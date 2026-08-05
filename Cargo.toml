@@ -1,0 +1,24 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "crates/chat-core",
+    "crates/chat-server",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["Anapaya & contributors"]
+license = "Apache-2.0"
+repository = "https://github.com/anapaya/scion-sdk-chat"
+
+[workspace.lints.clippy]
+mem_forget = "deny"
+
+[workspace.lints.rust]
+missing_docs = "warn"
+
+[profile.ci]
+inherits = "dev"    # https://doc.rust-lang.org/cargo/reference/profiles.html#dev
+incremental = false # Disable incremental compilation to allow caching dependencies
