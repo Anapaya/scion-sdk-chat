@@ -22,5 +22,28 @@
 //! I/O, nothing async, and no dependency beyond serde. Code that does not meet that bar belongs
 //! to whichever side needs it.
 //!
-//! The contents land in follow-up tickets; this crate currently only reserves the workspace
-//! slot.
+//! # The wire contract
+//!
+//! The types below are every JSON body the API accepts or returns. Their conventions, which hold
+//! for all of them:
+//!
+//! - **JSON only**, with `snake_case` field names, over `/api/v1`.
+//! - **Timestamps are `unix_millis`** ([`UnixMillis`]) — integers, UTC, always the server's clock.
+//! - **`seq` is a JSON number** ([`Seq`]), and a cursor rather than a count.
+//! - **Every failure has the same body**, [`ErrorResponse`], whatever the status code.
+//! - **Unknown fields are ignored**, in both directions. That is what makes the compatibility
+//!   stance below survive a client and a server of different ages talking to each other.
+//!
+//! Compatibility: once a client ships, this contract only grows — new optional fields, never a
+//! renamed, retyped or removed one. Anything else is a new endpoint.
+//!
+//! The protocol limits, the error codes and the validation rules join the crate with the tickets
+//! that first enforce them.
+
+mod wire;
+
+pub use wire::{
+    ApiError, CreateRoomRequest, ErrorResponse, LoginRequest, LoginResponse, Message,
+    MessagesResponse, PostMessageRequest, PostMessageResponse, RegisterRequest, Room, RoomId,
+    RoomsResponse, Seq, ServerInfo, UnixMillis,
+};
