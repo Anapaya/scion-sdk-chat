@@ -1,8 +1,9 @@
 # Copyright 2026 Anapaya Systems
 name: Rust Cache Restore
 description: >
-  Restore the Rust toolchain and build artifact cache. Uses ./.github/actions/cache-restore to
-  select the appropriate action based on the runner environment.
+  Restore the Rust toolchain and build artifact cache, through
+  ./.github/actions/cache-restore. The cache key and the paths differ per OS, so there is one
+  step each for Linux and Windows.
 
 inputs:
   workspace:
@@ -40,12 +41,12 @@ runs:
       uses: ./.github/actions/cache-restore
       with:
         key: >-
-          ${{ runner.os }}-80GB-cargo-shear-1.3.2-${{ hashFiles(format('{0}/rust-toolchain.toml', inputs.workspace)) }}-cargo-${{ hashFiles(format('{0}/**/Cargo.lock', inputs.workspace)) }}
+          ${{ runner.os }}-20GB-cargo-shear-1.3.2-${{ hashFiles(format('{0}/rust-toolchain.toml', inputs.workspace)) }}-cargo-${{ hashFiles(format('{0}/**/Cargo.lock', inputs.workspace)) }}
         path: C:\\rust_cache.vhdx
         restore-keys: |-
-          ${{ runner.os }}-80GB
-          ${{ runner.os }}-80GB-cargo-shear-1.3.2
-          ${{ runner.os }}-80GB-cargo-shear-1.3.2-${{ hashFiles(format('{0}/rust-toolchain.toml', inputs.workspace)) }}
+          ${{ runner.os }}-20GB
+          ${{ runner.os }}-20GB-cargo-shear-1.3.2
+          ${{ runner.os }}-20GB-cargo-shear-1.3.2-${{ hashFiles(format('{0}/rust-toolchain.toml', inputs.workspace)) }}
     - name: Set cache-hit output
       id: set-cache-hit
       shell: bash
@@ -60,7 +61,7 @@ runs:
       uses: samypr100/setup-dev-drive@v3
       with:
         drive-path: C:\\rust_cache.vhdx
-        drive-size: 100GB
+        drive-size: 20GB
         # XXX(uniquefine): revert to ReFS after https://github.com/rust-lang/rust/pull/138133 is merged.
         drive-format: NTFS
         trusted-dev-drive: true
