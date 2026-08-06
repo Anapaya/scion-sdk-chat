@@ -1,0 +1,14 @@
+[package]
+name = "chat-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Vocabulary shared by the chat server and every chat client"
+
+[dependencies]
+
+[lints]
+workspace = true
