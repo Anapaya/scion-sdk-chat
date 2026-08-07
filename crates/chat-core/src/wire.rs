@@ -613,8 +613,8 @@ mod tests {
         );
     }
 
-    /// The compatibility stance in the crate docs, as a test: a client built against today's
-    /// contract keeps working when a later server adds a field.
+    /// Decoding tolerates fields it does not know, so a client and a server built at different
+    /// commits still exchange whatever they have in common.
     #[test]
     fn unknown_fields_are_ignored() {
         let from_a_newer_server = r#"{
@@ -627,35 +627,47 @@ mod tests {
         assert_eq!(room.name, "lobby");
     }
 
+    /// Asserts that `value`'s `Debug` output hides `secret` behind the redaction marker while
+    /// still showing `kept` — a field that is not a secret, so that redaction cannot be passed by
+    /// rendering nothing at all.
+    #[track_caller]
+    fn assert_debug_redacts(value: impl fmt::Debug, secret: &str, kept: &str) {
+        let rendered = format!("{value:?}");
+        assert!(!rendered.contains(secret), "secret leaked: {rendered}");
+        assert!(rendered.contains(REDACTED), "secret not marked: {rendered}");
+        assert!(
+            rendered.contains(kept),
+            "non-secret field missing: {rendered}"
+        );
+    }
+
     /// Passwords and tokens must not reach a log through the `Debug` impl of the struct that
     /// carries them.
     #[test]
     fn secrets_are_redacted_in_debug_output() {
-        let register = RegisterRequest {
-            username: "alice".to_owned(),
-            password: "correct horse battery staple".to_owned(),
-        };
-        let login = LoginRequest {
-            username: "alice".to_owned(),
-            password: "correct horse battery staple".to_owned(),
-        };
-        let session = LoginResponse {
-            token: "eyJhbGciOiJIUzI1NiJ9.c2ln".to_owned(),
-            expires_at: 1_790_000_000_000,
-        };
-
-        for rendered in [
-            format!("{register:?}"),
-            format!("{login:?}"),
-            format!("{session:?}"),
-        ] {
-            assert!(!rendered.contains("correct horse"), "{rendered}");
-            assert!(!rendered.contains("c2ln"), "{rendered}");
-            assert!(rendered.contains(REDACTED), "{rendered}");
-        }
-
-        // Everything that is not a secret still shows up.
-        assert!(format!("{register:?}").contains("alice"));
-        assert!(format!("{session:?}").contains("1790000000000"));
+        assert_debug_redacts(
+            RegisterRequest {
+                username: "alice".to_owned(),
+                password: "correct horse battery staple".to_owned(),
+            },
+            "correct horse battery staple",
+            "alice",
+        );
+        assert_debug_redacts(
+            LoginRequest {
+                username: "alice".to_owned(),
+                password: "correct horse battery staple".to_owned(),
+            },
+            "correct horse battery staple",
+            "alice",
+        );
+        assert_debug_redacts(
+            LoginResponse {
+                token: "eyJhbGciOiJIUzI1NiJ9.c2ln".to_owned(),
+                expires_at: 1_790_000_000_000,
+            },
+            "eyJhbGciOiJIUzI1NiJ9.c2ln",
+            "1790000000000",
+        );
     }
 }

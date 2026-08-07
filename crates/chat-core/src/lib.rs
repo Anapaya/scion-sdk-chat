@@ -28,14 +28,15 @@
 //! for all of them:
 //!
 //! - **JSON only**, with `snake_case` field names, over `/api/v1`.
-//! - **Timestamps are `unix_millis`** ([`UnixMillis`]) — integers, UTC, always the server's clock.
+//! - **Timestamps are `unix_millis`** ([`UnixMillis`]) — integers, UTC.
 //! - **`seq` is a JSON number** ([`Seq`]), and a cursor rather than a count.
 //! - **Every failure has the same body**, [`ErrorResponse`], whatever the status code.
-//! - **Unknown fields are ignored**, in both directions. That is what makes the compatibility
-//!   stance below survive a client and a server of different ages talking to each other.
+//! - **Unknown fields are ignored**, in both directions — a decoder built at one commit still reads
+//!   whatever it recognizes from a peer built at another.
 //!
-//! Compatibility: once a client ships, this contract only grows — new optional fields, never a
-//! renamed, retyped or removed one. Anything else is a new endpoint.
+//! Compatibility: there is none to keep. The contract stays on `/api/v1` and changes whenever the
+//! example needs it — fields and whole types are added, renamed, retyped or removed, and every
+//! client is updated in the same change. Nothing here is a promise to anyone outside this repo.
 //!
 //! The protocol limits, the error codes and the validation rules join the crate with the tickets
 //! that first enforce them.
