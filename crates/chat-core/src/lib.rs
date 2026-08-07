@@ -25,10 +25,6 @@
 //!
 //! The API types live in [`api::v1`], one module per domain, and are reached by the version they
 //! belong to rather than re-exported at the crate root — `use chat_core::api::v1::{Message,
-//! Room};`. A second version can then sit beside the first without either becoming the implicit
-//! one. That module's own documentation carries the conventions all of them follow.
-//!
-//! The protocol limits, the error codes and the validation rules join the crate with the tickets
-//! that first enforce them.
+//! Room};`.
 
 pub mod api;
