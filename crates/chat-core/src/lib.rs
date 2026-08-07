@@ -19,32 +19,16 @@
 //! Everything depends on this crate: the server, the clients, the end-to-end harness, and
 //! eventually the mobile bindings. That stays affordable only while the crate is cheap to
 //! depend on, so it holds types, constants and pure functions over them — nothing that performs
-//! I/O, nothing async, and no dependency beyond serde. Code that does not meet that bar belongs
-//! to whichever side needs it.
+//! I/O, nothing async, and no dependency beyond serde and the `utoipa` derive that lets the
+//! server describe these same types in its OpenAPI document. Code that does not meet that bar
+//! belongs to whichever side needs it.
 //!
-//! # The wire contract
-//!
-//! The types below are every JSON body the API accepts or returns. Their conventions, which hold
-//! for all of them:
-//!
-//! - **JSON only**, with `snake_case` field names, over `/api/v1`.
-//! - **Timestamps are `unix_millis`** ([`UnixMillis`]) — integers, UTC.
-//! - **`seq` is a JSON number** ([`Seq`]), and a cursor rather than a count.
-//! - **Every failure has the same body**, [`ErrorResponse`], whatever the status code.
-//! - **Unknown fields are ignored**, in both directions — a decoder built at one commit still reads
-//!   whatever it recognizes from a peer built at another.
-//!
-//! Compatibility: there is none to keep. The contract stays on `/api/v1` and changes whenever the
-//! example needs it — fields and whole types are added, renamed, retyped or removed, and every
-//! client is updated in the same change. Nothing here is a promise to anyone outside this repo.
+//! The API types live in [`api::v1`], one module per domain, and are reached by the version they
+//! belong to rather than re-exported at the crate root — `use chat_core::api::v1::{Message,
+//! Room};`. A second version can then sit beside the first without either becoming the implicit
+//! one. That module's own documentation carries the conventions all of them follow.
 //!
 //! The protocol limits, the error codes and the validation rules join the crate with the tickets
 //! that first enforce them.
 
-mod wire;
-
-pub use wire::{
-    ApiError, CreateRoomRequest, ErrorResponse, LoginRequest, LoginResponse, Message,
-    MessagesResponse, PostMessageRequest, PostMessageResponse, RegisterRequest, Room, RoomId,
-    RoomsResponse, Seq, ServerInfo, UnixMillis,
-};
+pub mod api;
