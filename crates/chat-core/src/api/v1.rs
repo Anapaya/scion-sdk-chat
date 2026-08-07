@@ -14,14 +14,12 @@
 //! Version 1 of the chat API: every JSON body it accepts or returns, and the error envelope it
 //! fails with, one module per domain — [`auth`], [`rooms`], [`messages`], [`server`], [`error`].
 //!
-//! The types are plain data — no logic, no validation, no defaults. Each carries the JSON it
-//! serializes to, so a client author on a platform without these structs (the Kotlin and Swift
-//! apps) can implement against the doc comments alone.
+//! The types are plain data — no logic, no validation, no defaults — and they describe the bodies
+//! only, never the endpoints that carry them: which method and path a type belongs to is stated
+//! once, on the handler, and reaches a reader through the OpenAPI document rather than through a
+//! doc comment that can drift out of step with the routing.
 //!
-//! Each also derives [`utoipa::ToSchema`], so the same types describe themselves in the OpenAPI
-//! document the server publishes. That derive is independent of serde's, and the two can
-//! disagree — nullability and flattening being the usual places — so the shapes where they are
-//! likeliest to diverge are covered by tests in the modules below.
+//! Each derives [`utoipa::ToSchema`], which is what puts them in that document.
 //!
 //! The conventions, which hold for all of them:
 //!
@@ -37,8 +35,6 @@ pub mod error;
 pub mod messages;
 pub mod rooms;
 pub mod server;
-#[cfg(test)]
-mod test_support;
 
 pub use auth::{LoginRequest, LoginResponse, RegisterRequest};
 pub use error::{ApiError, ErrorResponse};

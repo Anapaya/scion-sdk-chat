@@ -16,19 +16,8 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-/// Response body of `GET /api/v1/server`: everything about the server a client may want to show
-/// or adapt to. Unauthenticated, so a client can read it before anyone logs in.
-///
-/// ```json
-/// {
-///   "version": "0.1.0",
-///   "isd_as": "1-ff00:0:110",
-///   "max_accounts": 500,
-///   "max_rooms": 100,
-///   "max_message_bytes": 4096,
-///   "token_expiry_days": 7
-/// }
-/// ```
+/// Everything about the server a client may want to show or adapt to. Needs no token, so a
+/// client can read it before anyone logs in.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct ServerInfo {
     /// The server build's version, as in its `Cargo.toml`.
@@ -42,6 +31,6 @@ pub struct ServerInfo {
     pub max_rooms: u32,
     /// The largest message body the server accepts, in bytes of UTF-8.
     pub max_message_bytes: u32,
-    /// How long a token issued by `POST /api/v1/login` stays valid.
+    /// How long a token issued at login stays valid.
     pub token_expiry_days: u32,
 }

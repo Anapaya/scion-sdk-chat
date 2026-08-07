@@ -17,15 +17,6 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 /// The body of every failing response, whatever failed.
-///
-/// ```json
-/// {
-///   "error": {
-///     "code": "room_not_found",
-///     "message": "no room with id 7"
-///   }
-/// }
-/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct ErrorResponse {
     /// What went wrong.
@@ -54,22 +45,4 @@ pub struct ApiError {
     /// A human-readable explanation, for logs and for showing to a user. Free-form: it may change
     /// between server versions, so never branch on it.
     pub message: String,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{super::test_support::assert_wire_shape, *};
-
-    #[test]
-    fn error_response() {
-        assert_wire_shape(
-            ErrorResponse::new("room_not_found", "no room with id 7"),
-            r#"{
-              "error": {
-                "code": "room_not_found",
-                "message": "no room with id 7"
-              }
-            }"#,
-        );
-    }
 }

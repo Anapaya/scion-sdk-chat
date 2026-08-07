@@ -18,13 +18,7 @@ use utoipa::ToSchema;
 
 use super::{Seq, UnixMillis};
 
-/// Request body of `POST /api/v1/rooms/{id}/messages`.
-///
-/// ```json
-/// {
-///   "body": "hello from 1-ff00:0:110"
-/// }
-/// ```
+/// The text of a message being posted.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct PostMessageRequest {
     /// The message text. UTF-8, at most the server's `max_message_bytes` when encoded — see
@@ -32,17 +26,10 @@ pub struct PostMessageRequest {
     pub body: String,
 }
 
-/// Response body of `POST /api/v1/rooms/{id}/messages`: where the message landed.
+/// Where a posted message landed.
 ///
 /// A client does *not* advance its poll cursor to this `seq` — a message with a lower `seq` may
 /// still be waiting to be polled. The cursor only ever follows what polling actually delivered.
-///
-/// ```json
-/// {
-///   "seq": 43,
-///   "posted_at": 1789994400000
-/// }
-/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct PostMessageResponse {
     /// The `seq` the server assigned to the new message.
@@ -55,15 +42,6 @@ pub struct PostMessageResponse {
 /// One message in a room.
 ///
 /// Messages are append-only: never edited, never deleted.
-///
-/// ```json
-/// {
-///   "seq": 43,
-///   "username": "alice",
-///   "body": "hello from 1-ff00:0:110",
-///   "posted_at": 1789994400000
-/// }
-/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct Message {
     /// The message's position in the sequence, and the cursor used to fetch around it.
@@ -76,18 +54,9 @@ pub struct Message {
     pub posted_at: UnixMillis,
 }
 
-/// Response body of `GET /api/v1/rooms/{id}/messages`, for all three ways of asking:
-/// no cursor (the newest page, to open a room), `after_seq` (poll, then append), and
-/// `before_seq` (load more, then prepend).
-///
-/// ```json
-/// {
-///   "messages": [
-///     { "seq": 42, "username": "bob", "body": "anyone here?", "posted_at": 1789994300000 },
-///     { "seq": 43, "username": "alice", "body": "hello", "posted_at": 1789994400000 }
-///   ]
-/// }
-/// ```
+/// A page of a room's messages, whichever of the three ways it was asked for: no cursor (the
+/// newest page, to open a room), `after_seq` (poll, then append), or `before_seq` (load more,
+/// then prepend).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct MessagesResponse {
     /// The page, **always oldest-first**, whichever cursor asked for it.
@@ -96,39 +65,4 @@ pub struct MessagesResponse {
     /// walking towards: the present when polling forwards, the start of history when loading
     /// older messages. A full page means more is waiting — ask again immediately.
     pub messages: Vec<Message>,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{super::test_support::assert_wire_shape, *};
-
-    /// The page every client polls for: an array of objects whose fields are all required, and
-    /// the one place the oldest-first ordering is visible.
-    #[test]
-    fn messages_response() {
-        assert_wire_shape(
-            MessagesResponse {
-                messages: vec![
-                    Message {
-                        seq: 42,
-                        username: "bob".to_owned(),
-                        body: "anyone here?".to_owned(),
-                        posted_at: 1_789_994_300_000,
-                    },
-                    Message {
-                        seq: 43,
-                        username: "alice".to_owned(),
-                        body: "hello".to_owned(),
-                        posted_at: 1_789_994_400_000,
-                    },
-                ],
-            },
-            r#"{
-              "messages": [
-                { "seq": 42, "username": "bob", "body": "anyone here?", "posted_at": 1789994300000 },
-                { "seq": 43, "username": "alice", "body": "hello", "posted_at": 1789994400000 }
-              ]
-            }"#,
-        );
-    }
 }

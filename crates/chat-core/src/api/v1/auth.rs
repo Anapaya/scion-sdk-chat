@@ -24,17 +24,10 @@ use super::UnixMillis;
 /// of a struct that merely happens to be printed.
 const REDACTED: &str = "<redacted>";
 
-/// Request body of `POST /api/v1/register`.
+/// The credentials a new account is created with.
 ///
 /// The username is the account's permanent identity — the name messages are attributed to. There
 /// is no rename, no password change, and no password reset.
-///
-/// ```json
-/// {
-///   "username": "alice",
-///   "password": "correct horse battery staple"
-/// }
-/// ```
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct RegisterRequest {
     /// The name to register. UTF-8, 1–32 characters, no control characters; compared
@@ -54,14 +47,7 @@ impl fmt::Debug for RegisterRequest {
     }
 }
 
-/// Request body of `POST /api/v1/login`.
-///
-/// ```json
-/// {
-///   "username": "alice",
-///   "password": "correct horse battery staple"
-/// }
-/// ```
+/// The credentials an existing account is authenticated with.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct LoginRequest {
     /// The registered name to log in as.
@@ -79,14 +65,7 @@ impl fmt::Debug for LoginRequest {
     }
 }
 
-/// Response body of `POST /api/v1/login`: the bearer token every other endpoint requires.
-///
-/// ```json
-/// {
-///   "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhbGljZSIsImV4cCI6MTc5MDAwMDAwMH0.c2ln",
-///   "expires_at": 1790000000000
-/// }
-/// ```
+/// What a successful login yields: the bearer token every authenticated request carries.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct LoginResponse {
     /// The JWT to send as `Authorization: Bearer <token>`. Opaque to clients: they carry it, they
