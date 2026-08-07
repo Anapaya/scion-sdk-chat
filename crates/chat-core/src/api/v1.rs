@@ -27,8 +27,6 @@
 //! - **Timestamps are `unix_millis`** ([`UnixMillis`]) — integers, UTC.
 //! - **`seq` is a JSON number** ([`Seq`]), and a cursor rather than a count.
 //! - **Every failure has the same body**, [`ErrorResponse`], whatever the status code.
-//! - **Unknown fields are ignored**, in both directions — a decoder built at one commit still reads
-//!   whatever it recognizes from a peer built at another.
 
 pub mod auth;
 pub mod error;

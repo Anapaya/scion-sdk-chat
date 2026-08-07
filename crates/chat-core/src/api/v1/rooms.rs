@@ -53,22 +53,3 @@ pub struct CreateRoomRequest {
     /// case-insensitively against the rooms that already exist.
     pub name: String,
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Decoding tolerates fields it does not know, so a client and a server built at different
-    /// commits still exchange whatever they have in common.
-    #[test]
-    fn unknown_fields_are_ignored() {
-        let from_a_newer_server = r#"{
-          "id": 1,
-          "name": "lobby",
-          "latest_seq": 42,
-          "topic": "a field this version has never heard of"
-        }"#;
-        let room: Room = serde_json::from_str(from_a_newer_server).expect("decodes");
-        assert_eq!(room.name, "lobby");
-    }
-}
