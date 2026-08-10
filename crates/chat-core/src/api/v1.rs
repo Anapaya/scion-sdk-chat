@@ -40,17 +40,17 @@ pub use server::ServerInfo;
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ToSchema,
 )]
 #[serde(transparent)]
-#[schema(value_type = i64)]
-pub struct RoomId(i64);
+#[schema(value_type = u64)]
+pub struct RoomId(u64);
 
 impl RoomId {
     /// Wraps the value the server assigned.
-    pub const fn new(id: i64) -> Self {
+    pub const fn new(id: u64) -> Self {
         Self(id)
     }
 
     /// The value beneath, for storage and for building request paths.
-    pub const fn get(self) -> i64 {
+    pub const fn get(self) -> u64 {
         self.0
     }
 }
@@ -75,20 +75,20 @@ impl fmt::Display for RoomId {
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ToSchema,
 )]
 #[serde(transparent)]
-#[schema(value_type = i64)]
-pub struct Seq(i64);
+#[schema(value_type = u64)]
+pub struct Seq(u64);
 
 impl Seq {
     /// The position before every message, which no message ever occupies.
     pub const START: Self = Self(0);
 
     /// Wraps the value the server assigned.
-    pub const fn new(seq: i64) -> Self {
+    pub const fn new(seq: u64) -> Self {
         Self(seq)
     }
 
     /// The value beneath, for storage and for building query strings.
-    pub const fn get(self) -> i64 {
+    pub const fn get(self) -> u64 {
         self.0
     }
 }
@@ -104,17 +104,17 @@ impl fmt::Display for Seq {
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ToSchema,
 )]
 #[serde(transparent)]
-#[schema(value_type = i64)]
-pub struct UnixMillis(i64);
+#[schema(value_type = u64)]
+pub struct UnixMillis(u64);
 
 impl UnixMillis {
     /// Wraps a count of milliseconds since the Unix epoch.
-    pub const fn new(millis: i64) -> Self {
+    pub const fn new(millis: u64) -> Self {
         Self(millis)
     }
 
     /// The count of milliseconds beneath, for storage and for conversion to a date type.
-    pub const fn get(self) -> i64 {
+    pub const fn get(self) -> u64 {
         self.0
     }
 }
