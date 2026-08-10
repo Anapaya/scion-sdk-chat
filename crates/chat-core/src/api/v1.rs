@@ -14,12 +14,7 @@
 //! Version 1 of the chat API: every JSON body it accepts or returns, and the error envelope it
 //! fails with, one module per domain — [`auth`], [`rooms`], [`messages`], [`server`], [`error`].
 //!
-//! The types are plain data — no logic, no validation, no defaults — and they describe the bodies
-//! only, never the endpoints that carry them: which method and path a type belongs to is stated
-//! once, on the handler, and reaches a reader through the OpenAPI document rather than through a
-//! doc comment that can drift out of step with the routing.
-//!
-//! Each derives [`utoipa::ToSchema`], which is what puts them in that document.
+//! The types describe the bodies only, not the endpoints that carry them.
 //!
 //! The conventions, which hold for all of them:
 //!

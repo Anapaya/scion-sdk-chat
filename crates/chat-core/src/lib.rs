@@ -11,20 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! Vocabulary shared by the chat server and every chat client: the wire contract (request and
-//! response types plus the error envelope), and anything else the two sides must agree on
-//! word-for-word — the error codes, the protocol limits and defaults, and validation of the
-//! values the API accepts.
+//! Vocabulary shared by the chat server and every chat client: the request and response types,
+//! the error envelope, and the error codes.
 //!
-//! Everything depends on this crate: the server, the clients, the end-to-end harness, and
-//! eventually the mobile bindings. That stays affordable only while the crate is cheap to
-//! depend on, so it holds types, constants and pure functions over them — nothing that performs
-//! I/O, nothing async, and no dependency beyond serde and the `utoipa` derive that lets the
-//! server describe these same types in its OpenAPI document. Code that does not meet that bar
-//! belongs to whichever side needs it.
-//!
-//! The API types live in [`api::v1`], one module per domain, and are reached by the version they
-//! belong to rather than re-exported at the crate root — `use chat_core::api::v1::{Message,
+//! The API types live in [`api::v1`], one module per domain — `use chat_core::api::v1::{Message,
 //! Room};`.
 
 pub mod api;
