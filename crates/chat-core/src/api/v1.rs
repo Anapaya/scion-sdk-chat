@@ -28,6 +28,11 @@
 //! - **`seq` is a JSON number** ([`Seq`]), and a cursor rather than a count.
 //! - **Every failure has the same body**, [`ErrorResponse`], whatever the status code.
 
+use std::fmt;
+
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+
 pub mod auth;
 pub mod error;
 pub mod messages;
@@ -35,14 +40,37 @@ pub mod rooms;
 pub mod server;
 
 pub use auth::{LoginRequest, LoginResponse, RegisterRequest};
-pub use error::{ApiError, ErrorResponse};
+pub use error::{ApiError, ErrorCode, ErrorResponse, UnknownCode};
 pub use messages::{Message, MessagesResponse, PostMessageRequest, PostMessageResponse};
 pub use rooms::{CreateRoomRequest, Room, RoomsResponse};
 pub use server::ServerInfo;
 
 /// Identifier of a room, assigned by the server when the room is created. Stable for the room's
 /// lifetime, and rooms are never deleted.
-pub type RoomId = i64;
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ToSchema,
+)]
+#[serde(transparent)]
+#[schema(value_type = i64)]
+pub struct RoomId(i64);
+
+impl RoomId {
+    /// Wraps the value the server assigned.
+    pub const fn new(id: i64) -> Self {
+        Self(id)
+    }
+
+    /// The value beneath, for storage and for building request paths.
+    pub const fn get(self) -> i64 {
+        self.0
+    }
+}
+
+impl fmt::Display for RoomId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 /// Position of a message in the server's message sequence.
 ///
@@ -51,9 +79,53 @@ pub type RoomId = i64;
 /// gaps: treat `seq` as a cursor, never as a count. Clients remember the highest `seq` they have
 /// seen in a room and poll for what came after it.
 ///
-/// Numbering starts at 1, so `0` is the position before every message — an empty room and a
-/// client that has read nothing both sit there, and `after_seq=0` asks for everything.
-pub type Seq = i64;
+/// Numbering starts at 1, so [`Seq::START`] is the position before every message — an empty room
+/// and a client that has read nothing both sit there, and asking for what follows it asks for
+/// everything.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ToSchema,
+)]
+#[serde(transparent)]
+#[schema(value_type = i64)]
+pub struct Seq(i64);
+
+impl Seq {
+    /// The position before every message, which no message ever occupies.
+    pub const START: Self = Self(0);
+
+    /// Wraps the value the server assigned.
+    pub const fn new(seq: i64) -> Self {
+        Self(seq)
+    }
+
+    /// The value beneath, for storage and for building query strings.
+    pub const fn get(self) -> i64 {
+        self.0
+    }
+}
+
+impl fmt::Display for Seq {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 /// A point in time on the wire: milliseconds since the Unix epoch, UTC.
-pub type UnixMillis = i64;
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ToSchema,
+)]
+#[serde(transparent)]
+#[schema(value_type = i64)]
+pub struct UnixMillis(i64);
+
+impl UnixMillis {
+    /// Wraps a count of milliseconds since the Unix epoch.
+    pub const fn new(millis: i64) -> Self {
+        Self(millis)
+    }
+
+    /// The count of milliseconds beneath, for storage and for conversion to a date type.
+    pub const fn get(self) -> i64 {
+        self.0
+    }
+}

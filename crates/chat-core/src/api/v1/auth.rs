@@ -125,7 +125,7 @@ mod tests {
         assert_debug_redacts(
             LoginResponse {
                 token: "eyJhbGciOiJIUzI1NiJ9.c2ln".to_owned(),
-                expires_at: 1_790_000_000_000,
+                expires_at: UnixMillis::new(1_790_000_000_000),
             },
             "eyJhbGciOiJIUzI1NiJ9.c2ln",
             "1790000000000",
