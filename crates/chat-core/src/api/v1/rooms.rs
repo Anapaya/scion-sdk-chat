@@ -26,15 +26,13 @@ use super::{RoomId, Seq};
 pub struct Room {
     /// The room's identifier, used in the message paths.
     pub id: RoomId,
-    /// The room's display name. UTF-8, 1–64 characters, no control characters; unique
-    /// case-insensitively.
+    /// The room's display name. Printable ASCII, 1–64 characters; unique case-insensitively.
     pub name: String,
-    /// The `seq` of the newest message in the room, or `null` when the room has none yet.
+    /// The `seq` of the newest message in the room, or `0` while it has none.
     ///
-    /// Comparing it against the newest message a client has read is what drives an unread badge,
-    /// so one listing covers every room at once. It is not a message count:
-    /// `seq` is server-wide (see [`Seq`]).
-    pub latest_seq: Option<Seq>,
+    /// Comparing it against the newest `seq` a client has read is what drives an unread badge, so
+    /// one listing covers every room at once. Not a count: `seq` is server-wide (see [`Seq`]).
+    pub latest_seq: Seq,
 }
 
 /// Every room on the server.
@@ -49,7 +47,7 @@ pub struct RoomsResponse {
 /// Creation is idempotent on the name: an existing name returns that room instead of failing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct CreateRoomRequest {
-    /// The name to create. UTF-8, 1–64 characters, no control characters; matched
-    /// case-insensitively against the rooms that already exist.
+    /// The name to create. Printable ASCII, 1–64 characters; matched case-insensitively against
+    /// the rooms that already exist.
     pub name: String,
 }

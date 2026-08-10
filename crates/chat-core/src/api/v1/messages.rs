@@ -63,6 +63,6 @@ pub struct MessagesResponse {
     ///
     /// A page shorter than the requested `limit` means the client has reached the end it was
     /// walking towards: the present when polling forwards, the start of history when loading
-    /// older messages. A full page means more is waiting — ask again immediately.
+    /// older messages. A full page means more might be waiting — ask again immediately.
     pub messages: Vec<Message>,
 }

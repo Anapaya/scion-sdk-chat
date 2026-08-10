@@ -50,6 +50,9 @@ pub type RoomId = i64;
 /// agrees on. It is assigned server-wide rather than per room, so a single room's messages carry
 /// gaps: treat `seq` as a cursor, never as a count. Clients remember the highest `seq` they have
 /// seen in a room and poll for what came after it.
+///
+/// Numbering starts at 1, so `0` is the position before every message — an empty room and a
+/// client that has read nothing both sit there, and `after_seq=0` asks for everything.
 pub type Seq = i64;
 
 /// A point in time on the wire: milliseconds since the Unix epoch, UTC.

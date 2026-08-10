@@ -24,6 +24,9 @@ pub struct ServerInfo {
     pub version: String,
     /// The SCION ISD-AS the server is reachable in, or `null` when it is serving over plain TCP
     /// in development mode.
+    // TODO: replace with `sciparse::IsdAsn`. It serializes to this same string, is `Copy`, and
+    // already carries a `ToSchema` with an example and a validation pattern — so the published
+    // schema stops saying "some string". Costs this crate its first SDK dependency.
     pub isd_as: Option<String>,
     /// How many accounts the server registers before it starts rejecting registrations.
     pub max_accounts: u32,
@@ -31,6 +34,6 @@ pub struct ServerInfo {
     pub max_rooms: u32,
     /// The largest message body the server accepts, in bytes of UTF-8.
     pub max_message_bytes: u32,
-    /// How long a token issued at login stays valid.
-    pub token_expiry_days: u32,
+    /// How long a token stays valid after it is issued.
+    pub token_validity_seconds: u32,
 }
