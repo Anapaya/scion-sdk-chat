@@ -14,14 +14,8 @@
 //! Version 1 of the chat API: every JSON body it accepts or returns, and the error envelope it
 //! fails with, one module per domain — [`auth`], [`rooms`], [`messages`], [`server`], [`error`].
 //!
-//! The types describe the bodies only, not the endpoints that carry them.
-//!
-//! The conventions, which hold for all of them:
-//!
-//! - **JSON only**, with `snake_case` field names, under `/api/v1`.
-//! - **Timestamps are `unix_millis`** ([`UnixMillis`]) — integers, UTC.
-//! - **`seq` is a JSON number** ([`Seq`]), and a cursor rather than a count.
-//! - **Every failure has the same body**, [`ErrorResponse`], whatever the status code.
+//! The types describe the bodies only, not the endpoints that carry them. Every failure carries
+//! the same body, [`ErrorResponse`], whatever the status code.
 
 use std::fmt;
 
