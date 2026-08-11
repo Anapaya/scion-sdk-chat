@@ -1,0 +1,21 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT EXISTS(SELECT 1 FROM rooms WHERE id = ?) AS \"found!\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "found!",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e2f3188ee2fd4692570c98dc50071b1dd1504aa12f7fd14fd5ac3b1a38127e76"
+}

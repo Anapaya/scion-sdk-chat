@@ -2,14 +2,8 @@
 
 Chat demo application using scion-sdk.
 
-The workspace holds two crates: `chat-core`, the vocabulary shared by the server and every
-client — the wire contract, the error codes, the protocol limits — and `chat-server`, the server
-itself.
-
-`chat-core` currently carries the wire contract: every JSON body the API accepts or returns, each
-documented with the JSON it serializes to. Those examples are what the Kotlin and Swift clients
-are implemented against, so read them there — `cargo doc_dx --open` — rather than re-deriving
-them from the server.
+The workspace holds two crates: `chat-core`, the request and response types the server and every
+client share, and `chat-server`, the server itself. `cargo doc_dx --open` renders both.
 
 ## Development
 
@@ -26,6 +20,18 @@ Formatting runs on a pinned nightly, because `rustfmt.toml` uses nightly-only op
 
 ```sh
 cargo +nightly-2026-03-12 fmt --all
+```
+
+### Database queries
+
+`chat-server`'s SQL is checked against the schema at compile time. What makes that work without a
+database is committed in `.sqlx/`, so an ordinary build needs nothing extra. After adding or
+changing a query, regenerate it — otherwise the build fails:
+
+```sh
+cargo install sqlx-cli --no-default-features --features sqlite
+sqlite3 prepare.db < crates/chat-server/src/schema.sql
+DATABASE_URL=sqlite://$PWD/prepare.db cargo sqlx prepare --workspace -- --all-targets
 ```
 
 ## License
