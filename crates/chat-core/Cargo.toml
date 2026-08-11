@@ -9,6 +9,8 @@ publish = false
 description = "Vocabulary shared by the chat server and every chat client"
 
 [dependencies]
+serde = { workspace = true }
+utoipa = { workspace = true }
 
 [lints]
 workspace = true

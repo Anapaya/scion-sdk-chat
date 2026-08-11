@@ -4,7 +4,12 @@ Chat demo application using scion-sdk.
 
 The workspace holds two crates: `chat-core`, the vocabulary shared by the server and every
 client — the wire contract, the error codes, the protocol limits — and `chat-server`, the server
-itself. Both are placeholders until the following tickets fill them in.
+itself.
+
+`chat-core` currently carries the wire contract: every JSON body the API accepts or returns, each
+documented with the JSON it serializes to. Those examples are what the Kotlin and Swift clients
+are implemented against, so read them there — `cargo doc_dx --open` — rather than re-deriving
+them from the server.
 
 ## Development
 

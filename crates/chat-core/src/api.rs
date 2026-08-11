@@ -11,10 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! Vocabulary shared by the chat server and every chat client: the request and response types,
-//! the error envelope, and the error codes.
-//!
-//! The API types live in [`api::v1`], one module per domain — `use chat_core::api::v1::{Message,
-//! Room};`.
+//! The chat REST API, one module per version.
 
-pub mod api;
+pub mod v1;
