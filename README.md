@@ -22,17 +22,31 @@ Formatting runs on a pinned nightly, because `rustfmt.toml` uses nightly-only op
 cargo +nightly-2026-03-12 fmt --all
 ```
 
-### Database queries
+### The database
 
-`chat-server`'s SQL is checked against the schema at compile time. What makes that work without a
-database is committed in `.sqlx/`, so an ordinary build needs nothing extra. After adding or
-changing a query, regenerate it — otherwise the build fails:
+SQLite is compiled into the binary, so there is no database service to install, start, or connect
+to. The database is a single file; the store creates it, and the directory holding it, when
+absent. Deleting it starts over.
+
+### `.sqlx` purpose
+
+The server's SQL is checked against the schema while it compiles, so the compiler needs to know
+the schema. `.sqlx/` is what it was told, one JSON file per query.
+
+It is committed so that a clone builds and runs with no database and no tooling — `cargo test` and
+`cargo run` need neither `DATABASE_URL` nor `sqlx-cli`. Without it the crate does not compile.
+
+You only need `sqlx-cli` to add or change a query, which requires regenerating it:
 
 ```sh
-cargo install sqlx-cli --no-default-features --features sqlite
+cargo install --version 0.9.0 sqlx-cli --no-default-features --features sqlite  # match Cargo.toml
+rm -f prepare.db   # the schema is all CREATE TABLE IF NOT EXISTS, so a stale file stays stale
 sqlite3 prepare.db < crates/chat-server/src/schema.sql
 DATABASE_URL=sqlite://$PWD/prepare.db cargo sqlx prepare --workspace -- --all-targets
 ```
+
+Forgetting to is a compile error. Metadata that has drifted from the schema is worse — it still
+compiles — so CI runs the same commands with `--check`.
 
 ## License
 

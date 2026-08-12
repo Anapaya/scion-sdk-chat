@@ -11,6 +11,9 @@ inputs:
   version:
     description: Rust version.
     default: "nightly-2026-03-12"
+  sqlx-version:
+    description: sqlx-cli version, which must match the sqlx dependency.
+    default: "0.9.0"
 
 runs:
   using: composite
@@ -44,3 +47,16 @@ runs:
       shell: bash
       working-directory: ${{ inputs.workspace }}
       run: cargo install --version 1.3.2 cargo-shear && cargo shear
+    - name: Query metadata is current
+      # sqlx's committed .sqlx cache is what lets the query macros check SQL without a database.
+      # Stale metadata still compiles, so this is the only thing that catches a query nobody
+      # regenerated for — the store tests only cover queries that have a test.
+      if: runner.os == 'Linux'
+      shell: bash
+      working-directory: ${{ inputs.workspace }}
+      run: |
+        cargo install --version ${{ inputs.sqlx-version }} sqlx-cli --no-default-features --features sqlite
+        rm -f prepare.db
+        sqlite3 prepare.db < crates/chat-server/src/schema.sql
+        DATABASE_URL="sqlite://$PWD/prepare.db" cargo sqlx prepare --workspace --check -- --all-targets
+        rm -f prepare.db

@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! SQLite persistence. This file opens the database and owns the pool; the statements live one
-//! module down, grouped by table — `users`, `rooms`, `messages` — and nowhere else.
+//! SQLite persistence. This file opens the database and owns the pool; the per-table statements
+//! live one module down, in `users`, `rooms` and `messages`.
 
 use std::{
     path::{Path, PathBuf},
