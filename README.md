@@ -33,8 +33,12 @@ absent. Deleting it starts over.
 The server's SQL is checked against the schema while it compiles, so the compiler needs to know
 the schema. `.sqlx/` is what it was told, one JSON file per query.
 
-It is committed so that a clone builds and runs with no database and no tooling — `cargo test` and
-`cargo run` need neither `DATABASE_URL` nor `sqlx-cli`. Without it the crate does not compile.
+It is committed so that **compiling** needs no database and no tooling: `cargo build`, `cargo test`
+and `cargo run` all work on a fresh clone without `DATABASE_URL` or `sqlx-cli`. Without it the
+crate does not compile.
+
+That the *server* needs no database service is separate — SQLite and `schema.sql` are compiled
+into the binary, which is true with or without this folder.
 
 You only need `sqlx-cli` to add or change a query, which requires regenerating it:
 
