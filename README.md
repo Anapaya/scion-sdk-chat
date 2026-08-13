@@ -46,7 +46,7 @@ You only need `sqlx-cli` to add or change a query, which requires regenerating i
 cargo install --version 0.9.0 sqlx-cli --no-default-features --features sqlite  # match Cargo.toml
 cd crates/chat-server
 DB=$(mktemp -d)/prepare.db   # a fresh file: CREATE TABLE IF NOT EXISTS would leave a stale one stale
-sqlite3 "$DB" < src/store/schema.sql
+sqlite3 "$DB" < src/store/sqlite/schema.sql
 DATABASE_URL="sqlite://$DB" cargo sqlx prepare -- --all-targets
 ```
 

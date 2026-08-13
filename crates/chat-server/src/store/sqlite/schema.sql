@@ -12,7 +12,7 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 
--- Changing anything below means bumping SCHEMA_VERSION in store.rs. There are no migrations:
+-- Changing anything below means bumping SCHEMA_VERSION in sqlite.rs. There are no migrations:
 -- CREATE TABLE IF NOT EXISTS leaves an existing table untouched, so without the bump an old
 -- database survives under new code. Bumping it deletes and rebuilds the database.
 

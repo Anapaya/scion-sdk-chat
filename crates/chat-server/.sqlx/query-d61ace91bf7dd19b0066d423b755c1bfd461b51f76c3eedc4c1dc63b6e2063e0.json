@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT seq AS \"seq!\", username, body, posted_at\n               FROM messages WHERE room_id = ? AND seq > ?\n               ORDER BY seq ASC LIMIT ?",
+  "query": "SELECT seq AS \"seq!\", username, body, posted_at\n           FROM messages WHERE room_id = ? AND seq > ?\n           ORDER BY seq ASC LIMIT ?",
   "describe": {
     "columns": [
       {
@@ -58,5 +58,5 @@
       false
     ]
   },
-  "hash": "1ca458d754e366146dbb2df3dca4bf6fc4f2ac6e87e618e6d33a76eea3afe88d"
+  "hash": "d61ace91bf7dd19b0066d423b755c1bfd461b51f76c3eedc4c1dc63b6e2063e0"
 }

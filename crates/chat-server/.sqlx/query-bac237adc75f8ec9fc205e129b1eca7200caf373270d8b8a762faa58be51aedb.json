@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "INSERT INTO messages (room_id, username, body, posted_at) VALUES (?, ?, ?, ?)\n               RETURNING seq AS \"seq!\", posted_at AS \"posted_at!\"",
+  "query": "INSERT INTO messages (room_id, username, body, posted_at) VALUES (?, ?, ?, ?)\n           RETURNING seq AS \"seq!\", posted_at AS \"posted_at!\"",
   "describe": {
     "columns": [
       {
@@ -34,5 +34,5 @@
       false
     ]
   },
-  "hash": "bde7d83d8ba0d46316aea510ffbc4377796c9fa646c632334c07da31738c811a"
+  "hash": "bac237adc75f8ec9fc205e129b1eca7200caf373270d8b8a762faa58be51aedb"
 }

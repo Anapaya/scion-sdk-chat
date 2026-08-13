@@ -13,25 +13,29 @@
 // limitations under the License.
 //! The accounts table.
 
+use sqlx::SqlitePool;
+
 use super::{
-    Store, StoreError,
+    super::StoreError,
     convert::{now, to_column},
 };
 
-impl Store {
-    /// Registers an account. Returns `false` when the username is already taken.
-    pub async fn insert_user(&self, username: &str, pw_hash: &str) -> Result<bool, StoreError> {
-        let created_at = to_column("timestamp", now().get())?;
-        let result = sqlx::query!(
-            "INSERT INTO users (username, pw_hash, created_at) VALUES (?, ?, ?)
-             ON CONFLICT(username) DO NOTHING",
-            username,
-            pw_hash,
-            created_at,
-        )
-        .execute(&self.pool)
-        .await?;
+/// Registers an account. Returns `false` when the username is already taken.
+pub(super) async fn insert_user(
+    pool: &SqlitePool,
+    username: &str,
+    pw_hash: &str,
+) -> Result<bool, StoreError> {
+    let created_at = to_column("timestamp", now().get())?;
+    let result = sqlx::query!(
+        "INSERT INTO users (username, pw_hash, created_at) VALUES (?, ?, ?)
+         ON CONFLICT(username) DO NOTHING",
+        username,
+        pw_hash,
+        created_at,
+    )
+    .execute(pool)
+    .await?;
 
-        Ok(result.rows_affected() == 1)
-    }
+    Ok(result.rows_affected() == 1)
 }

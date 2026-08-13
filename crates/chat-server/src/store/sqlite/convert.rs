@@ -17,7 +17,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use chat_core::api::v1::{RoomId, Seq, UnixMillis};
 
-use super::StoreError;
+use super::super::StoreError;
 
 /// Now, on the server's clock.
 pub(super) fn now() -> UnixMillis {

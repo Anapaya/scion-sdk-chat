@@ -11,54 +11,47 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! SQLite persistence. This file opens the database and owns the pool; the per-table statements
-//! live one module down, in `users`, `rooms` and `messages`.
+//! The store module defines the data access layer for the chat application.
+//!
+//! It provides the [DataStore] trait which abstracts the underlying storage mechanism, and
+//! implementations for supported databases (currently SQLite).
 
-use std::{
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use std::path::PathBuf;
 
-use sqlx::{
-    AssertSqlSafe, SqlitePool,
-    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
-};
+use async_trait::async_trait;
+use chat_core::api::v1::{Message, PostMessageResponse, Room, RoomId, Seq};
+use thiserror::Error;
 
-mod convert;
-mod messages;
-mod rooms;
-#[cfg(test)]
-mod tests;
-mod users;
+pub mod sqlite;
 
-pub use rooms::RoomCreation;
+pub use self::sqlite::SqliteStore;
 
-/// The schema applied at startup. There are no migrations.
-const SCHEMA: &str = include_str!("store/schema.sql");
-
-/// Stamped into `PRAGMA user_version`. A database stamped with anything else is deleted and
-/// rebuilt, so bumping this discards all data. Bump it whenever `schema.sql` changes.
-const SCHEMA_VERSION: i32 = 1;
-
-/// The room that always exists. Seeded at every startup, and no endpoint deletes a room.
+/// The room that always exists. Every implementation seeds it at startup, and no endpoint deletes
+/// a room, so clients may assume it is there.
 pub const LOBBY: &str = "lobby";
 
 /// Anything the store can fail with.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error)]
 pub enum StoreError {
+    /// The row the caller named does not exist.
+    #[error("not found: {0}")]
+    NotFound(String),
+
     /// A query or a connection failed.
-    #[error("database: {0}")]
-    Database(#[from] sqlx::Error),
-    /// The database file could not be removed.
+    #[error("database error: {0}")]
+    DbError(#[from] sqlx::Error),
+
+    /// The database file could not be created or removed.
     #[error("database file {path}: {source}")]
-    File {
-        /// The file being removed.
+    FileError {
+        /// The file being operated on.
         path: PathBuf,
         /// What the filesystem reported.
         source: std::io::Error,
     },
-    /// A value did not fit across the SQLite boundary, where signed integers meet the API's
-    /// unsigned ones.
+
+    /// A value did not fit across the boundary between the database's signed integers
+    /// and the API's unsigned ones.
     #[error("{what} out of range: {value}")]
     OutOfRange {
         /// Which value.
@@ -66,6 +59,25 @@ pub enum StoreError {
         /// What it held.
         value: i128,
     },
+}
+
+/// The outcome of creating a room. Creation is idempotent on the name, so a taken name is a
+/// success that reports the room already there.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RoomCreation {
+    /// The room did not exist and was created.
+    Created(Room),
+    /// The name was taken; this is the room holding it.
+    Existing(Room),
+}
+
+impl RoomCreation {
+    /// The room, however it was obtained.
+    pub fn room(&self) -> &Room {
+        match self {
+            Self::Created(room) | Self::Existing(room) => room,
+        }
+    }
 }
 
 /// How much the server is holding, for the caps.
@@ -77,109 +89,61 @@ pub struct Counts {
     pub rooms: u64,
 }
 
-/// The database, and every query against it.
-#[derive(Debug, Clone)]
-pub struct Store {
-    pool: SqlitePool,
-}
+/// DataStore defines the interface for persisting chat data.
+///
+/// Implementations of this trait must be thread-safe ([`Send`] + [`Sync`]).
+#[async_trait]
+pub trait DataStore: Send + Sync {
+    // ---- Accounts ----
 
-impl Store {
-    /// Opens the database at `path`, creating it and its directory when absent and
-    /// **discarding it** when it was written by a different schema version. Applies the schema
-    /// and seeds [`LOBBY`].
-    pub async fn new(path: &Path) -> Result<Self, StoreError> {
-        // SQLite creates the file but not the directory holding it, and reports the difference
-        // only as "unable to open database file".
-        match path.parent() {
-            Some(parent) if !parent.as_os_str().is_empty() => {
-                std::fs::create_dir_all(parent).map_err(|source| {
-                    StoreError::File {
-                        path: parent.to_path_buf(),
-                        source,
-                    }
-                })?;
-            }
-            _ => {}
-        }
+    /// Register an account. Returns `false` when the username is already taken.
+    async fn insert_user(&self, username: &str, pw_hash: &str) -> Result<bool, StoreError>;
 
-        if stamped_version(path)
-            .await?
-            .is_some_and(|v| v != SCHEMA_VERSION)
-        {
-            remove_database(path)?;
-        }
+    // ---- Rooms ----
 
-        let pool = connect(path, true).await?;
-        sqlx::raw_sql(SCHEMA).execute(&pool).await?;
-        // A PRAGMA takes no bind parameter, so the statement is built by hand. Safe to
-        // assert: SCHEMA_VERSION is a compile-time integer constant, not caller input.
-        sqlx::query(AssertSqlSafe(format!(
-            "PRAGMA user_version = {SCHEMA_VERSION}"
-        )))
-        .execute(&pool)
-        .await?;
+    /// Create a room, or return the one already holding the name. Names are matched
+    /// case-insensitively.
+    async fn create_room(&self, name: &str) -> Result<RoomCreation, StoreError>;
 
-        let store = Self { pool };
-        store.create_room(LOBBY).await?;
-        Ok(store)
-    }
+    /// List every room, oldest first, each with the `seq` of its newest message.
+    async fn list_rooms(&self) -> Result<Vec<Room>, StoreError>;
 
-    /// Accounts and rooms held, for the caps. Spans both tables, so it lives here rather than in
-    /// either of their modules.
-    pub async fn counts(&self) -> Result<Counts, StoreError> {
-        let row = sqlx::query!(
-            r#"SELECT (SELECT COUNT(*) FROM users) AS "users!",
-                      (SELECT COUNT(*) FROM rooms) AS "rooms!""#,
-        )
-        .fetch_one(&self.pool)
-        .await?;
+    /// Report whether a room with this id exists.
+    async fn room_exists(&self, room: RoomId) -> Result<bool, StoreError>;
 
-        Ok(Counts {
-            users: convert::from_column("user count", row.users)?,
-            rooms: convert::from_column("room count", row.rooms)?,
-        })
-    }
-}
+    // ---- Messages ----
 
-/// Opens a pool with the settings every connection needs.
-async fn connect(path: &Path, create: bool) -> Result<SqlitePool, StoreError> {
-    let options = SqliteConnectOptions::new()
-        .filename(path)
-        .create_if_missing(create)
-        .journal_mode(SqliteJournalMode::Wal)
-        .busy_timeout(Duration::from_secs(5))
-        .foreign_keys(true);
+    /// Append a message to a room.
+    ///
+    /// Returns [StoreError::NotFound] if the room does not exist.
+    async fn post_message(
+        &self,
+        room: RoomId,
+        username: &str,
+        body: &str,
+    ) -> Result<PostMessageResponse, StoreError>;
 
-    Ok(SqlitePoolOptions::new().connect_with(options).await?)
-}
+    /// Return the newest `limit` messages in a room, oldest first — what opening a room fetches.
+    async fn messages_newest(&self, room: RoomId, limit: u32) -> Result<Vec<Message>, StoreError>;
 
-/// The `user_version` an existing database is stamped with. `None` when there is no database, or
-/// when it reads as `0` — the value a file gets before any schema is stamped into it.
-async fn stamped_version(path: &Path) -> Result<Option<i32>, StoreError> {
-    if !path.exists() {
-        return Ok(None);
-    }
+    /// Return the messages newer than `after`, oldest first — what polling fetches.
+    async fn messages_after(
+        &self,
+        room: RoomId,
+        after: Seq,
+        limit: u32,
+    ) -> Result<Vec<Message>, StoreError>;
 
-    let pool = connect(path, false).await?;
-    let version: i32 = sqlx::query_scalar("PRAGMA user_version")
-        .fetch_one(&pool)
-        .await?;
-    pool.close().await;
+    /// Return the messages older than `before`, oldest first — what "load more" fetches.
+    async fn messages_before(
+        &self,
+        room: RoomId,
+        before: Seq,
+        limit: u32,
+    ) -> Result<Vec<Message>, StoreError>;
 
-    Ok((version != 0).then_some(version))
-}
+    // ---- Caps ----
 
-/// Deletes the database and the files WAL mode keeps beside it.
-fn remove_database(path: &Path) -> Result<(), StoreError> {
-    for suffix in ["", "-wal", "-shm"] {
-        let mut name = path.as_os_str().to_owned();
-        name.push(suffix);
-        let file = PathBuf::from(name);
-        match std::fs::remove_file(&file) {
-            Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(source) => return Err(StoreError::File { path: file, source }),
-        }
-    }
-    Ok(())
+    /// Count the accounts and rooms held, for the caps.
+    async fn counts(&self) -> Result<Counts, StoreError>;
 }

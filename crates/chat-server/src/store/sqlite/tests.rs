@@ -16,17 +16,19 @@
 use chat_core::api::v1::{Message, Room, RoomId, Seq};
 use tempfile::TempDir;
 
-use super::*;
+use super::{super::*, *};
 
 /// A store on a fresh file, with the directory kept alive for the test's duration.
-async fn store() -> (Store, TempDir) {
+async fn store() -> (SqliteStore, TempDir) {
     let dir = TempDir::new().expect("temp dir");
-    let store = Store::new(&dir.path().join("chat.db")).await.expect("open");
+    let store = SqliteStore::new(&dir.path().join("chat.db"))
+        .await
+        .expect("open");
     (store, dir)
 }
 
 /// The room every client may assume exists.
-async fn lobby(store: &Store) -> Room {
+async fn lobby(store: &SqliteStore) -> Room {
     store
         .list_rooms()
         .await
@@ -36,12 +38,22 @@ async fn lobby(store: &Store) -> Room {
         .expect("lobby is seeded")
 }
 
+/// The trait exists so that callers can hold a store without naming the backend. That only
+/// works if it stays usable behind a pointer.
+#[tokio::test]
+async fn the_store_is_usable_as_a_trait_object() {
+    let (store, _dir) = store().await;
+    let store: std::sync::Arc<dyn DataStore> = std::sync::Arc::new(store);
+
+    assert_eq!(store.counts().await.expect("counts").rooms, 1);
+}
+
 #[tokio::test]
 async fn lobby_is_seeded_and_survives_a_restart() {
     let dir = TempDir::new().expect("temp dir");
     let path = dir.path().join("chat.db");
 
-    let store = Store::new(&path).await.expect("open");
+    let store = SqliteStore::new(&path).await.expect("open");
     let first = lobby(&store).await;
     store
         .post_message(first.id, "alice", "hi")
@@ -49,7 +61,7 @@ async fn lobby_is_seeded_and_survives_a_restart() {
         .expect("post");
     drop(store);
 
-    let reopened = Store::new(&path).await.expect("reopen");
+    let reopened = SqliteStore::new(&path).await.expect("reopen");
     let second = lobby(&reopened).await;
 
     assert_eq!(
@@ -58,7 +70,7 @@ async fn lobby_is_seeded_and_survives_a_restart() {
     );
     assert_eq!(
         reopened
-            .newest_page(second.id, 10)
+            .messages_newest(second.id, 10)
             .await
             .expect("page")
             .len(),
@@ -72,7 +84,7 @@ async fn a_version_mismatch_rebuilds_the_database() {
     let dir = TempDir::new().expect("temp dir");
     let path = dir.path().join("chat.db");
 
-    let store = Store::new(&path).await.expect("open");
+    let store = SqliteStore::new(&path).await.expect("open");
     let room = store.create_room("scion").await.expect("create");
     store
         .post_message(room.room().id, "alice", "hi")
@@ -88,7 +100,7 @@ async fn a_version_mismatch_rebuilds_the_database() {
         .expect("stamp");
     pool.close().await;
 
-    let store = Store::new(&path).await.expect("reopen");
+    let store = SqliteStore::new(&path).await.expect("reopen");
     let rooms = store.list_rooms().await.expect("list");
 
     assert_eq!(
@@ -104,7 +116,9 @@ async fn opening_creates_the_directory_holding_the_database() {
     let dir = TempDir::new().expect("temp dir");
     let nested = dir.path().join("data").join("chat.db");
 
-    let store = Store::new(&nested).await.expect("open should create data/");
+    let store = SqliteStore::new(&nested)
+        .await
+        .expect("open should create data/");
 
     assert!(nested.exists());
     assert_eq!(lobby(&store).await.name, LOBBY);
@@ -115,11 +129,11 @@ async fn reopening_the_same_version_keeps_everything() {
     let dir = TempDir::new().expect("temp dir");
     let path = dir.path().join("chat.db");
 
-    let store = Store::new(&path).await.expect("open");
+    let store = SqliteStore::new(&path).await.expect("open");
     store.create_room("scion").await.expect("create");
     drop(store);
 
-    let store = Store::new(&path).await.expect("reopen");
+    let store = SqliteStore::new(&path).await.expect("reopen");
     assert_eq!(store.counts().await.expect("counts").rooms, 2);
 }
 
@@ -169,7 +183,7 @@ async fn seq_increases_and_never_repeats_across_rooms() {
         "seq must increase server-wide"
     );
     assert_eq!(
-        store.newest_page(lobby.id, 10).await.expect("page"),
+        store.messages_newest(lobby.id, 10).await.expect("page"),
         vec![
             Message {
                 seq: a.seq,
@@ -228,25 +242,46 @@ async fn the_three_fetch_shapes_agree_and_return_oldest_first() {
     let of = |page: Vec<Message>| page.into_iter().map(|m| m.seq).collect::<Vec<_>>();
 
     assert_eq!(
-        of(store.newest_page(room, 3).await.expect("newest")),
-        seqs[2..]
-    );
-    assert_eq!(of(store.newest_page(room, 50).await.expect("newest")), seqs);
-    assert_eq!(
-        of(store.after(room, seqs[1], 50).await.expect("after")),
+        of(store.messages_newest(room, 3).await.expect("newest")),
         seqs[2..]
     );
     assert_eq!(
-        of(store.after(room, Seq::START, 50).await.expect("after")),
+        of(store.messages_newest(room, 50).await.expect("newest")),
         seqs
     );
-    assert_eq!(of(store.after(room, seqs[4], 50).await.expect("after")), []);
     assert_eq!(
-        of(store.before(room, seqs[3], 2).await.expect("before")),
+        of(store
+            .messages_after(room, seqs[1], 50)
+            .await
+            .expect("after")),
+        seqs[2..]
+    );
+    assert_eq!(
+        of(store
+            .messages_after(room, Seq::START, 50)
+            .await
+            .expect("after")),
+        seqs
+    );
+    assert_eq!(
+        of(store
+            .messages_after(room, seqs[4], 50)
+            .await
+            .expect("after")),
+        []
+    );
+    assert_eq!(
+        of(store
+            .messages_before(room, seqs[3], 2)
+            .await
+            .expect("before")),
         seqs[1..3]
     );
     assert_eq!(
-        of(store.before(room, seqs[0], 50).await.expect("before")),
+        of(store
+            .messages_before(room, seqs[0], 50)
+            .await
+            .expect("before")),
         []
     );
 }
@@ -267,8 +302,8 @@ async fn posting_to_a_missing_room_is_refused() {
     let result = store.post_message(RoomId::new(9999), "alice", "hi").await;
 
     assert!(
-        matches!(result, Err(StoreError::Database(_))),
-        "the foreign key should reject it, got {result:?}"
+        matches!(result, Err(StoreError::NotFound(_))),
+        "a missing room should be reported as not found, got {result:?}"
     );
 }
 
@@ -277,7 +312,7 @@ async fn a_cursor_beyond_the_column_range_is_an_error_not_a_panic() {
     let (store, _dir) = store().await;
     let room = lobby(&store).await.id;
 
-    let result = store.after(room, Seq::new(u64::MAX), 50).await;
+    let result = store.messages_after(room, Seq::new(u64::MAX), 50).await;
 
     assert!(
         matches!(result, Err(StoreError::OutOfRange { what: "seq", .. })),
