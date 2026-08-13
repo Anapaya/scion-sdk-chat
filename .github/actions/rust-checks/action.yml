@@ -56,7 +56,5 @@ runs:
       working-directory: ${{ inputs.workspace }}
       run: |
         cargo install --version ${{ inputs.sqlx-version }} sqlx-cli --no-default-features --features sqlite
-        rm -f prepare.db
-        sqlite3 prepare.db < crates/chat-server/src/schema.sql
-        DATABASE_URL="sqlite://$PWD/prepare.db" cargo sqlx prepare --workspace --check -- --all-targets
-        rm -f prepare.db
+        sqlite3 "$RUNNER_TEMP/prepare.db" < crates/chat-server/src/schema.sql
+        DATABASE_URL="sqlite://$RUNNER_TEMP/prepare.db" cargo sqlx prepare --workspace --check -- --all-targets

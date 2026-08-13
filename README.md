@@ -2,8 +2,8 @@
 
 Chat demo application using scion-sdk.
 
-The workspace holds two crates: `chat-core`, the request and response types the server and every
-client share, and `chat-server`, the server itself. `cargo doc_dx --open` renders both.
+The workspace holds two crates: `chat-core`, the API's request and response types, and
+`chat-server`, the server itself. `cargo doc_dx --open` renders both.
 
 ## Development
 
@@ -44,9 +44,9 @@ You only need `sqlx-cli` to add or change a query, which requires regenerating i
 
 ```sh
 cargo install --version 0.9.0 sqlx-cli --no-default-features --features sqlite  # match Cargo.toml
-rm -f prepare.db   # the schema is all CREATE TABLE IF NOT EXISTS, so a stale file stays stale
-sqlite3 prepare.db < crates/chat-server/src/schema.sql
-DATABASE_URL=sqlite://$PWD/prepare.db cargo sqlx prepare --workspace -- --all-targets
+DB=$(mktemp -d)/prepare.db   # a fresh file: CREATE TABLE IF NOT EXISTS would leave a stale one stale
+sqlite3 "$DB" < crates/chat-server/src/schema.sql
+DATABASE_URL="sqlite://$DB" cargo sqlx prepare --workspace -- --all-targets
 ```
 
 Forgetting to is a compile error. Metadata that has drifted from the schema is worse — it still
