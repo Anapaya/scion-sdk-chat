@@ -34,7 +34,7 @@ mod users;
 pub use rooms::RoomCreation;
 
 /// The schema applied at startup. There are no migrations.
-const SCHEMA: &str = include_str!("schema.sql");
+const SCHEMA: &str = include_str!("store/schema.sql");
 
 /// Stamped into `PRAGMA user_version`. A database stamped with anything else is deleted and
 /// rebuilt, so bumping this discards all data. Bump it whenever `schema.sql` changes.
