@@ -31,7 +31,7 @@ absent. Deleting it starts over.
 ### `.sqlx` purpose
 
 The server's SQL is checked against the schema while it compiles, so the compiler needs to know
-the schema. `.sqlx/` is what it was told, one JSON file per query.
+the schema. `crates/chat-server/.sqlx/` is what it was told, one JSON file per query.
 
 It is committed so that **compiling** needs no database and no tooling: `cargo build`, `cargo test`
 and `cargo run` all work on a fresh clone without `DATABASE_URL` or `sqlx-cli`. Without it the
@@ -44,9 +44,10 @@ You only need `sqlx-cli` to add or change a query, which requires regenerating i
 
 ```sh
 cargo install --version 0.9.0 sqlx-cli --no-default-features --features sqlite  # match Cargo.toml
+cd crates/chat-server
 DB=$(mktemp -d)/prepare.db   # a fresh file: CREATE TABLE IF NOT EXISTS would leave a stale one stale
-sqlite3 "$DB" < crates/chat-server/src/schema.sql
-DATABASE_URL="sqlite://$DB" cargo sqlx prepare --workspace -- --all-targets
+sqlite3 "$DB" < src/schema.sql
+DATABASE_URL="sqlite://$DB" cargo sqlx prepare -- --all-targets
 ```
 
 Forgetting to is a compile error. Metadata that has drifted from the schema is worse — it still
