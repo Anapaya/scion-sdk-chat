@@ -123,10 +123,10 @@ pub trait DataStore: Send + Sync {
         body: &str,
     ) -> Result<PostMessageResponse, StoreError>;
 
-    /// Return the newest `limit` messages in a room, oldest first — what opening a room fetches.
+    /// Return the newest `limit` messages in a room, oldest first.
     async fn messages_newest(&self, room: RoomId, limit: u32) -> Result<Vec<Message>, StoreError>;
 
-    /// Return the messages newer than `after`, oldest first — what polling fetches.
+    /// Return the messages newer than `after`, oldest first.
     async fn messages_after(
         &self,
         room: RoomId,
@@ -134,7 +134,7 @@ pub trait DataStore: Send + Sync {
         limit: u32,
     ) -> Result<Vec<Message>, StoreError>;
 
-    /// Return the messages older than `before`, oldest first — what "load more" fetches.
+    /// Return the messages older than `before`, oldest first.
     async fn messages_before(
         &self,
         room: RoomId,

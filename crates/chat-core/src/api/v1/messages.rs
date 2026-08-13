@@ -54,9 +54,8 @@ pub struct Message {
     pub posted_at: UnixMillis,
 }
 
-/// A page of a room's messages, whichever of the three ways it was asked for: no cursor (the
-/// newest page, to open a room), `after_seq` (poll, then append), or `before_seq` (load more,
-/// then prepend).
+/// A page of a room's messages, whichever of the three ways it was asked for: no cursor,
+/// `after_seq`, or `before_seq`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct MessagesResponse {
     /// The page, **always oldest-first**, whichever cursor asked for it.
