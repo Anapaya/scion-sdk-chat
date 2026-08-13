@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT pw_hash FROM users WHERE username = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "pw_hash",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "pw_hash"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9a979a583ea61ed8c21b41c2d5f73a7adf7155ed47cc12a0843a5c0cb52135bf"
+}

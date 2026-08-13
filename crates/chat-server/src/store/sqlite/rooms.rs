@@ -21,13 +21,24 @@ use super::{
     convert::{now, room_id, seq, to_column},
 };
 
-/// Creates a room, or returns the one already holding the name.
-pub(super) async fn create_room(pool: &SqlitePool, name: &str) -> Result<RoomCreation, StoreError> {
+/// Creates a room, or returns the one already holding the name, refusing once `max_rooms` exist.
+///
+/// The cap is checked inside the insert rather than before it, so two concurrent creations cannot
+/// both pass a check and both write.
+pub(super) async fn create_room(
+    pool: &SqlitePool,
+    name: &str,
+    max_rooms: u32,
+) -> Result<RoomCreation, StoreError> {
     let created_at = to_column("timestamp", now().get())?;
+    let max = i64::from(max_rooms);
     let inserted = sqlx::query!(
-        "INSERT INTO rooms (name, created_at) VALUES (?, ?) ON CONFLICT(name) DO NOTHING",
+        "INSERT INTO rooms (name, created_at)
+         SELECT ?, ? WHERE (SELECT COUNT(*) FROM rooms) < ?
+         ON CONFLICT(name) DO NOTHING",
         name,
         created_at,
+        max,
     )
     .execute(pool)
     .await?
@@ -41,8 +52,13 @@ pub(super) async fn create_room(pool: &SqlitePool, name: &str) -> Result<RoomCre
            GROUP BY r.id, r.name"#,
         name,
     )
-    .fetch_one(pool)
+    .fetch_optional(pool)
     .await?;
+
+    // Nothing was inserted and nothing is there to return: the cap refused it.
+    let Some(row) = row else {
+        return Err(StoreError::CapExceeded { what: "room" });
+    };
 
     let room = Room {
         id: room_id(row.id)?,

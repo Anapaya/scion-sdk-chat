@@ -1,0 +1,141 @@
+// Copyright 2026 Anapaya Systems
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//! Registering an account, logging in, and recognising the caller on every other request.
+
+use std::sync::Arc;
+
+use axum::{
+    Json,
+    extract::{FromRequestParts, State},
+    http::{StatusCode, request::Parts},
+};
+use chat_core::api::v1::{ErrorCode, LoginRequest, LoginResponse, RegisterRequest};
+
+use super::{ApiError, AppState};
+use crate::{
+    auth::{hash_password, verify_password},
+    store::Registration,
+};
+
+/// A username, once it has been checked.
+///
+/// Handlers take this rather than a `String`, so a request cannot reach the store without the
+/// name having been validated on the way in.
+pub struct Username(pub String);
+
+impl Username {
+    /// Accepts 1–32 characters with nothing unprintable in them.
+    fn parse(raw: &str) -> Result<Self, ApiError> {
+        let length = raw.chars().count();
+        let printable = !raw.chars().any(char::is_control);
+
+        if (1..=32).contains(&length) && printable {
+            Ok(Self(raw.to_owned()))
+        } else {
+            Err(ApiError::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                ErrorCode::InvalidUsername,
+                "a username is 1 to 32 characters and holds no control characters",
+            ))
+        }
+    }
+}
+
+/// The caller, established from the bearer token.
+///
+/// Any handler that takes this argument is authenticated by construction: axum runs the
+/// extraction before the handler body, and a missing or invalid token never reaches it.
+pub struct Caller(pub String);
+
+impl FromRequestParts<Arc<AppState>> for Caller {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &Arc<AppState>,
+    ) -> Result<Self, Self::Rejection> {
+        let token = parts
+            .headers
+            .get(axum::http::header::AUTHORIZATION)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.strip_prefix("Bearer "))
+            .ok_or_else(ApiError::unauthorized)?;
+
+        let username = state
+            .tokens
+            .verify(token.trim())
+            .map_err(|_| ApiError::unauthorized())?;
+
+        Ok(Self(username))
+    }
+}
+
+/// `POST /register`
+pub async fn register(
+    State(state): State<Arc<AppState>>,
+    body: Result<Json<RegisterRequest>, axum::extract::rejection::JsonRejection>,
+) -> Result<StatusCode, ApiError> {
+    let Json(body) = body?;
+    let username = Username::parse(&body.username)?;
+
+    // Hashing is deliberately slow, so it runs on a thread that is allowed to block.
+    let password = body.password.clone();
+    let hash = tokio::task::spawn_blocking(move || hash_password(&password))
+        .await
+        .expect("the hashing task cannot panic")?;
+
+    match state
+        .store
+        .insert_user(&username.0, &hash, state.config.max_accounts)
+        .await
+    {
+        Ok(Registration::Created) => Ok(StatusCode::CREATED),
+        Ok(Registration::UsernameTaken) => {
+            Err(ApiError::new(
+                StatusCode::CONFLICT,
+                ErrorCode::UsernameTaken,
+                "that username is already registered",
+            ))
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// `POST /login`
+pub async fn login(
+    State(state): State<Arc<AppState>>,
+    body: Result<Json<LoginRequest>, axum::extract::rejection::JsonRejection>,
+) -> Result<Json<LoginResponse>, ApiError> {
+    let Json(body) = body?;
+
+    // Look the account up whether or not the name is well-formed, so that a rejected username
+    // and a wrong password are indistinguishable from the outside.
+    let stored = state.store.password_hash(&body.username).await?;
+
+    let password = body.password.clone();
+    let verified = tokio::task::spawn_blocking(move || verify_password(&password, stored.as_ref()))
+        .await
+        .expect("the verification task cannot panic");
+
+    if !verified {
+        return Err(ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            ErrorCode::InvalidCredentials,
+            "that username and password do not match",
+        ));
+    }
+
+    let (token, expires_at) = state.tokens.issue(&body.username)?;
+    Ok(Json(LoginResponse { token, expires_at }))
+}

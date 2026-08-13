@@ -14,9 +14,15 @@ license = "Apache-2.0"
 repository = "https://github.com/anapaya/scion-sdk-chat"
 
 [workspace.dependencies]
+argon2 = "0.5"
 async-trait = "0.1"
+axum = "0.8"
 chat-core = { path = "crates/chat-core" }
+clap = { version = "4", features = ["derive", "env"] }
+jsonwebtoken = { version = "11", features = ["rust_crypto"] }
+rand = "0.10"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 sqlx = { version = "0.9", default-features = false, features = [
     "macros",
     "runtime-tokio",
@@ -24,7 +30,15 @@ sqlx = { version = "0.9", default-features = false, features = [
 ] }
 tempfile = "3"
 thiserror = "2"
-tokio = { version = "1", features = ["macros", "rt"] }
+tokio = { version = "1", features = [
+    "macros",
+    "net",
+    "rt-multi-thread",
+    "signal",
+] }
+tower = "0.5"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 utoipa = "5.4"
 
 [workspace.lints.clippy]

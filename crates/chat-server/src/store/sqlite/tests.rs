@@ -20,6 +20,9 @@ use tempfile::TempDir;
 
 use super::{super::*, *};
 
+/// A cap high enough that no test reaches it unless it means to.
+const NO_CAP: u32 = u32::MAX;
+
 /// The database file inside a test's directory.
 fn db_path(dir: &TempDir) -> PathBuf {
     dir.path().join("chat.db")
@@ -56,7 +59,7 @@ async fn the_store_is_usable_as_a_trait_object() {
     let (store, _dir) = store().await;
     let store: std::sync::Arc<dyn DataStore> = std::sync::Arc::new(store);
 
-    assert_eq!(store.counts().await.expect("counts").rooms, 1);
+    assert_eq!(store.list_rooms().await.expect("list").len(), 1);
 }
 
 #[tokio::test]
@@ -89,7 +92,7 @@ async fn lobby_is_seeded_and_survives_a_restart() {
 #[tokio::test]
 async fn a_version_mismatch_rebuilds_the_database() {
     let (store, dir) = store().await;
-    let room = store.create_room("scion").await.expect("create");
+    let room = store.create_room("scion", NO_CAP).await.expect("create");
     store
         .post_message(room.room().id, "alice", "hi")
         .await
@@ -112,7 +115,7 @@ async fn a_version_mismatch_rebuilds_the_database() {
         [LOBBY],
         "the rebuilt database kept rooms from the old schema"
     );
-    assert_eq!(store.counts().await.expect("counts").rooms, 1);
+    assert_eq!(store.list_rooms().await.expect("list").len(), 1);
 }
 
 #[tokio::test]
@@ -131,42 +134,60 @@ async fn opening_creates_the_directory_holding_the_database() {
 #[tokio::test]
 async fn reopening_the_same_version_keeps_everything() {
     let (store, dir) = store().await;
-    store.create_room("scion").await.expect("create");
+    store.create_room("scion", NO_CAP).await.expect("create");
 
     let store = restart(store, &dir).await;
-    assert_eq!(store.counts().await.expect("counts").rooms, 2);
+    assert_eq!(store.list_rooms().await.expect("list").len(), 2);
 }
 
 #[tokio::test]
 async fn rooms_are_created_once_and_matched_case_insensitively() {
     let (store, _dir) = store().await;
 
-    let created = store.create_room("scion").await.expect("create");
+    let created = store.create_room("scion", NO_CAP).await.expect("create");
     assert!(matches!(created, RoomCreation::Created(_)));
 
-    let again = store.create_room("SCION").await.expect("create again");
+    let again = store
+        .create_room("SCION", NO_CAP)
+        .await
+        .expect("create again");
     assert!(matches!(again, RoomCreation::Existing(_)));
     assert_eq!(created.room().id, again.room().id);
-    assert_eq!(store.counts().await.expect("counts").rooms, 2);
+    assert_eq!(store.list_rooms().await.expect("list").len(), 2);
 }
 
 #[tokio::test]
 async fn usernames_are_taken_once_and_case_insensitively() {
     let (store, _dir) = store().await;
 
-    assert!(store.insert_user("alice", "hash").await.expect("insert"));
-    assert!(
-        !store.insert_user("ALICE", "other").await.expect("insert"),
+    let hash = PasswordHash::new("hash".to_owned());
+    assert_eq!(
+        store
+            .insert_user("alice", &hash, NO_CAP)
+            .await
+            .expect("insert"),
+        Registration::Created
+    );
+    assert_eq!(
+        store
+            .insert_user("ALICE", &hash, NO_CAP)
+            .await
+            .expect("insert"),
+        Registration::UsernameTaken,
         "the name should already be taken, case-insensitively"
     );
-    assert_eq!(store.counts().await.expect("counts").users, 1);
 }
 
 #[tokio::test]
 async fn seq_increases_and_never_repeats_across_rooms() {
     let (store, _dir) = store().await;
     let lobby = lobby(&store).await;
-    let other = store.create_room("scion").await.expect("create").room().id;
+    let other = store
+        .create_room("scion", NO_CAP)
+        .await
+        .expect("create")
+        .room()
+        .id;
 
     let a = store
         .post_message(lobby.id, "alice", "1")
@@ -318,4 +339,76 @@ async fn a_cursor_beyond_the_column_range_is_an_error_not_a_panic() {
         matches!(result, Err(StoreError::OutOfRange { what: "seq", .. })),
         "got {result:?}"
     );
+}
+
+/// The cap is enforced inside the insert, so it holds without a separate check the caller could
+/// race against.
+#[tokio::test]
+async fn the_account_cap_refuses_the_one_past_it() {
+    let (store, _dir) = store().await;
+    let hash = PasswordHash::new("hash".to_owned());
+
+    assert_eq!(
+        store.insert_user("alice", &hash, 1).await.expect("insert"),
+        Registration::Created
+    );
+    assert!(matches!(
+        store.insert_user("bob", &hash, 1).await,
+        Err(StoreError::CapExceeded { what: "account" })
+    ));
+}
+
+#[tokio::test]
+async fn the_room_cap_refuses_the_one_past_it() {
+    let (store, _dir) = store().await;
+
+    // The lobby already occupies the first slot.
+    assert!(matches!(
+        store.create_room("scion", 2).await.expect("create"),
+        RoomCreation::Created(_)
+    ));
+    assert!(matches!(
+        store.create_room("another", 2).await,
+        Err(StoreError::CapExceeded { what: "room" })
+    ));
+    assert_eq!(store.list_rooms().await.expect("list").len(), 2);
+}
+
+/// A name that already exists is returned even at the cap: nothing is created, so nothing is
+/// refused.
+#[tokio::test]
+async fn an_existing_room_is_returned_even_at_the_cap() {
+    let (store, _dir) = store().await;
+
+    let existing = store.create_room(LOBBY, 1).await.expect("create");
+
+    assert!(matches!(existing, RoomCreation::Existing(_)));
+    assert_eq!(existing.room().name, LOBBY);
+}
+
+/// The stored hash comes back for verification, and only for a name that exists.
+#[tokio::test]
+async fn the_password_hash_is_readable_for_verification() {
+    let (store, _dir) = store().await;
+    let hash = PasswordHash::new("$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA".to_owned());
+    store
+        .insert_user("alice", &hash, NO_CAP)
+        .await
+        .expect("insert");
+
+    let stored = store.password_hash("Alice").await.expect("lookup");
+
+    assert_eq!(stored.expect("a hash").as_str(), hash.as_str());
+    assert!(store.password_hash("bob").await.expect("lookup").is_none());
+}
+
+/// A hash must not reach a log through the `Debug` of whatever carries it.
+#[tokio::test]
+async fn the_password_hash_is_redacted_in_debug_output() {
+    let hash = PasswordHash::new("$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA".to_owned());
+
+    let rendered = format!("{hash:?}");
+
+    assert!(!rendered.contains("aGFzaA"), "{rendered}");
+    assert!(rendered.contains("redacted"), "{rendered}");
 }

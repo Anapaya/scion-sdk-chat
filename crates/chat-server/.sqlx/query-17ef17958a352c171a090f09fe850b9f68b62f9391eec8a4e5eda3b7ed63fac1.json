@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO rooms (name, created_at)\n         SELECT ?, ? WHERE (SELECT COUNT(*) FROM rooms) < ?\n         ON CONFLICT(name) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "17ef17958a352c171a090f09fe850b9f68b62f9391eec8a4e5eda3b7ed63fac1"
+}

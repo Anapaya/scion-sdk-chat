@@ -28,7 +28,7 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
 };
 
-use super::{Counts, DataStore, LOBBY, RoomCreation, StoreError};
+use super::{DataStore, LOBBY, PasswordHash, Registration, RoomCreation, StoreError};
 
 mod convert;
 mod messages;
@@ -87,19 +87,29 @@ impl SqliteStore {
         .await?;
 
         let store = Self { pool };
-        store.create_room(LOBBY).await?;
+        // The lobby is seeded before any cap can apply to it.
+        store.create_room(LOBBY, u32::MAX).await?;
         Ok(store)
     }
 }
 
 #[async_trait]
 impl DataStore for SqliteStore {
-    async fn insert_user(&self, username: &str, pw_hash: &str) -> Result<bool, StoreError> {
-        users::insert_user(&self.pool, username, pw_hash).await
+    async fn insert_user(
+        &self,
+        username: &str,
+        pw_hash: &PasswordHash,
+        max_accounts: u32,
+    ) -> Result<Registration, StoreError> {
+        users::insert_user(&self.pool, username, pw_hash, max_accounts).await
     }
 
-    async fn create_room(&self, name: &str) -> Result<RoomCreation, StoreError> {
-        rooms::create_room(&self.pool, name).await
+    async fn password_hash(&self, username: &str) -> Result<Option<PasswordHash>, StoreError> {
+        users::password_hash(&self.pool, username).await
+    }
+
+    async fn create_room(&self, name: &str, max_rooms: u32) -> Result<RoomCreation, StoreError> {
+        rooms::create_room(&self.pool, name, max_rooms).await
     }
 
     async fn list_rooms(&self) -> Result<Vec<Room>, StoreError> {
@@ -139,20 +149,6 @@ impl DataStore for SqliteStore {
         limit: u32,
     ) -> Result<Vec<Message>, StoreError> {
         messages::before(&self.pool, room, before, limit).await
-    }
-
-    async fn counts(&self) -> Result<Counts, StoreError> {
-        let row = sqlx::query!(
-            r#"SELECT (SELECT COUNT(*) FROM users) AS "users!",
-                      (SELECT COUNT(*) FROM rooms) AS "rooms!""#,
-        )
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(Counts {
-            users: convert::from_column("user count", row.users)?,
-            rooms: convert::from_column("room count", row.rooms)?,
-        })
     }
 }
 

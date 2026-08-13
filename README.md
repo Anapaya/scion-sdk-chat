@@ -2,8 +2,51 @@
 
 Chat demo application using scion-sdk.
 
-The workspace holds two crates: `chat-core`, the API's request and response types, and
-`chat-server`, the server itself. `cargo doc_dx --open` renders both.
+The workspace holds two crates:
+
+- `chat-core`, the API's request and response types
+- `chat-server`, the server
+
+`cargo doc_dx --open` renders both.
+
+## chat-server guide
+
+`--transport tcp` serves the API as plain HTTP, with no TLS and no SCION, so every endpoint is
+reachable with `curl`. It is a development mode.
+
+```sh
+cargo run -p chat-server -- --transport tcp --listen 127.0.0.1:8080
+```
+
+Every flag has a `CHAT_*` environment fallback:
+
+| Flag | Env | Default | |
+|---|---|---|---|
+| `--transport` | `CHAT_TRANSPORT` | `scion` | `scion` or `tcp` |
+| `--listen` | `CHAT_LISTEN` | `0.0.0.0:8443` | address to bind |
+| `--data-dir` | `CHAT_DATA_DIR` | `./data` | holds `chat.db` and `jwt.secret` |
+| `--max-accounts` | `CHAT_MAX_ACCOUNTS` | `500` | accounts accepted |
+| `--max-rooms` | `CHAT_MAX_ROOMS` | `100` | rooms accepted |
+| `--max-message-bytes` | `CHAT_MAX_MESSAGE_BYTES` | `4096` | largest message body |
+| `--token-expiry-days` | `CHAT_TOKEN_EXPIRY_DAYS` | `7` | how long a login lasts |
+| `--endhost-api` | `CHAT_ENDHOST_API` | — | how to reach the SCION network |
+| `--auth-token-file` | `CHAT_AUTH_TOKEN_FILE` | — | SNAP token, on that underlay only |
+
+### Endpoints
+
+All under `/api/v1`. Everything except the first four needs
+`A="authorization: Bearer $TOKEN"`, from `login`.
+
+| | | |
+|---|---|---|
+| `GET` | `/healthz` | liveness |
+| `GET` | `/server` | version and the limits this server enforces |
+| `POST` | `/register` | `{username, password}` → 201 |
+| `POST` | `/login` | `{username, password}` → `{token, expires_at}` |
+| `GET` | `/rooms` | every room, each with the `seq` of its newest message |
+| `POST` | `/rooms` | `{name}` → 201, or 200 with the room already holding the name |
+| `POST` | `/rooms/{id}/messages` | `{body}` → `{seq, posted_at}` |
+| `GET` | `/rooms/{id}/messages` | the newest page; `?after_seq=N` to poll, `?before_seq=N` to load older, `?limit=N` up to 200 |
 
 ## Development
 
