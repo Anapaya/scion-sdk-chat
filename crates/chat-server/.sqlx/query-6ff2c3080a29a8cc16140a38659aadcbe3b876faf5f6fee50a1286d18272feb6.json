@@ -1,0 +1,28 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT (SELECT COUNT(*) FROM users) AS \"users!\",\n                      (SELECT COUNT(*) FROM rooms) AS \"rooms!\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "users!",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": "Expression"
+      },
+      {
+        "name": "rooms!",
+        "ordinal": 1,
+        "type_info": "Integer",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "6ff2c3080a29a8cc16140a38659aadcbe3b876faf5f6fee50a1286d18272feb6"
+}

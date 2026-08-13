@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO messages (room_id, username, body, posted_at) VALUES (?, ?, ?, ?)\n           RETURNING seq AS \"seq!\", posted_at AS \"posted_at!\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "seq!",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "messages",
+            "name": "seq"
+          }
+        }
+      },
+      {
+        "name": "posted_at!",
+        "ordinal": 1,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "messages",
+            "name": "posted_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": [
+      null,
+      false
+    ]
+  },
+  "hash": "bac237adc75f8ec9fc205e129b1eca7200caf373270d8b8a762faa58be51aedb"
+}

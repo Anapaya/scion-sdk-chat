@@ -12,5 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //! The chat server runtime, exposed as a library so that tests can embed the server in-process.
-//! The implementation lands in follow-up tickets; this crate currently only reserves the
-//! workspace slot.
+
+pub mod store;

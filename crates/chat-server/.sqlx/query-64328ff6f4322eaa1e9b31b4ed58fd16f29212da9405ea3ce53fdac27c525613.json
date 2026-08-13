@@ -1,0 +1,45 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT r.id AS \"id!\", r.name AS \"name!\", COALESCE(MAX(m.seq), 0) AS \"latest_seq!\"\n           FROM rooms r LEFT JOIN messages m ON m.room_id = r.id\n           WHERE r.name = ?\n           GROUP BY r.id, r.name",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "rooms",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "name!",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "rooms",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "name": "latest_seq!",
+        "ordinal": 2,
+        "type_info": "Integer",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "64328ff6f4322eaa1e9b31b4ed58fd16f29212da9405ea3ce53fdac27c525613"
+}
