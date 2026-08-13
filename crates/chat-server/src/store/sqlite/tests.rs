@@ -13,18 +13,29 @@
 // limitations under the License.
 //! Store tests.
 
+use std::path::PathBuf;
+
 use chat_core::api::v1::{Message, Room, RoomId, Seq};
 use tempfile::TempDir;
 
 use super::{super::*, *};
 
+/// The database file inside a test's directory.
+fn db_path(dir: &TempDir) -> PathBuf {
+    dir.path().join("chat.db")
+}
+
 /// A store on a fresh file, with the directory kept alive for the test's duration.
 async fn store() -> (SqliteStore, TempDir) {
     let dir = TempDir::new().expect("temp dir");
-    let store = SqliteStore::new(&dir.path().join("chat.db"))
-        .await
-        .expect("open");
+    let store = SqliteStore::new(&db_path(&dir)).await.expect("open");
     (store, dir)
+}
+
+/// Closes the store and opens the same file again, as restarting the server does.
+async fn restart(store: SqliteStore, dir: &TempDir) -> SqliteStore {
+    drop(store);
+    SqliteStore::new(&db_path(dir)).await.expect("reopen")
 }
 
 /// The room every client may assume exists.
@@ -50,18 +61,14 @@ async fn the_store_is_usable_as_a_trait_object() {
 
 #[tokio::test]
 async fn lobby_is_seeded_and_survives_a_restart() {
-    let dir = TempDir::new().expect("temp dir");
-    let path = dir.path().join("chat.db");
-
-    let store = SqliteStore::new(&path).await.expect("open");
+    let (store, dir) = store().await;
     let first = lobby(&store).await;
     store
         .post_message(first.id, "alice", "hi")
         .await
         .expect("post");
-    drop(store);
 
-    let reopened = SqliteStore::new(&path).await.expect("reopen");
+    let reopened = restart(store, &dir).await;
     let second = lobby(&reopened).await;
 
     assert_eq!(
@@ -81,10 +88,7 @@ async fn lobby_is_seeded_and_survives_a_restart() {
 
 #[tokio::test]
 async fn a_version_mismatch_rebuilds_the_database() {
-    let dir = TempDir::new().expect("temp dir");
-    let path = dir.path().join("chat.db");
-
-    let store = SqliteStore::new(&path).await.expect("open");
+    let (store, dir) = store().await;
     let room = store.create_room("scion").await.expect("create");
     store
         .post_message(room.room().id, "alice", "hi")
@@ -93,14 +97,14 @@ async fn a_version_mismatch_rebuilds_the_database() {
     drop(store);
 
     // Stand in for a schema change: stamp a version this build does not recognise.
-    let pool = connect(&path, false).await.expect("connect");
+    let pool = connect(&db_path(&dir), false).await.expect("connect");
     sqlx::raw_sql("PRAGMA user_version = 999")
         .execute(&pool)
         .await
         .expect("stamp");
     pool.close().await;
 
-    let store = SqliteStore::new(&path).await.expect("reopen");
+    let store = SqliteStore::new(&db_path(&dir)).await.expect("reopen");
     let rooms = store.list_rooms().await.expect("list");
 
     assert_eq!(
@@ -126,14 +130,10 @@ async fn opening_creates_the_directory_holding_the_database() {
 
 #[tokio::test]
 async fn reopening_the_same_version_keeps_everything() {
-    let dir = TempDir::new().expect("temp dir");
-    let path = dir.path().join("chat.db");
-
-    let store = SqliteStore::new(&path).await.expect("open");
+    let (store, dir) = store().await;
     store.create_room("scion").await.expect("create");
-    drop(store);
 
-    let store = SqliteStore::new(&path).await.expect("reopen");
+    let store = restart(store, &dir).await;
     assert_eq!(store.counts().await.expect("counts").rooms, 2);
 }
 
