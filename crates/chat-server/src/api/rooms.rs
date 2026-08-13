@@ -68,11 +68,7 @@ pub async fn create(
     let Json(body) = body?;
     let name = RoomName::parse(&body.name)?;
 
-    match state
-        .store
-        .create_room(&name.0, state.config.max_rooms)
-        .await?
-    {
+    match state.store.create_room(&name.0).await? {
         RoomCreation::Created(room) => Ok(created(room)),
         RoomCreation::Existing(room) => Ok((StatusCode::OK, Json(room)).into_response()),
     }

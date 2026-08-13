@@ -78,6 +78,14 @@ impl Config {
         self.data_dir.join("jwt.secret")
     }
 
+    /// The caps the store enforces.
+    pub fn caps(&self) -> crate::store::Caps {
+        crate::store::Caps {
+            accounts: self.max_accounts,
+            rooms: self.max_rooms,
+        }
+    }
+
     /// How long an issued token stays valid.
     pub fn token_validity(&self) -> Duration {
         Duration::from_secs(u64::from(self.token_expiry_days) * 24 * 60 * 60)

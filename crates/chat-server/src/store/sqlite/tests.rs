@@ -20,8 +20,11 @@ use tempfile::TempDir;
 
 use super::{super::*, *};
 
-/// A cap high enough that no test reaches it unless it means to.
-const NO_CAP: u32 = u32::MAX;
+/// Caps high enough that no test reaches them unless it opens a store that means to.
+const NO_CAPS: Caps = Caps {
+    accounts: u32::MAX,
+    rooms: u32::MAX,
+};
 
 /// The database file inside a test's directory.
 fn db_path(dir: &TempDir) -> PathBuf {
@@ -31,14 +34,18 @@ fn db_path(dir: &TempDir) -> PathBuf {
 /// A store on a fresh file, with the directory kept alive for the test's duration.
 async fn store() -> (SqliteStore, TempDir) {
     let dir = TempDir::new().expect("temp dir");
-    let store = SqliteStore::new(&db_path(&dir)).await.expect("open");
+    let store = SqliteStore::new(&db_path(&dir), NO_CAPS)
+        .await
+        .expect("open");
     (store, dir)
 }
 
 /// Closes the store and opens the same file again, as restarting the server does.
 async fn restart(store: SqliteStore, dir: &TempDir) -> SqliteStore {
     drop(store);
-    SqliteStore::new(&db_path(dir)).await.expect("reopen")
+    SqliteStore::new(&db_path(dir), NO_CAPS)
+        .await
+        .expect("reopen")
 }
 
 /// The room every client may assume exists.
@@ -92,7 +99,7 @@ async fn lobby_is_seeded_and_survives_a_restart() {
 #[tokio::test]
 async fn a_version_mismatch_rebuilds_the_database() {
     let (store, dir) = store().await;
-    let room = store.create_room("scion", NO_CAP).await.expect("create");
+    let room = store.create_room("scion").await.expect("create");
     store
         .post_message(room.room().id, "alice", "hi")
         .await
@@ -107,7 +114,9 @@ async fn a_version_mismatch_rebuilds_the_database() {
         .expect("stamp");
     pool.close().await;
 
-    let store = SqliteStore::new(&db_path(&dir)).await.expect("reopen");
+    let store = SqliteStore::new(&db_path(&dir), NO_CAPS)
+        .await
+        .expect("reopen");
     let rooms = store.list_rooms().await.expect("list");
 
     assert_eq!(
@@ -123,7 +132,7 @@ async fn opening_creates_the_directory_holding_the_database() {
     let dir = TempDir::new().expect("temp dir");
     let nested = dir.path().join("data").join("chat.db");
 
-    let store = SqliteStore::new(&nested)
+    let store = SqliteStore::new(&nested, NO_CAPS)
         .await
         .expect("open should create data/");
 
@@ -134,7 +143,7 @@ async fn opening_creates_the_directory_holding_the_database() {
 #[tokio::test]
 async fn reopening_the_same_version_keeps_everything() {
     let (store, dir) = store().await;
-    store.create_room("scion", NO_CAP).await.expect("create");
+    store.create_room("scion").await.expect("create");
 
     let store = restart(store, &dir).await;
     assert_eq!(store.list_rooms().await.expect("list").len(), 2);
@@ -144,13 +153,10 @@ async fn reopening_the_same_version_keeps_everything() {
 async fn rooms_are_created_once_and_matched_case_insensitively() {
     let (store, _dir) = store().await;
 
-    let created = store.create_room("scion", NO_CAP).await.expect("create");
+    let created = store.create_room("scion").await.expect("create");
     assert!(matches!(created, RoomCreation::Created(_)));
 
-    let again = store
-        .create_room("SCION", NO_CAP)
-        .await
-        .expect("create again");
+    let again = store.create_room("SCION").await.expect("create again");
     assert!(matches!(again, RoomCreation::Existing(_)));
     assert_eq!(created.room().id, again.room().id);
     assert_eq!(store.list_rooms().await.expect("list").len(), 2);
@@ -162,17 +168,11 @@ async fn usernames_are_taken_once_and_case_insensitively() {
 
     let hash = PasswordHash::new("hash".to_owned());
     assert_eq!(
-        store
-            .insert_user("alice", &hash, NO_CAP)
-            .await
-            .expect("insert"),
+        store.insert_user("alice", &hash).await.expect("insert"),
         Registration::Created
     );
     assert_eq!(
-        store
-            .insert_user("ALICE", &hash, NO_CAP)
-            .await
-            .expect("insert"),
+        store.insert_user("ALICE", &hash).await.expect("insert"),
         Registration::UsernameTaken,
         "the name should already be taken, case-insensitively"
     );
@@ -182,12 +182,7 @@ async fn usernames_are_taken_once_and_case_insensitively() {
 async fn seq_increases_and_never_repeats_across_rooms() {
     let (store, _dir) = store().await;
     let lobby = lobby(&store).await;
-    let other = store
-        .create_room("scion", NO_CAP)
-        .await
-        .expect("create")
-        .room()
-        .id;
+    let other = store.create_room("scion").await.expect("create").room().id;
 
     let a = store
         .post_message(lobby.id, "alice", "1")
@@ -345,30 +340,48 @@ async fn a_cursor_beyond_the_column_range_is_an_error_not_a_panic() {
 /// race against.
 #[tokio::test]
 async fn the_account_cap_refuses_the_one_past_it() {
-    let (store, _dir) = store().await;
+    let dir = TempDir::new().expect("temp dir");
+    let store = SqliteStore::new(
+        &db_path(&dir),
+        Caps {
+            accounts: 1,
+            rooms: u32::MAX,
+        },
+    )
+    .await
+    .expect("open");
     let hash = PasswordHash::new("hash".to_owned());
 
     assert_eq!(
-        store.insert_user("alice", &hash, 1).await.expect("insert"),
+        store.insert_user("alice", &hash).await.expect("insert"),
         Registration::Created
     );
     assert!(matches!(
-        store.insert_user("bob", &hash, 1).await,
+        store.insert_user("bob", &hash).await,
         Err(StoreError::CapExceeded { what: "account" })
     ));
 }
 
 #[tokio::test]
 async fn the_room_cap_refuses_the_one_past_it() {
-    let (store, _dir) = store().await;
+    let dir = TempDir::new().expect("temp dir");
+    let store = SqliteStore::new(
+        &db_path(&dir),
+        Caps {
+            accounts: u32::MAX,
+            rooms: 2,
+        },
+    )
+    .await
+    .expect("open");
 
     // The lobby already occupies the first slot.
     assert!(matches!(
-        store.create_room("scion", 2).await.expect("create"),
+        store.create_room("scion").await.expect("create"),
         RoomCreation::Created(_)
     ));
     assert!(matches!(
-        store.create_room("another", 2).await,
+        store.create_room("another").await,
         Err(StoreError::CapExceeded { what: "room" })
     ));
     assert_eq!(store.list_rooms().await.expect("list").len(), 2);
@@ -378,9 +391,18 @@ async fn the_room_cap_refuses_the_one_past_it() {
 /// refused.
 #[tokio::test]
 async fn an_existing_room_is_returned_even_at_the_cap() {
-    let (store, _dir) = store().await;
+    let dir = TempDir::new().expect("temp dir");
+    let store = SqliteStore::new(
+        &db_path(&dir),
+        Caps {
+            accounts: u32::MAX,
+            rooms: 1,
+        },
+    )
+    .await
+    .expect("open");
 
-    let existing = store.create_room(LOBBY, 1).await.expect("create");
+    let existing = store.create_room(LOBBY).await.expect("create");
 
     assert!(matches!(existing, RoomCreation::Existing(_)));
     assert_eq!(existing.room().name, LOBBY);
@@ -391,10 +413,7 @@ async fn an_existing_room_is_returned_even_at_the_cap() {
 async fn the_password_hash_is_readable_for_verification() {
     let (store, _dir) = store().await;
     let hash = PasswordHash::new("$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA".to_owned());
-    store
-        .insert_user("alice", &hash, NO_CAP)
-        .await
-        .expect("insert");
+    store.insert_user("alice", &hash).await.expect("insert");
 
     let stored = store.password_hash("Alice").await.expect("lookup");
 

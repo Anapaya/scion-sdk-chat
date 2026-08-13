@@ -28,7 +28,7 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
 };
 
-use super::{DataStore, LOBBY, PasswordHash, Registration, RoomCreation, StoreError};
+use super::{Caps, DataStore, LOBBY, PasswordHash, Registration, RoomCreation, StoreError};
 
 mod convert;
 mod messages;
@@ -48,13 +48,14 @@ const SCHEMA_VERSION: i32 = 1;
 #[derive(Debug, Clone)]
 pub struct SqliteStore {
     pool: SqlitePool,
+    caps: Caps,
 }
 
 impl SqliteStore {
     /// Opens the database at `path`, creating it and its directory when absent and **discarding
     /// it** when it was written by a different schema version. Applies the schema and seeds
     /// [`LOBBY`].
-    pub async fn new(path: &Path) -> Result<Self, StoreError> {
+    pub async fn new(path: &Path, caps: Caps) -> Result<Self, StoreError> {
         // SQLite creates the file but not the directory holding it, and reports the difference
         // only as "unable to open database file".
         match path.parent() {
@@ -86,9 +87,10 @@ impl SqliteStore {
         .execute(&pool)
         .await?;
 
-        let store = Self { pool };
-        // The lobby is seeded before any cap can apply to it.
-        store.create_room(LOBBY, u32::MAX).await?;
+        let store = Self { pool, caps };
+        // Seeded directly rather than through `create_room`, which the room cap would refuse on a
+        // store configured to accept none.
+        rooms::create_room(&store.pool, LOBBY, u32::MAX).await?;
         Ok(store)
     }
 }
@@ -99,17 +101,16 @@ impl DataStore for SqliteStore {
         &self,
         username: &str,
         pw_hash: &PasswordHash,
-        max_accounts: u32,
     ) -> Result<Registration, StoreError> {
-        users::insert_user(&self.pool, username, pw_hash, max_accounts).await
+        users::insert_user(&self.pool, username, pw_hash, self.caps.accounts).await
     }
 
     async fn password_hash(&self, username: &str) -> Result<Option<PasswordHash>, StoreError> {
         users::password_hash(&self.pool, username).await
     }
 
-    async fn create_room(&self, name: &str, max_rooms: u32) -> Result<RoomCreation, StoreError> {
-        rooms::create_room(&self.pool, name, max_rooms).await
+    async fn create_room(&self, name: &str) -> Result<RoomCreation, StoreError> {
+        rooms::create_room(&self.pool, name, self.caps.rooms).await
     }
 
     async fn list_rooms(&self) -> Result<Vec<Room>, StoreError> {

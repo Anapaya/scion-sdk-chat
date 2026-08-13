@@ -95,11 +95,7 @@ pub async fn register(
         .await
         .expect("the hashing task cannot panic")?;
 
-    match state
-        .store
-        .insert_user(&username.0, &hash, state.config.max_accounts)
-        .await
-    {
+    match state.store.insert_user(&username.0, &hash).await {
         Ok(Registration::Created) => Ok(StatusCode::CREATED),
         Ok(Registration::UsernameTaken) => {
             Err(ApiError::new(

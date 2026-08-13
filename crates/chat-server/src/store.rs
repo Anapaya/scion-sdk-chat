@@ -26,6 +26,16 @@ pub mod sqlite;
 
 pub use self::sqlite::SqliteStore;
 
+/// How much a store accepts before it refuses more. Fixed when the store is opened, so no caller
+/// can pass the wrong one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Caps {
+    /// How many accounts to accept.
+    pub accounts: u32,
+    /// How many rooms to accept.
+    pub rooms: u32,
+}
+
 /// The room that always exists. Every implementation seeds it at startup, and no endpoint deletes
 /// a room, so clients may assume it is there.
 pub const LOBBY: &str = "lobby";
@@ -131,12 +141,11 @@ pub trait DataStore: Send + Sync {
 
     /// Register an account.
     ///
-    /// Returns [StoreError::CapExceeded] once `max_accounts` exist.
+    /// Returns [StoreError::CapExceeded] once the store holds as many accounts as it accepts.
     async fn insert_user(
         &self,
         username: &str,
         pw_hash: &PasswordHash,
-        max_accounts: u32,
     ) -> Result<Registration, StoreError>;
 
     /// The stored hash for an account, or `None` when no such account exists.
@@ -147,9 +156,9 @@ pub trait DataStore: Send + Sync {
     /// Create a room, or return the one already holding the name. Names are matched
     /// case-insensitively.
     ///
-    /// Returns [StoreError::CapExceeded] once `max_rooms` exist. An existing name is returned
-    /// even then, since nothing is created.
-    async fn create_room(&self, name: &str, max_rooms: u32) -> Result<RoomCreation, StoreError>;
+    /// Returns [StoreError::CapExceeded] once the store holds as many rooms as it accepts. An
+    /// existing name is returned even then, since nothing is created.
+    async fn create_room(&self, name: &str) -> Result<RoomCreation, StoreError>;
 
     /// List every room, oldest first, each with the `seq` of its newest message.
     async fn list_rooms(&self) -> Result<Vec<Room>, StoreError>;

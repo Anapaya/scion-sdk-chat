@@ -65,7 +65,7 @@ pub async fn run(config: Config) -> Result<(), RunError> {
 
 /// Everything the handlers need, built from the configuration.
 pub async fn state(config: &Config) -> Result<AppState, RunError> {
-    let store = SqliteStore::new(&config.database()).await?;
+    let store = SqliteStore::new(&config.database(), config.caps()).await?;
     // The store creates the data directory, so the secret can be written beside the database
     // without checking for it again.
     let secret = auth::load_or_create_secret(&config.jwt_secret())?;
