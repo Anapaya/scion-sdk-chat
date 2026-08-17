@@ -73,6 +73,9 @@ pub enum ErrorCode {
     Internal,
     /// The request carried no usable bearer token.
     Unauthorized,
+    /// The token was issued by this server but has passed its expiry. Logging in again is all it
+    /// takes; nothing else about the request was wrong.
+    ExpiredToken,
     /// The username exists but the password does not match it.
     InvalidCredentials,
     /// The requested username is already registered.

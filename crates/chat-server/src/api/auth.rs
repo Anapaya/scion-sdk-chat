@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! Registering an account, logging in, and recognising the caller on every other request.
+//! Registering an account, logging in, and authenticating every other request.
 
 use std::sync::Arc;
 
@@ -52,13 +52,13 @@ impl Username {
     }
 }
 
-/// The caller, established from the bearer token.
+/// The username the bearer token names.
 ///
 /// Any handler that takes this argument is authenticated by construction: axum runs the
 /// extraction before the handler body, and a missing or invalid token never reaches it.
-pub struct Caller(pub String);
+pub struct Authenticated(pub String);
 
-impl FromRequestParts<Arc<AppState>> for Caller {
+impl FromRequestParts<Arc<AppState>> for Authenticated {
     type Rejection = ApiError;
 
     async fn from_request_parts(
@@ -69,13 +69,18 @@ impl FromRequestParts<Arc<AppState>> for Caller {
             .headers
             .get(axum::http::header::AUTHORIZATION)
             .and_then(|value| value.to_str().ok())
-            .and_then(|value| value.strip_prefix("Bearer "))
+            .and_then(|value| value.split_once(' '))
+            .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("Bearer"))
+            .map(|(_, token)| token.trim())
             .ok_or_else(ApiError::unauthorized)?;
 
-        let username = state
-            .tokens
-            .verify(token.trim())
-            .map_err(|_| ApiError::unauthorized())?;
+        let username = state.tokens.verify(token).map_err(|error| {
+            if error.is_expired_token() {
+                ApiError::expired_token()
+            } else {
+                ApiError::unauthorized()
+            }
+        })?;
 
         Ok(Self(username))
     }

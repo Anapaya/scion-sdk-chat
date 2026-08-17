@@ -55,6 +55,18 @@ pub enum AuthError {
     },
 }
 
+impl AuthError {
+    /// Whether a token this server signed has simply run out.
+    ///
+    /// The one distinction the API does report, because reaching it means the signature already
+    /// verified: only someone who held a valid token can be told this, so it tells an attacker
+    /// nothing. A client learns to log in again rather than to show a failure.
+    pub fn is_expired_token(&self) -> bool {
+        matches!(self, Self::Token(error)
+            if matches!(error.kind(), jsonwebtoken::errors::ErrorKind::ExpiredSignature))
+    }
+}
+
 /// What a token carries: who it is, and when it stops being accepted.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -254,6 +266,10 @@ mod tests {
         )
         .expect("encode");
 
-        assert!(tokens.verify(&expired).is_err());
+        let error = tokens.verify(&expired).expect_err("an expired token");
+        assert!(
+            error.is_expired_token(),
+            "expiry is told apart from every other reason a token fails: {error}",
+        );
     }
 }

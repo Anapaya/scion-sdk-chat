@@ -25,7 +25,10 @@ use axum::{
 use chat_core::api::v1::{ErrorCode, ErrorResponse};
 use utoipa::{
     Modify, OpenApi,
-    openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
+    openapi::{
+        Server,
+        security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
+    },
 };
 use utoipa_axum::{router::OpenApiRouter, routes};
 
@@ -95,24 +98,29 @@ impl Modify for BearerAuth {
 }
 
 /// Every route, paired with the document describing it, so neither can be added without the other.
+///
+/// The paths stay as the handlers write them. [`API_V1`] is where the routes are mounted and the
+/// document's only server, so the two cannot name different prefixes.
 fn routes() -> OpenApiRouter<Arc<AppState>> {
-    OpenApiRouter::with_openapi(ApiDoc::openapi()).nest(
-        API_V1,
-        OpenApiRouter::new()
-            .routes(routes!(server::healthz))
-            .routes(routes!(server::server_info))
-            .routes(routes!(auth::register))
-            .routes(routes!(auth::login))
-            .routes(routes!(rooms::list, rooms::create))
-            .routes(routes!(messages::list, messages::post)),
-    )
+    let mut doc = ApiDoc::openapi();
+    doc.servers = Some(vec![Server::new(API_V1)]);
+
+    OpenApiRouter::with_openapi(doc)
+        .routes(routes!(server::healthz))
+        .routes(routes!(server::server_info))
+        .routes(routes!(auth::register))
+        .routes(routes!(auth::login))
+        .routes(routes!(rooms::list, rooms::create))
+        .routes(routes!(messages::list, messages::post))
 }
 
-/// Builds the router. Transport-agnostic: the same value is served over TCP or over SCION.
+/// Builds the router.
 pub fn router(state: AppState) -> Router {
     let (router, spec) = routes().with_state(Arc::new(state)).split_for_parts();
 
-    router.route(OPENAPI_PATH, get(async || Json(spec)))
+    Router::new()
+        .nest(API_V1, router)
+        .route(OPENAPI_PATH, get(async || Json(spec)))
 }
 
 /// The document describing the API, without the state a served router needs.
@@ -147,6 +155,15 @@ impl ApiError {
             StatusCode::UNAUTHORIZED,
             ErrorCode::Unauthorized,
             "a valid bearer token is required",
+        )
+    }
+
+    /// The token was this server's, but it has run out.
+    pub fn expired_token() -> Self {
+        Self::new(
+            StatusCode::UNAUTHORIZED,
+            ErrorCode::ExpiredToken,
+            "the token has expired; log in again",
         )
     }
 

@@ -20,12 +20,13 @@ use axum::{
     http::{Request, StatusCode, header},
 };
 use clap::Parser as _;
+use jsonwebtoken::{Algorithm, EncodingKey, Header};
 use serde_json::{Value, json};
 use tempfile::TempDir;
 use tower::ServiceExt as _;
 
 use super::router;
-use crate::config::Config;
+use crate::{auth::Claims, config::Config};
 
 /// A router over a fresh database, with the directory kept alive for the test's duration.
 ///
@@ -111,6 +112,29 @@ async fn login(app: &Router, username: &str) -> String {
     body["token"].as_str().expect("a token").to_owned()
 }
 
+/// A token the server signed itself, and would accept but for the expiry ten seconds ago.
+///
+/// Signed with the secret the server wrote, so nothing but the expiry distinguishes it from a
+/// token handed out at login.
+fn expired_token(dir: &TempDir) -> String {
+    let secret = std::fs::read(dir.path().join("jwt.secret")).expect("the server's secret");
+    let claims = Claims {
+        sub: "alice".to_owned(),
+        exp: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("a clock set after the Unix epoch")
+            .as_secs()
+            - 10,
+    };
+
+    jsonwebtoken::encode(
+        &Header::new(Algorithm::HS256),
+        &claims,
+        &EncodingKey::from_secret(&secret),
+    )
+    .expect("encode")
+}
+
 /// The error code a failing response carries, which is what a client branches on.
 fn code(body: &Value) -> &str {
     body["error"]["code"].as_str().unwrap_or("<no code>")
@@ -144,7 +168,11 @@ async fn the_document_is_served_where_it_is_advertised() {
     let (status, body) = send(&app, get(super::OPENAPI_PATH)).await;
 
     assert_eq!(status, StatusCode::OK);
-    assert!(body["paths"]["/api/v1/healthz"].is_object());
+    assert!(body["paths"]["/healthz"].is_object());
+    assert_eq!(
+        body["servers"][0]["url"], "/api/v1",
+        "the prefix the paths are relative to",
+    );
 }
 
 #[tokio::test]
@@ -195,6 +223,18 @@ async fn a_token_that_was_not_signed_by_this_server_is_refused() {
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(code(&body), "unauthorized");
+}
+
+/// Expiry is the one refusal a client can act on by itself, so it does not arrive as the code
+/// every other refusal uses.
+#[tokio::test]
+async fn an_expired_token_is_told_apart_from_one_that_never_worked() {
+    let (app, dir) = app(&[]).await;
+
+    let (status, body) = send(&app, bearer(get("/api/v1/rooms"), &expired_token(&dir))).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(code(&body), "expired_token");
 }
 
 #[tokio::test]

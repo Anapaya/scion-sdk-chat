@@ -8,8 +8,10 @@ info:
     name: Apache-2.0
     identifier: Apache-2.0
   version: 0.1.0
+servers:
+- url: /api/v1
 paths:
-  /api/v1/healthz:
+  /healthz:
     get:
       tags:
       - server
@@ -22,7 +24,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Health'
-  /api/v1/login:
+  /login:
     post:
       tags:
       - accounts
@@ -47,7 +49,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /api/v1/register:
+  /register:
     post:
       tags:
       - accounts
@@ -80,7 +82,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /api/v1/rooms:
+  /rooms:
     get:
       tags:
       - rooms
@@ -151,7 +153,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
       security:
       - bearer: []
-  /api/v1/rooms/{id}/messages:
+  /rooms/{id}/messages:
     get:
       tags:
       - messages
@@ -270,7 +272,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
       security:
       - bearer: []
-  /api/v1/server:
+  /server:
     get:
       tags:
       - server
@@ -328,6 +330,12 @@ components:
         description: The request carried no usable bearer token.
         enum:
         - unauthorized
+      - type: string
+        description: |-
+          The token was issued by this server but has passed its expiry. Logging in again is all it
+          takes; nothing else about the request was wrong.
+        enum:
+        - expired_token
       - type: string
         description: The username exists but the password does not match it.
         enum:

@@ -28,7 +28,7 @@ use chat_core::api::v1::{
 use serde::Deserialize;
 use utoipa::IntoParams;
 
-use super::{ApiError, AppState, auth::Caller};
+use super::{ApiError, AppState, auth::Authenticated};
 
 /// The default page size, and the most a caller can ask for.
 const DEFAULT_LIMIT: u32 = 50;
@@ -71,7 +71,7 @@ impl Page {
     tag = "messages",
 )]
 pub async fn list(
-    _: Caller,
+    _: Authenticated,
     State(state): State<Arc<AppState>>,
     Path(room): Path<u64>,
     Query(page): Query<Page>,
@@ -125,7 +125,7 @@ pub async fn list(
     tag = "messages",
 )]
 pub async fn post(
-    Caller(username): Caller,
+    Authenticated(username): Authenticated,
     State(state): State<Arc<AppState>>,
     Path(room): Path<u64>,
     body: Result<Json<PostMessageRequest>, JsonRejection>,

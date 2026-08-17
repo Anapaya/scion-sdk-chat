@@ -23,7 +23,7 @@ use axum::{
 };
 use chat_core::api::v1::{CreateRoomRequest, ErrorCode, ErrorResponse, Room, RoomsResponse};
 
-use super::{API_V1, ApiError, AppState, auth::Caller};
+use super::{API_V1, ApiError, AppState, auth::Authenticated};
 use crate::store::RoomCreation;
 
 /// A room name, once it has been checked.
@@ -58,7 +58,7 @@ impl RoomName {
     tag = "rooms",
 )]
 pub async fn list(
-    _: Caller,
+    _: Authenticated,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<RoomsResponse>, ApiError> {
     let rooms = state.store.list_rooms().await?;
@@ -85,7 +85,7 @@ pub async fn list(
     tag = "rooms",
 )]
 pub async fn create(
-    _: Caller,
+    _: Authenticated,
     State(state): State<Arc<AppState>>,
     body: Result<Json<CreateRoomRequest>, JsonRejection>,
 ) -> Result<Response, ApiError> {
