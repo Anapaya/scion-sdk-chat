@@ -1,0 +1,3 @@
+# A test compares this file against the document the router generates, byte for byte, so Windows
+# must not check it out with CRLF.
+crates/chat-server/openapi.yaml text eol=lf
