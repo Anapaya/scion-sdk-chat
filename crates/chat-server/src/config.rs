@@ -38,8 +38,11 @@ pub struct Config {
     #[arg(long, env = "CHAT_LISTEN", default_value = "0.0.0.0:8443")]
     pub listen: SocketAddr,
 
-    /// Directory holding `chat.db`, `jwt.secret`, and the TLS material.
-    #[arg(long, env = "CHAT_DATA_DIR", default_value = "./data")]
+    /// Directory holding `chat.db`, `jwt.secret`, and the TLS material. Created if absent.
+    ///
+    /// Required: a server should not decide on its own where to write, least of all into
+    /// whichever directory it happened to be started from.
+    #[arg(long, env = "CHAT_DATA_DIR")]
     pub data_dir: PathBuf,
 
     /// How many accounts to accept.
@@ -98,14 +101,13 @@ mod tests {
 
     use super::*;
 
-    /// The defaults are the ones the design fixes, and a bare invocation must produce them.
+    /// The defaults are the ones the design fixes.
     #[test]
     fn the_defaults_match_the_design() {
-        let config = Config::parse_from(["chat-server"]);
+        let config = Config::parse_from(["chat-server", "--data-dir", "/srv/chat"]);
 
         assert_eq!(config.transport, Transport::Scion);
         assert_eq!(config.listen.to_string(), "0.0.0.0:8443");
-        assert_eq!(config.data_dir, PathBuf::from("./data"));
         assert_eq!(config.max_accounts, 500);
         assert_eq!(config.max_rooms, 100);
         assert_eq!(config.max_message_bytes, 4096);
@@ -122,15 +124,29 @@ mod tests {
 
     #[test]
     fn the_token_lifetime_is_expressed_in_days_and_used_in_seconds() {
-        let config = Config::parse_from(["chat-server", "--token-expiry-days", "2"]);
+        let config = Config::parse_from([
+            "chat-server",
+            "--data-dir",
+            "/srv/chat",
+            "--token-expiry-days",
+            "2",
+        ]);
 
         assert_eq!(config.token_validity(), Duration::from_secs(2 * 86_400));
+    }
+
+    /// There is no default: the server never picks a directory to write into.
+    #[test]
+    fn the_data_directory_must_be_named() {
+        assert!(Config::try_parse_from(["chat-server"]).is_err());
     }
 
     #[test]
     fn flags_override_the_defaults() {
         let config = Config::parse_from([
             "chat-server",
+            "--data-dir",
+            "/srv/chat",
             "--transport",
             "tcp",
             "--listen",

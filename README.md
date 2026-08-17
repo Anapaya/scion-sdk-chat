@@ -15,7 +15,7 @@ The workspace holds two crates:
 reachable with `curl`. It is a development mode.
 
 ```sh
-cargo run -p chat-server -- --transport tcp --listen 127.0.0.1:8080
+cargo run -p chat-server -- --transport tcp --listen 127.0.0.1:8080 --data-dir ./data
 ```
 
 Every flag has a `CHAT_*` environment fallback:
@@ -24,7 +24,7 @@ Every flag has a `CHAT_*` environment fallback:
 |---|---|---|---|
 | `--transport` | `CHAT_TRANSPORT` | `scion` | `scion` or `tcp` |
 | `--listen` | `CHAT_LISTEN` | `0.0.0.0:8443` | address to bind |
-| `--data-dir` | `CHAT_DATA_DIR` | `./data` | holds `chat.db` and `jwt.secret` |
+| `--data-dir` | `CHAT_DATA_DIR` | **required** | holds `chat.db` and `jwt.secret`; created if absent |
 | `--max-accounts` | `CHAT_MAX_ACCOUNTS` | `500` | accounts accepted |
 | `--max-rooms` | `CHAT_MAX_ROOMS` | `100` | rooms accepted |
 | `--max-message-bytes` | `CHAT_MAX_MESSAGE_BYTES` | `4096` | largest message body |
