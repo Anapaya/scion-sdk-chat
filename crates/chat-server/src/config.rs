@@ -38,10 +38,7 @@ pub struct Config {
     #[arg(long, env = "CHAT_LISTEN", default_value = "0.0.0.0:8443")]
     pub listen: SocketAddr,
 
-    /// Directory holding `chat.db`, `jwt.secret`, and the TLS material. Created if absent.
-    ///
-    /// Required: a server should not decide on its own where to write, least of all into
-    /// whichever directory it happened to be started from.
+    /// Where to keep `chat.db` and `jwt.secret`. Created if absent.
     #[arg(long, env = "CHAT_DATA_DIR")]
     pub data_dir: PathBuf,
 
