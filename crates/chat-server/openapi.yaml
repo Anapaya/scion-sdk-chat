@@ -331,9 +331,7 @@ components:
         enum:
         - unauthorized
       - type: string
-        description: |-
-          The token was issued by this server but has passed its expiry. Logging in again is all it
-          takes; nothing else about the request was wrong.
+        description: The token was issued by this server but has passed its expiry. New login required.
         enum:
         - expired_token
       - type: string
