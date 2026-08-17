@@ -25,10 +25,7 @@ use axum::{
 use chat_core::api::v1::{ErrorCode, ErrorResponse};
 use utoipa::{
     Modify, OpenApi,
-    openapi::{
-        Server,
-        security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
-    },
+    openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
 };
 use utoipa_axum::{router::OpenApiRouter, routes};
 
@@ -68,6 +65,7 @@ pub const OPENAPI_PATH: &str = "/.well-known/openapi.json";
 #[derive(OpenApi)]
 #[openapi(
     info(title = "scion-chat", description = "A chat server over HTTP/3-over-SCION"),
+    servers((url = API_V1)),
     modifiers(&BearerAuth),
     tags(
         (name = "server", description = "Liveness and server metadata"),
@@ -97,15 +95,9 @@ impl Modify for BearerAuth {
     }
 }
 
-/// Every route, paired with the document describing it, so neither can be added without the other.
-///
-/// The paths stay as the handlers write them. [`API_V1`] is where the routes are mounted and the
-/// document's only server, so the two cannot name different prefixes.
+/// Every route, paired with the document describing it.
 fn routes() -> OpenApiRouter<Arc<AppState>> {
-    let mut doc = ApiDoc::openapi();
-    doc.servers = Some(vec![Server::new(API_V1)]);
-
-    OpenApiRouter::with_openapi(doc)
+    OpenApiRouter::with_openapi(ApiDoc::openapi())
         .routes(routes!(server::healthz))
         .routes(routes!(server::server_info))
         .routes(routes!(auth::register))
