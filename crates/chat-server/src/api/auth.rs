@@ -20,7 +20,7 @@ use axum::{
     extract::{FromRequestParts, State},
     http::{StatusCode, request::Parts},
 };
-use chat_core::api::v1::{ErrorCode, LoginRequest, LoginResponse, RegisterRequest};
+use chat_core::api::v1::{ErrorCode, ErrorResponse, LoginRequest, LoginResponse, RegisterRequest};
 
 use super::{ApiError, AppState};
 use crate::{
@@ -81,7 +81,19 @@ impl FromRequestParts<Arc<AppState>> for Caller {
     }
 }
 
-/// `POST /register`
+/// Register an account.
+#[utoipa::path(
+    post,
+    path = "/register",
+    request_body = RegisterRequest,
+    responses(
+        (status = 201, description = "The account was created"),
+        (status = 409, description = "The username is taken", body = ErrorResponse),
+        (status = 422, description = "The username is not acceptable", body = ErrorResponse),
+        (status = 429, description = "The server accepts no more accounts", body = ErrorResponse),
+    ),
+    tag = "accounts",
+)]
 pub async fn register(
     State(state): State<Arc<AppState>>,
     body: Result<Json<RegisterRequest>, axum::extract::rejection::JsonRejection>,
@@ -108,7 +120,17 @@ pub async fn register(
     }
 }
 
-/// `POST /login`
+/// Exchange a username and password for a bearer token.
+#[utoipa::path(
+    post,
+    path = "/login",
+    request_body = LoginRequest,
+    responses(
+        (status = 200, description = "The token to send as `Authorization: Bearer`", body = LoginResponse),
+        (status = 401, description = "The username and password do not match", body = ErrorResponse),
+    ),
+    tag = "accounts",
+)]
 pub async fn login(
     State(state): State<Arc<AppState>>,
     body: Result<Json<LoginRequest>, axum::extract::rejection::JsonRejection>,

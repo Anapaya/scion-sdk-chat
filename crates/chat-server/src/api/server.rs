@@ -18,22 +18,35 @@ use std::sync::Arc;
 use axum::{Json, extract::State};
 use chat_core::api::v1::ServerInfo;
 use serde::Serialize;
+use utoipa::ToSchema;
 
 use super::AppState;
 
 /// The body of a liveness check.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct Health {
     /// Always `ok`; the status code carries the answer.
     pub status: &'static str,
 }
 
-/// `GET /healthz`
+/// Report that the server is running.
+#[utoipa::path(
+    get,
+    path = "/healthz",
+    responses((status = 200, description = "The server is running", body = Health)),
+    tag = "server",
+)]
 pub async fn healthz() -> Json<Health> {
     Json(Health { status: "ok" })
 }
 
-/// `GET /server`
+/// Report the version and the limits this server enforces.
+#[utoipa::path(
+    get,
+    path = "/server",
+    responses((status = 200, description = "Server metadata", body = ServerInfo)),
+    tag = "server",
+)]
 pub async fn server_info(State(state): State<Arc<AppState>>) -> Json<ServerInfo> {
     Json(ServerInfo {
         version: env!("CARGO_PKG_VERSION").to_owned(),

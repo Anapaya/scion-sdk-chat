@@ -34,19 +34,17 @@ Every flag has a `CHAT_*` environment fallback:
 
 ### Endpoints
 
-All under `/api/v1`. Everything except the first four needs
-`A="authorization: Bearer $TOKEN"`, from `login`.
+Every route sits under `/api/v1`, and every route except `/healthz`, `/server`, `/register` and
+`/login` needs `A="authorization: Bearer $TOKEN"`, from `login`.
 
-| | | |
-|---|---|---|
-| `GET` | `/healthz` | liveness |
-| `GET` | `/server` | version and the limits this server enforces |
-| `POST` | `/register` | `{username, password}` → 201 |
-| `POST` | `/login` | `{username, password}` → `{token, expires_at}` |
-| `GET` | `/rooms` | every room, each with the `seq` of its newest message |
-| `POST` | `/rooms` | `{name}` → 201, or 200 with the room already holding the name |
-| `POST` | `/rooms/{id}/messages` | `{body}` → `{seq, posted_at}` |
-| `GET` | `/rooms/{id}/messages` | the newest page; `?after_seq=N` to poll, `?before_seq=N` to load older, `?limit=N` up to 200 |
+The server describes itself at `/.well-known/openapi.json`. The same document is committed at
+[`crates/chat-server/openapi.json`](crates/chat-server/openapi.json), so the API surface is
+readable, and reviewable, without running anything. A test compares the two; it rewrites the file
+when run as:
+
+```sh
+CHAT_UPDATE_OPENAPI=1 cargo test -p chat-server
+```
 
 ## Development
 

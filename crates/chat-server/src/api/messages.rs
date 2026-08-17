@@ -22,9 +22,11 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use chat_core::api::v1::{
-    ErrorCode, MessagesResponse, PostMessageRequest, PostMessageResponse, RoomId, Seq,
+    ErrorCode, ErrorResponse, MessagesResponse, PostMessageRequest, PostMessageResponse, RoomId,
+    Seq,
 };
 use serde::Deserialize;
+use utoipa::IntoParams;
 
 use super::{ApiError, AppState, auth::Caller};
 
@@ -36,10 +38,14 @@ const MAX_LIMIT: u32 = 200;
 ///
 /// The two cursors are mutually exclusive; passing both is a client error rather than a silent
 /// preference for one of them.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct Page {
+    /// How many messages to return, clamped to 1..=200. Defaults to 50.
     limit: Option<u32>,
+    /// Return only messages newer than this `seq`.
     after_seq: Option<u64>,
+    /// Return only messages older than this `seq`.
     before_seq: Option<u64>,
 }
 
@@ -50,7 +56,20 @@ impl Page {
     }
 }
 
-/// `GET /rooms/{id}/messages`
+/// Read a page of a room's messages, oldest first.
+#[utoipa::path(
+    get,
+    path = "/rooms/{id}/messages",
+    params(("id" = u64, Path, description = "The room to read"), Page),
+    responses(
+        (status = 200, description = "A page of messages, oldest first", body = MessagesResponse),
+        (status = 400, description = "Both cursors were given", body = ErrorResponse),
+        (status = 401, description = "No usable bearer token", body = ErrorResponse),
+        (status = 404, description = "No room with that id", body = ErrorResponse),
+    ),
+    security(("bearer" = [])),
+    tag = "messages",
+)]
 pub async fn list(
     _: Caller,
     State(state): State<Arc<AppState>>,
@@ -89,7 +108,22 @@ pub async fn list(
     Ok(Json(MessagesResponse { messages }))
 }
 
-/// `POST /rooms/{id}/messages`
+/// Append a message to a room, attributed to the token holder.
+#[utoipa::path(
+    post,
+    path = "/rooms/{id}/messages",
+    params(("id" = u64, Path, description = "The room to post to")),
+    request_body = PostMessageRequest,
+    responses(
+        (status = 201, description = "Where the message landed", body = PostMessageResponse),
+        (status = 401, description = "No usable bearer token", body = ErrorResponse),
+        (status = 404, description = "No room with that id", body = ErrorResponse),
+        (status = 413, description = "The body is larger than the server accepts", body = ErrorResponse),
+        (status = 422, description = "The body is empty", body = ErrorResponse),
+    ),
+    security(("bearer" = [])),
+    tag = "messages",
+)]
 pub async fn post(
     Caller(username): Caller,
     State(state): State<Arc<AppState>>,

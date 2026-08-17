@@ -116,6 +116,37 @@ fn code(body: &Value) -> &str {
     body["error"]["code"].as_str().unwrap_or("<no code>")
 }
 
+/// The committed document must match the one the router generates, so that a reviewer reads the
+/// API surface from the diff without running anything.
+///
+/// Regenerate with `CHAT_UPDATE_OPENAPI=1 cargo test -p chat-server`.
+#[test]
+fn the_committed_openapi_document_describes_the_router() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/openapi.json");
+    let generated = serde_json::to_string_pretty(&super::openapi()).expect("a document") + "\n";
+
+    if std::env::var_os("CHAT_UPDATE_OPENAPI").is_some() {
+        std::fs::write(path, &generated).expect("write openapi.json");
+        return;
+    }
+
+    assert_eq!(
+        std::fs::read_to_string(path).unwrap_or_default(),
+        generated,
+        "openapi.json is stale: rerun with CHAT_UPDATE_OPENAPI=1",
+    );
+}
+
+#[tokio::test]
+async fn the_document_is_served_where_it_is_advertised() {
+    let (app, _dir) = app(&[]).await;
+
+    let (status, body) = send(&app, get(super::OPENAPI_PATH)).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(body["paths"]["/api/v1/healthz"].is_object());
+}
+
 #[tokio::test]
 async fn healthz_answers_without_a_token() {
     let (app, _dir) = app(&[]).await;

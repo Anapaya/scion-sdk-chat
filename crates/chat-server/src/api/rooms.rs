@@ -21,7 +21,7 @@ use axum::{
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
-use chat_core::api::v1::{CreateRoomRequest, ErrorCode, Room, RoomsResponse};
+use chat_core::api::v1::{CreateRoomRequest, ErrorCode, ErrorResponse, Room, RoomsResponse};
 
 use super::{API_V1, ApiError, AppState, auth::Caller};
 use crate::store::RoomCreation;
@@ -46,7 +46,17 @@ impl RoomName {
     }
 }
 
-/// `GET /rooms`
+/// List every room.
+#[utoipa::path(
+    get,
+    path = "/rooms",
+    responses(
+        (status = 200, description = "Every room on the server", body = RoomsResponse),
+        (status = 401, description = "No usable bearer token", body = ErrorResponse),
+    ),
+    security(("bearer" = [])),
+    tag = "rooms",
+)]
 pub async fn list(
     _: Caller,
     State(state): State<Arc<AppState>>,
@@ -56,10 +66,24 @@ pub async fn list(
     Ok(Json(RoomsResponse { rooms }))
 }
 
-/// `POST /rooms`
+/// Create a room, or return the one already holding the name.
 ///
-/// Creation is idempotent on the name: a name already taken is a success reporting the room that
-/// holds it, so a client never has to look the id up separately.
+/// Creation is idempotent on the name, so a client never has to look the id up separately.
+#[utoipa::path(
+    post,
+    path = "/rooms",
+    request_body = CreateRoomRequest,
+    responses(
+        (status = 201, description = "The room was created", body = Room,
+            headers(("location" = String, description = "Where the new room is"))),
+        (status = 200, description = "The name was taken; this is the room holding it", body = Room),
+        (status = 401, description = "No usable bearer token", body = ErrorResponse),
+        (status = 422, description = "The name is not acceptable", body = ErrorResponse),
+        (status = 429, description = "The server accepts no more rooms", body = ErrorResponse),
+    ),
+    security(("bearer" = [])),
+    tag = "rooms",
+)]
 pub async fn create(
     _: Caller,
     State(state): State<Arc<AppState>>,

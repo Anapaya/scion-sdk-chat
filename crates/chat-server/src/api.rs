@@ -20,9 +20,14 @@ use axum::{
     extract::rejection::JsonRejection,
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::get,
 };
 use chat_core::api::v1::{ErrorCode, ErrorResponse};
+use utoipa::{
+    Modify, OpenApi,
+    openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
+};
+use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::{
     auth::{AuthError, Tokens},
@@ -52,21 +57,67 @@ pub struct AppState {
     pub config: Config,
 }
 
+/// Where the generated OpenAPI document is served.
+pub const OPENAPI_PATH: &str = "/.well-known/openapi.json";
+
+/// The document's title, version and security scheme. The paths and schemas come from the
+/// handlers themselves, so this holds only what they cannot say.
+#[derive(OpenApi)]
+#[openapi(
+    info(title = "scion-chat", description = "A chat server over HTTP/3-over-SCION"),
+    modifiers(&BearerAuth),
+    tags(
+        (name = "server", description = "Liveness and server metadata"),
+        (name = "accounts", description = "Registering and logging in"),
+        (name = "rooms", description = "Listing and creating rooms"),
+        (name = "messages", description = "Posting and reading messages"),
+    ),
+)]
+pub struct ApiDoc;
+
+/// Declares the bearer scheme the authenticated paths refer to by name.
+struct BearerAuth;
+
+impl Modify for BearerAuth {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "bearer",
+                SecurityScheme::Http(
+                    HttpBuilder::new()
+                        .scheme(HttpAuthScheme::Bearer)
+                        .bearer_format("JWT")
+                        .build(),
+                ),
+            );
+        }
+    }
+}
+
+/// Every route, paired with the document describing it, so neither can be added without the other.
+fn routes() -> OpenApiRouter<Arc<AppState>> {
+    OpenApiRouter::with_openapi(ApiDoc::openapi()).nest(
+        API_V1,
+        OpenApiRouter::new()
+            .routes(routes!(server::healthz))
+            .routes(routes!(server::server_info))
+            .routes(routes!(auth::register))
+            .routes(routes!(auth::login))
+            .routes(routes!(rooms::list, rooms::create))
+            .routes(routes!(messages::list, messages::post)),
+    )
+}
+
 /// Builds the router. Transport-agnostic: the same value is served over TCP or over SCION.
 pub fn router(state: AppState) -> Router {
-    let api = Router::new()
-        .route("/healthz", get(server::healthz))
-        .route("/server", get(server::server_info))
-        .route("/register", post(auth::register))
-        .route("/login", post(auth::login))
-        .route("/rooms", get(rooms::list).post(rooms::create))
-        .route(
-            "/rooms/{id}/messages",
-            get(messages::list).post(messages::post),
-        )
-        .with_state(Arc::new(state));
+    let (router, spec) = routes().with_state(Arc::new(state)).split_for_parts();
 
-    Router::new().nest(API_V1, api)
+    router.route(OPENAPI_PATH, get(async || Json(spec)))
+}
+
+/// The document describing the API, without the state a served router needs.
+pub fn openapi() -> utoipa::openapi::OpenApi {
+    routes().split_for_parts().1
 }
 
 /// A failure on its way to becoming a response.
