@@ -1,0 +1,649 @@
+openapi: 3.1.0
+info:
+  title: scion-chat
+  description: A chat server over HTTP/3-over-SCION
+  contact:
+    name: Anapaya & contributors
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+  version: 0.1.0
+servers:
+- url: /api/v1
+paths:
+  /healthz:
+    get:
+      tags:
+      - server
+      summary: Report that the server is running.
+      operationId: healthz
+      responses:
+        '200':
+          description: The server is running
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /login:
+    post:
+      tags:
+      - accounts
+      summary: Exchange a username and password for a bearer token.
+      operationId: login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      responses:
+        '200':
+          description: 'The token to send as `Authorization: Bearer`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: The username and password do not match
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /register:
+    post:
+      tags:
+      - accounts
+      summary: Register an account.
+      operationId: register
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+        required: true
+      responses:
+        '201':
+          description: The account was created
+        '409':
+          description: The username is taken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: The username is not acceptable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: The server accepts no more accounts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /rooms:
+    get:
+      tags:
+      - rooms
+      summary: List every room.
+      operationId: list
+      responses:
+        '200':
+          description: Every room on the server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomsResponse'
+        '401':
+          description: No usable bearer token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+      - bearer: []
+    post:
+      tags:
+      - rooms
+      summary: Create a room, or return the one already holding the name.
+      description: Creation is idempotent on the name, so a client never has to look the id up separately.
+      operationId: create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoomRequest'
+        required: true
+      responses:
+        '200':
+          description: The name was taken; this is the room holding it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Room'
+        '201':
+          description: The room was created
+          headers:
+            location:
+              schema:
+                type: string
+              description: Where the new room is
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Room'
+        '401':
+          description: No usable bearer token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: The name is not acceptable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: The server accepts no more rooms
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+      - bearer: []
+  /rooms/{id}/messages:
+    get:
+      tags:
+      - messages
+      summary: Read a page of a room's messages, oldest first.
+      operationId: list
+      parameters:
+      - name: id
+        in: path
+        description: The room to read
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      - name: limit
+        in: query
+        description: How many messages to return, clamped to 1..=200. Defaults to 50.
+        required: false
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+      - name: after_seq
+        in: query
+        description: Return only messages newer than this `seq`.
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      - name: before_seq
+        in: query
+        description: Return only messages older than this `seq`.
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      responses:
+        '200':
+          description: A page of messages, oldest first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessagesResponse'
+        '400':
+          description: Both cursors were given
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: No usable bearer token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No room with that id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+      - bearer: []
+    post:
+      tags:
+      - messages
+      summary: Append a message to a room, attributed to the token holder.
+      operationId: post
+      parameters:
+      - name: id
+        in: path
+        description: The room to post to
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostMessageRequest'
+        required: true
+      responses:
+        '201':
+          description: Where the message landed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostMessageResponse'
+        '401':
+          description: No usable bearer token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No room with that id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: The body is larger than the server accepts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: The body is empty
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+      - bearer: []
+  /server:
+    get:
+      tags:
+      - server
+      summary: Report the version and the limits this server enforces.
+      operationId: server_info
+      responses:
+        '200':
+          description: Server metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerInfo'
+components:
+  schemas:
+    ApiError:
+      type: object
+      description: The contents of an [`ErrorResponse`].
+      required:
+      - code
+      - message
+      properties:
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+          description: What failed, as a value a client can branch on. The HTTP status alone is too coarse.
+        message:
+          type: string
+          description: |-
+            A human-readable explanation, for logs and for showing to a user. Free-form: it may change
+            between server versions, so never branch on it.
+    CreateRoomRequest:
+      type: object
+      description: |-
+        The name a new room is created under.
+
+        Creation is idempotent on the name: an existing name returns that room instead of failing.
+      required:
+      - name
+      properties:
+        name:
+          type: string
+          description: |-
+            The name to create. Printable ASCII, 1–64 characters; matched case-insensitively against
+            the rooms that already exist.
+    ErrorCode:
+      oneOf:
+      - type: string
+        description: The request body was missing, malformed, or not the shape the endpoint expects.
+        enum:
+        - invalid_body
+      - type: string
+        description: The server failed for a reason it does not describe further.
+        enum:
+        - internal
+      - type: string
+        description: The request carried no usable bearer token.
+        enum:
+        - unauthorized
+      - type: string
+        description: The token was issued by this server but has passed its expiry. New login required.
+        enum:
+        - expired_token
+      - type: string
+        description: The username exists but the password does not match it.
+        enum:
+        - invalid_credentials
+      - type: string
+        description: The requested username is already registered.
+        enum:
+        - username_taken
+      - type: string
+        description: The requested username is outside what registration accepts.
+        enum:
+        - invalid_username
+      - type: string
+        description: The requested room name is outside what room creation accepts.
+        enum:
+        - invalid_name
+      - type: string
+        description: No room has the requested id.
+        enum:
+        - room_not_found
+      - type: string
+        description: The message body exceeds the server's limit.
+        enum:
+        - message_too_large
+      - type: string
+        description: A configured cap — accounts or rooms — is already reached.
+        enum:
+        - cap_exceeded
+      - type: object
+        description: |-
+          A code this build does not know, kept verbatim.
+
+          Decoding an error must not itself fail: a client that meets a code added after it was
+          built still surfaces the server's message rather than a parse error.
+        required:
+        - other
+        properties:
+          other:
+            $ref: '#/components/schemas/UnknownCode'
+            description: |-
+              A code this build does not know, kept verbatim.
+
+              Decoding an error must not itself fail: a client that meets a code added after it was
+              built still surfaces the server's message rather than a parse error.
+      description: |-
+        Every failure this API distinguishes, on the wire as its name in `snake_case`.
+
+        An enum rather than a string so the server cannot emit a code that does not exist and a client
+        can `match` with the compiler checking it has covered them all.
+    ErrorResponse:
+      type: object
+      description: The body of every failing response, whatever failed.
+      required:
+      - error
+      properties:
+        error:
+          $ref: '#/components/schemas/ApiError'
+          description: What went wrong.
+    Health:
+      type: object
+      description: The body of a liveness check.
+      required:
+      - status
+      properties:
+        status:
+          type: string
+          description: Always `ok`; the status code carries the answer.
+    LoginRequest:
+      type: object
+      description: The credentials an existing account is authenticated with.
+      required:
+      - username
+      - password
+      properties:
+        password:
+          type: string
+          description: The password in the clear, verified against the stored hash.
+        username:
+          type: string
+          description: The registered name to log in as.
+    LoginResponse:
+      type: object
+      description: 'What a successful login yields: the bearer token every authenticated request carries.'
+      required:
+      - token
+      - expires_at
+      properties:
+        expires_at:
+          $ref: '#/components/schemas/UnixMillis'
+          description: When the token stops being accepted. There are no refresh tokens — a client logs in again.
+        token:
+          type: string
+          description: |-
+            The JWT to send as `Authorization: Bearer <token>`. Opaque to clients: they carry it, they
+            do not parse it.
+    Message:
+      type: object
+      description: |-
+        One message in a room.
+
+        Messages are append-only: never edited, never deleted.
+      required:
+      - seq
+      - username
+      - body
+      - posted_at
+      properties:
+        body:
+          type: string
+          description: The message text.
+        posted_at:
+          $ref: '#/components/schemas/UnixMillis'
+          description: When the server accepted the message.
+        seq:
+          $ref: '#/components/schemas/Seq'
+          description: The message's position in the sequence, and the cursor used to fetch around it.
+        username:
+          type: string
+          description: The account that posted it.
+    MessagesResponse:
+      type: object
+      description: A page of a room's messages.
+      required:
+      - messages
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+          description: |-
+            The page, **always oldest-first**, whichever cursor asked for it.
+
+            A page shorter than the requested `limit` means the client has reached the end it was
+            walking towards: the present when polling forwards, the start of history when loading
+            older messages. A full page means more might be waiting — ask again immediately.
+    PostMessageRequest:
+      type: object
+      description: The text of a message being posted.
+      required:
+      - body
+      properties:
+        body:
+          type: string
+          description: |-
+            The message text. UTF-8, at most the server's `max_message_bytes` when encoded — see
+            [`ServerInfo`](super::ServerInfo).
+    PostMessageResponse:
+      type: object
+      description: |-
+        Where a posted message landed.
+
+        A client does *not* advance its poll cursor to this `seq` — a message with a lower `seq` may
+        still be waiting to be polled. The cursor only ever follows what polling actually delivered.
+      required:
+      - seq
+      - posted_at
+      properties:
+        posted_at:
+          $ref: '#/components/schemas/UnixMillis'
+          description: |-
+            When the server accepted the message. Server time — a client's own clock never appears on
+            the wire.
+        seq:
+          $ref: '#/components/schemas/Seq'
+          description: The `seq` the server assigned to the new message.
+    RegisterRequest:
+      type: object
+      description: |-
+        The credentials a new account is created with.
+
+        The username is the account's permanent identity — the name messages are attributed to. There
+        is no rename, no password change, and no password reset.
+      required:
+      - username
+      - password
+      properties:
+        password:
+          type: string
+          description: |-
+            The password in the clear — the connection's TLS is what protects it. The server keeps
+            only a KDF hash.
+        username:
+          type: string
+          description: |-
+            The name to register. UTF-8, 1–32 characters, no control characters; compared
+            case-insensitively against the names already taken.
+    Room:
+      type: object
+      description: |-
+        A room.
+
+        Every user belongs to every room: there is no membership, no joining, and no private rooms.
+        A room named `lobby` always exists.
+      required:
+      - id
+      - name
+      - latest_seq
+      properties:
+        id:
+          $ref: '#/components/schemas/RoomId'
+          description: The room's identifier, used in the message paths.
+        latest_seq:
+          $ref: '#/components/schemas/Seq'
+          description: |-
+            The `seq` of the newest message in the room, or `0` while it has none.
+
+            Comparing it against the newest `seq` a client has read is what drives an unread badge, so
+            one listing covers every room at once. Not a count: `seq` is server-wide (see [`Seq`]).
+        name:
+          type: string
+          description: The room's display name. Printable ASCII, 1–64 characters; unique case-insensitively.
+    RoomId:
+      type: integer
+      format: int64
+      description: |-
+        Identifier of a room, assigned by the server when the room is created. Stable for the room's
+        lifetime, and rooms are never deleted.
+      minimum: 0
+    RoomsResponse:
+      type: object
+      description: Every room on the server.
+      required:
+      - rooms
+      properties:
+        rooms:
+          type: array
+          items:
+            $ref: '#/components/schemas/Room'
+          description: 'All rooms. Never empty: `lobby` is always present.'
+    Seq:
+      type: integer
+      format: int64
+      description: |-
+        Position of a message in the server's message sequence.
+
+        `seq` increases strictly and never regresses, so it is the one total order that every client
+        agrees on. It is assigned server-wide rather than per room, so a single room's messages carry
+        gaps: treat `seq` as a cursor, never as a count. Clients remember the highest `seq` they have
+        seen in a room and poll for what came after it.
+
+        Numbering starts at 1, so [`Seq::START`] is the position before every message — an empty room
+        and a client that has read nothing both sit there, and asking for what follows it asks for
+        everything.
+      minimum: 0
+    ServerInfo:
+      type: object
+      description: |-
+        Everything about the server a client may want to show or adapt to. Needs no token, so a
+        client can read it before anyone logs in.
+      required:
+      - version
+      - max_accounts
+      - max_rooms
+      - max_message_bytes
+      - token_validity_seconds
+      properties:
+        isd_as:
+          type:
+          - string
+          - 'null'
+          description: |-
+            The SCION ISD-AS the server is reachable in, or `null` when it is serving over plain TCP
+            in development mode.
+        max_accounts:
+          type: integer
+          format: int32
+          description: How many accounts the server registers before it starts rejecting registrations.
+          minimum: 0
+        max_message_bytes:
+          type: integer
+          format: int32
+          description: The largest message body the server accepts, in bytes of UTF-8.
+          minimum: 0
+        max_rooms:
+          type: integer
+          format: int32
+          description: How many rooms the server creates before it starts rejecting new ones.
+          minimum: 0
+        token_validity_seconds:
+          type: integer
+          format: int32
+          description: How long a token stays valid after it is issued.
+          minimum: 0
+        version:
+          type: string
+          description: The server build's version, as in its `Cargo.toml`.
+    UnixMillis:
+      type: integer
+      format: int64
+      description: 'A point in time on the wire: milliseconds since the Unix epoch, UTC.'
+      minimum: 0
+    UnknownCode:
+      type: string
+      description: |-
+        A code carried by a response but not named by [`ErrorCode`].
+
+        Its contents are private and it has no constructor, so decoding is the only thing that can
+        produce one. That is what makes a sender structurally unable to invent a code: reaching for
+        [`ErrorCode::Other`] instead of adding a variant is not an option it has.
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+tags:
+- name: server
+  description: Liveness and server metadata
+- name: accounts
+  description: Registering and logging in
+- name: rooms
+  description: Listing and creating rooms
+- name: messages
+  description: Posting and reading messages

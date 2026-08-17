@@ -20,6 +20,12 @@ use tempfile::TempDir;
 
 use super::{super::*, *};
 
+/// Caps high enough that no test reaches them unless it opens a store that means to.
+const NO_CAPS: Caps = Caps {
+    accounts: u32::MAX,
+    rooms: u32::MAX,
+};
+
 /// The database file inside a test's directory.
 fn db_path(dir: &TempDir) -> PathBuf {
     dir.path().join("chat.db")
@@ -28,14 +34,18 @@ fn db_path(dir: &TempDir) -> PathBuf {
 /// A store on a fresh file, with the directory kept alive for the test's duration.
 async fn store() -> (SqliteStore, TempDir) {
     let dir = TempDir::new().expect("temp dir");
-    let store = SqliteStore::new(&db_path(&dir)).await.expect("open");
+    let store = SqliteStore::new(&db_path(&dir), NO_CAPS)
+        .await
+        .expect("open");
     (store, dir)
 }
 
 /// Closes the store and opens the same file again, as restarting the server does.
 async fn restart(store: SqliteStore, dir: &TempDir) -> SqliteStore {
     drop(store);
-    SqliteStore::new(&db_path(dir)).await.expect("reopen")
+    SqliteStore::new(&db_path(dir), NO_CAPS)
+        .await
+        .expect("reopen")
 }
 
 /// The room every client may assume exists.
@@ -56,7 +66,7 @@ async fn the_store_is_usable_as_a_trait_object() {
     let (store, _dir) = store().await;
     let store: std::sync::Arc<dyn DataStore> = std::sync::Arc::new(store);
 
-    assert_eq!(store.counts().await.expect("counts").rooms, 1);
+    assert_eq!(store.list_rooms().await.expect("list").len(), 1);
 }
 
 #[tokio::test]
@@ -104,7 +114,9 @@ async fn a_version_mismatch_rebuilds_the_database() {
         .expect("stamp");
     pool.close().await;
 
-    let store = SqliteStore::new(&db_path(&dir)).await.expect("reopen");
+    let store = SqliteStore::new(&db_path(&dir), NO_CAPS)
+        .await
+        .expect("reopen");
     let rooms = store.list_rooms().await.expect("list");
 
     assert_eq!(
@@ -112,7 +124,7 @@ async fn a_version_mismatch_rebuilds_the_database() {
         [LOBBY],
         "the rebuilt database kept rooms from the old schema"
     );
-    assert_eq!(store.counts().await.expect("counts").rooms, 1);
+    assert_eq!(store.list_rooms().await.expect("list").len(), 1);
 }
 
 #[tokio::test]
@@ -120,7 +132,7 @@ async fn opening_creates_the_directory_holding_the_database() {
     let dir = TempDir::new().expect("temp dir");
     let nested = dir.path().join("data").join("chat.db");
 
-    let store = SqliteStore::new(&nested)
+    let store = SqliteStore::new(&nested, NO_CAPS)
         .await
         .expect("open should create data/");
 
@@ -134,7 +146,7 @@ async fn reopening_the_same_version_keeps_everything() {
     store.create_room("scion").await.expect("create");
 
     let store = restart(store, &dir).await;
-    assert_eq!(store.counts().await.expect("counts").rooms, 2);
+    assert_eq!(store.list_rooms().await.expect("list").len(), 2);
 }
 
 #[tokio::test]
@@ -147,19 +159,23 @@ async fn rooms_are_created_once_and_matched_case_insensitively() {
     let again = store.create_room("SCION").await.expect("create again");
     assert!(matches!(again, RoomCreation::Existing(_)));
     assert_eq!(created.room().id, again.room().id);
-    assert_eq!(store.counts().await.expect("counts").rooms, 2);
+    assert_eq!(store.list_rooms().await.expect("list").len(), 2);
 }
 
 #[tokio::test]
 async fn usernames_are_taken_once_and_case_insensitively() {
     let (store, _dir) = store().await;
 
-    assert!(store.insert_user("alice", "hash").await.expect("insert"));
-    assert!(
-        !store.insert_user("ALICE", "other").await.expect("insert"),
+    let hash = PasswordHash::new("hash".to_owned());
+    assert_eq!(
+        store.insert_user("alice", &hash).await.expect("insert"),
+        Registration::Created
+    );
+    assert_eq!(
+        store.insert_user("ALICE", &hash).await.expect("insert"),
+        Registration::UsernameTaken,
         "the name should already be taken, case-insensitively"
     );
-    assert_eq!(store.counts().await.expect("counts").users, 1);
 }
 
 #[tokio::test]
@@ -318,4 +334,100 @@ async fn a_cursor_beyond_the_column_range_is_an_error_not_a_panic() {
         matches!(result, Err(StoreError::OutOfRange { what: "seq", .. })),
         "got {result:?}"
     );
+}
+
+/// The cap is enforced inside the insert, so it holds without a separate check the caller could
+/// race against.
+#[tokio::test]
+async fn the_account_cap_refuses_the_one_past_it() {
+    let dir = TempDir::new().expect("temp dir");
+    let store = SqliteStore::new(
+        &db_path(&dir),
+        Caps {
+            accounts: 1,
+            rooms: u32::MAX,
+        },
+    )
+    .await
+    .expect("open");
+    let hash = PasswordHash::new("hash".to_owned());
+
+    assert_eq!(
+        store.insert_user("alice", &hash).await.expect("insert"),
+        Registration::Created
+    );
+    assert!(matches!(
+        store.insert_user("bob", &hash).await,
+        Err(StoreError::CapExceeded { what: "account" })
+    ));
+}
+
+#[tokio::test]
+async fn the_room_cap_refuses_the_one_past_it() {
+    let dir = TempDir::new().expect("temp dir");
+    let store = SqliteStore::new(
+        &db_path(&dir),
+        Caps {
+            accounts: u32::MAX,
+            rooms: 2,
+        },
+    )
+    .await
+    .expect("open");
+
+    // The lobby already occupies the first slot.
+    assert!(matches!(
+        store.create_room("scion").await.expect("create"),
+        RoomCreation::Created(_)
+    ));
+    assert!(matches!(
+        store.create_room("another").await,
+        Err(StoreError::CapExceeded { what: "room" })
+    ));
+    assert_eq!(store.list_rooms().await.expect("list").len(), 2);
+}
+
+/// A name that already exists is returned even at the cap: nothing is created, so nothing is
+/// refused.
+#[tokio::test]
+async fn an_existing_room_is_returned_even_at_the_cap() {
+    let dir = TempDir::new().expect("temp dir");
+    let store = SqliteStore::new(
+        &db_path(&dir),
+        Caps {
+            accounts: u32::MAX,
+            rooms: 1,
+        },
+    )
+    .await
+    .expect("open");
+
+    let existing = store.create_room(LOBBY).await.expect("create");
+
+    assert!(matches!(existing, RoomCreation::Existing(_)));
+    assert_eq!(existing.room().name, LOBBY);
+}
+
+/// The stored hash comes back for verification, and only for a name that exists.
+#[tokio::test]
+async fn the_password_hash_is_readable_for_verification() {
+    let (store, _dir) = store().await;
+    let hash = PasswordHash::new("$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA".to_owned());
+    store.insert_user("alice", &hash).await.expect("insert");
+
+    let stored = store.password_hash("Alice").await.expect("lookup");
+
+    assert_eq!(stored.expect("a hash").as_str(), hash.as_str());
+    assert!(store.password_hash("bob").await.expect("lookup").is_none());
+}
+
+/// A hash must not reach a log through the `Debug` of whatever carries it.
+#[tokio::test]
+async fn the_password_hash_is_redacted_in_debug_output() {
+    let hash = PasswordHash::new("$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA".to_owned());
+
+    let rendered = format!("{hash:?}");
+
+    assert!(!rendered.contains("aGFzaA"), "{rendered}");
+    assert!(rendered.contains("redacted"), "{rendered}");
 }

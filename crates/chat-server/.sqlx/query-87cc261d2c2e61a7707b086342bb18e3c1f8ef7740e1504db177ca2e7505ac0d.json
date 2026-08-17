@@ -1,0 +1,21 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT EXISTS(SELECT 1 FROM users WHERE username = ?) AS \"found!\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "found!",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "87cc261d2c2e61a7707b086342bb18e3c1f8ef7740e1504db177ca2e7505ac0d"
+}

@@ -2,8 +2,38 @@
 
 Chat demo application using scion-sdk.
 
-The workspace holds two crates: `chat-core`, the API's request and response types, and
-`chat-server`, the server itself. `cargo doc_dx --open` renders both.
+The workspace holds two crates:
+
+- `chat-core`, the API's request and response types
+- `chat-server`, the server
+
+`cargo doc_dx --open` renders both.
+
+## chat-server guide
+
+`--transport tcp` serves the API as plain HTTP, with no TLS and no SCION, so every endpoint is
+reachable with `curl`. It is a development mode.
+
+```sh
+cargo run -p chat-server -- --transport tcp --listen 127.0.0.1:8080 --data-dir ./data
+```
+
+`cargo run -p chat-server -- --help` lists every flag with its default and its `CHAT_*` environment
+fallback.
+
+### Endpoints
+
+Every route sits under `/api/v1`, and every route except `/healthz`, `/server`, `/register` and
+`/login` needs `A="authorization: Bearer $TOKEN"`, from `login`.
+
+The server describes itself at `/.well-known/openapi.json`. The same document is committed as YAML,
+which diffs better, at [`crates/chat-server/openapi.yaml`](crates/chat-server/openapi.yaml), so the
+API surface is readable, and reviewable, without running anything. A test compares the two; it
+rewrites the file when run as:
+
+```sh
+CHAT_UPDATE_OPENAPI=1 cargo test -p chat-server
+```
 
 ## Development
 

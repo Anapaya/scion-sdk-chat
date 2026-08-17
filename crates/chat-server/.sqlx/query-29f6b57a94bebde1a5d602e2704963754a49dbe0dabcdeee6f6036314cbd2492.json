@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO users (username, pw_hash, created_at)\n         SELECT ?, ?, ? WHERE (SELECT COUNT(*) FROM users) < ?\n         ON CONFLICT(username) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "29f6b57a94bebde1a5d602e2704963754a49dbe0dabcdeee6f6036314cbd2492"
+}

@@ -13,4 +13,20 @@
 // limitations under the License.
 //! Command-line entry point around the runtime defined in [`chat_server`].
 
-fn main() {}
+use clap::Parser as _;
+use tracing_subscriber::EnvFilter;
+
+#[tokio::main]
+async fn main() -> std::process::ExitCode {
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
+        .init();
+
+    match chat_server::run(chat_server::config::Config::parse()).await {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(error) => {
+            tracing::error!(%error, "the server stopped");
+            std::process::ExitCode::FAILURE
+        }
+    }
+}

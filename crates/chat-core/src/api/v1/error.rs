@@ -67,8 +67,14 @@ impl ApiError {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
+    /// The request body was missing, malformed, or not the shape the endpoint expects.
+    InvalidBody,
+    /// The server failed for a reason it does not describe further.
+    Internal,
     /// The request carried no usable bearer token.
     Unauthorized,
+    /// The token was issued by this server but has passed its expiry. New login required.
+    ExpiredToken,
     /// The username exists but the password does not match it.
     InvalidCredentials,
     /// The requested username is already registered.
