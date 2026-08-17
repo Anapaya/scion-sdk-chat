@@ -32,6 +32,8 @@ Every flag has a `CHAT_*` environment fallback:
 | `--endhost-api` | `CHAT_ENDHOST_API` | — | how to reach the SCION network |
 | `--auth-token-file` | `CHAT_AUTH_TOKEN_FILE` | — | SNAP token, on that underlay only |
 
+`cargo run -p chat-server -- --help` prints the same list from the binary itself.
+
 ### Endpoints
 
 Every route sits under `/api/v1`, and every route except `/healthz`, `/server`, `/register` and
