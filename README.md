@@ -37,10 +37,10 @@ Every flag has a `CHAT_*` environment fallback:
 Every route sits under `/api/v1`, and every route except `/healthz`, `/server`, `/register` and
 `/login` needs `A="authorization: Bearer $TOKEN"`, from `login`.
 
-The server describes itself at `/.well-known/openapi.json`. The same document is committed at
-[`crates/chat-server/openapi.json`](crates/chat-server/openapi.json), so the API surface is
-readable, and reviewable, without running anything. A test compares the two; it rewrites the file
-when run as:
+The server describes itself at `/.well-known/openapi.json`. The same document is committed as YAML,
+which diffs better, at [`crates/chat-server/openapi.yaml`](crates/chat-server/openapi.yaml), so the
+API surface is readable, and reviewable, without running anything. A test compares the two; it
+rewrites the file when run as:
 
 ```sh
 CHAT_UPDATE_OPENAPI=1 cargo test -p chat-server

@@ -122,18 +122,18 @@ fn code(body: &Value) -> &str {
 /// Regenerate with `CHAT_UPDATE_OPENAPI=1 cargo test -p chat-server`.
 #[test]
 fn the_committed_openapi_document_describes_the_router() {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/openapi.json");
-    let generated = serde_json::to_string_pretty(&super::openapi()).expect("a document") + "\n";
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/openapi.yaml");
+    let generated = super::openapi().to_yaml().expect("a document");
 
     if std::env::var_os("CHAT_UPDATE_OPENAPI").is_some() {
-        std::fs::write(path, &generated).expect("write openapi.json");
+        std::fs::write(path, &generated).expect("write openapi.yaml");
         return;
     }
 
     assert_eq!(
         std::fs::read_to_string(path).unwrap_or_default(),
         generated,
-        "openapi.json is stale: rerun with CHAT_UPDATE_OPENAPI=1",
+        "openapi.yaml is stale: rerun with CHAT_UPDATE_OPENAPI=1",
     );
 }
 
