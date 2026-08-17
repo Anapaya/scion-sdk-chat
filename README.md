@@ -18,21 +18,8 @@ reachable with `curl`. It is a development mode.
 cargo run -p chat-server -- --transport tcp --listen 127.0.0.1:8080 --data-dir ./data
 ```
 
-Every flag has a `CHAT_*` environment fallback:
-
-| Flag | Env | Default | |
-|---|---|---|---|
-| `--transport` | `CHAT_TRANSPORT` | `scion` | `scion` or `tcp` |
-| `--listen` | `CHAT_LISTEN` | `0.0.0.0:8443` | address to bind |
-| `--data-dir` | `CHAT_DATA_DIR` | **required** | holds `chat.db` and `jwt.secret`; created if absent |
-| `--max-accounts` | `CHAT_MAX_ACCOUNTS` | `500` | accounts accepted |
-| `--max-rooms` | `CHAT_MAX_ROOMS` | `100` | rooms accepted |
-| `--max-message-bytes` | `CHAT_MAX_MESSAGE_BYTES` | `4096` | largest message body |
-| `--token-expiry-days` | `CHAT_TOKEN_EXPIRY_DAYS` | `7` | how long a login lasts |
-| `--endhost-api` | `CHAT_ENDHOST_API` | — | how to reach the SCION network |
-| `--auth-token-file` | `CHAT_AUTH_TOKEN_FILE` | — | SNAP token, on that underlay only |
-
-`cargo run -p chat-server -- --help` prints the same list from the binary itself.
+`cargo run -p chat-server -- --help` lists every flag with its default and its `CHAT_*` environment
+fallback.
 
 ### Endpoints
 
