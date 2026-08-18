@@ -11,33 +11,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! Plain HTTP over TCP, against the server's development mode. No TLS and no SCION.
+//! Plain HTTP over TCP. Development only: no TLS, so nothing on the wire is protected.
 
-use std::time::Duration;
+use std::{error::Error as _, time::Duration};
 
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
 
 use super::{MAX_BODY_BYTES, Transport};
-use crate::{
-    config::ClientConfig,
-    error::{ChatError, TransportError},
-};
+use crate::error::{ChatError, TransportError};
 
 /// How long a request may take before it is abandoned.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Talks to the server's `--transport tcp` mode.
-///
-/// Development only, and the debug path that `curl` can reproduce line for line.
+/// Holds the connection pool
 pub struct TcpTransport {
     client: reqwest::Client,
 }
 
 impl TcpTransport {
-    /// Builds the client. Reads nothing from `config`: every request already carries an absolute
-    /// URL, so there is no base address to hold on to.
-    pub fn new(_config: &ClientConfig) -> Result<Self, ChatError> {
+    /// Builds the client.
+    pub fn new() -> Result<Self, ChatError> {
         let client = reqwest::Client::builder()
             .timeout(REQUEST_TIMEOUT)
             .build()
@@ -100,7 +94,7 @@ async fn read_capped(mut reply: reqwest::Response) -> Result<Bytes, TransportErr
 /// Ordered from the most specific test to the least, because reqwest's categories overlap: a
 /// timeout while connecting answers yes to both `is_timeout` and `is_connect`.
 fn failure(error: reqwest::Error) -> TransportError {
-    let detail = error.to_string();
+    let detail = describe(&error);
 
     if error.is_timeout() {
         TransportError::Timeout
@@ -115,6 +109,21 @@ fn failure(error: reqwest::Error) -> TransportError {
     }
 }
 
+/// The failure and its causes, outermost first. The outermost alone names the request, not what
+/// went wrong with it.
+fn describe(error: &reqwest::Error) -> String {
+    let mut described = error.to_string();
+    let mut cause = error.source();
+
+    while let Some(layer) = cause {
+        described.push_str(": ");
+        described.push_str(&layer.to_string());
+        cause = layer.source();
+    }
+
+    described
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,16 +132,20 @@ mod tests {
     /// operating system answers immediately.
     #[tokio::test]
     async fn a_closed_port_is_reported_as_a_failure_to_connect() {
-        let transport = TcpTransport::new(&ClientConfig::default()).expect("a transport");
+        let transport = TcpTransport::new().expect("a transport");
         let request = http::Request::get("http://127.0.0.1:1/api/v1/healthz")
             .body(Bytes::new())
             .expect("a request");
 
         let error = transport.request(request).await.expect_err("no listener");
 
+        let TransportError::Connect(detail) = &error else {
+            panic!("expected a connect failure, got {error:?}");
+        };
+        // Every platform words this differently, and every one of them says "refused".
         assert!(
-            matches!(error, TransportError::Connect(_)),
-            "expected a connect failure, got {error:?}",
+            detail.contains("refused"),
+            "the reason has to survive, not just the url: {detail}",
         );
     }
 
@@ -140,7 +153,7 @@ mod tests {
     /// under `is_connect`, so this lands there rather than in its own variant.
     #[tokio::test]
     async fn a_name_that_does_not_resolve_fails_without_reaching_the_wire() {
-        let transport = TcpTransport::new(&ClientConfig::default()).expect("a transport");
+        let transport = TcpTransport::new().expect("a transport");
         let request =
             http::Request::get("http://a.host.that.does.not.exist.invalid/api/v1/healthz")
                 .body(Bytes::new())
