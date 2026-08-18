@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! What a call can fail with.
+//! Errors the client returns.
 
 use chat_core::api::v1::{ErrorCode, ErrorResponse};
 
@@ -40,7 +40,8 @@ pub enum ChatError {
     /// The call needs a token and nobody has logged in.
     #[error("no one is logged in")]
     NotLoggedIn,
-    /// The token was refused. Only the user can fix this, by logging in again.
+    /// The token was refused, and the client has forgotten it. Only the user can fix this, by
+    /// logging in again.
     #[error("the session has ended; log in again")]
     SessionExpired,
 }
@@ -77,15 +78,9 @@ pub enum TransportError {
 
 /// Turns a refused reply into the error a caller sees.
 ///
-/// A 401 is the one status with a meaning of its own — only the user can fix it — so it becomes
-/// [`ChatError::SessionExpired`] whatever the body says. Every other refusal is read out of the
-/// server's error envelope; a body that is not one is the server breaking its own contract, which
-/// is a protocol failure rather than something to repeat as the server's own words.
+/// A refusal outside the server's error envelope is the server breaking its own contract, so it is
+/// a protocol failure rather than something to repeat as the server's own words.
 pub(crate) fn refusal(status: u16, body: &[u8]) -> ChatError {
-    if status == 401 {
-        return ChatError::SessionExpired;
-    }
-
     match serde_json::from_slice::<ErrorResponse>(body) {
         Ok(envelope) => {
             ChatError::Api {
@@ -139,22 +134,19 @@ mod tests {
         assert_eq!(unknown.as_str(), "teapot");
     }
 
-    /// 401 is read before the body, because nothing the body says can change what it means.
+    /// A 401 is read like any other refusal here. Whether it ended a session depends on whether the
+    /// request carried a token, which only the caller knows.
     #[test]
-    fn a_401_ends_the_session_whatever_it_carries() {
-        for body in [
-            br#"{"error":{"code":"unauthorized","message":"no token"}}"#.as_slice(),
-            br#"{"error":{"code":"expired_token","message":"log in again"}}"#.as_slice(),
-            b"not json at all",
-            b"",
-        ] {
-            let error = refusal(401, body);
+    fn a_401_is_decoded_rather_than_assumed_to_be_an_ended_session() {
+        let body = br#"{"error":{"code":"invalid_credentials","message":"no match"}}"#;
 
-            assert!(
-                matches!(error, ChatError::SessionExpired),
-                "expected the session to end, got {error:?}",
-            );
-        }
+        let error = refusal(401, body);
+
+        let ChatError::Api { status, code, .. } = error else {
+            panic!("expected an api error, got {error:?}");
+        };
+        assert_eq!(status, 401);
+        assert_eq!(code, ErrorCode::InvalidCredentials);
     }
 
     /// A refusal outside the envelope is the server breaking its contract, so it is not reported as

@@ -62,7 +62,7 @@ fn config(base: &str) -> ClientConfig {
 }
 
 fn transport() -> TcpTransport {
-    TcpTransport::new(&config("http://127.0.0.1:8080")).expect("a transport")
+    TcpTransport::new().expect("a transport")
 }
 
 /// The acceptance criterion: a request built by hand, with no client above it, reaches the real
@@ -228,8 +228,15 @@ async fn the_servers_own_refusals_arrive_with_their_codes() {
         .await
         .expect_err("that password is wrong");
     assert!(
-        matches!(error, ChatError::SessionExpired),
-        "a 401 is the session ending, whichever call met it: {error:?}",
+        matches!(
+            error,
+            ChatError::Api {
+                status: 401,
+                code: chat_client_core::v1::ErrorCode::InvalidCredentials,
+                ..
+            }
+        ),
+        "a login carries no token, so its 401 is about the password: {error:?}",
     );
 
     client

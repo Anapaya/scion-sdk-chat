@@ -21,7 +21,7 @@ use chat_core::api::v1::{
     PostMessageResponse, RegisterRequest, Room, RoomId, RoomsResponse, Seq, ServerInfo, UnixMillis,
 };
 use http::{
-    Method,
+    Method, StatusCode,
     header::{AUTHORIZATION, CONTENT_TYPE},
 };
 use serde::{Serialize, de::DeserializeOwned};
@@ -62,9 +62,8 @@ pub struct ChatClient {
     state: Arc<ClientState>,
 }
 
-/// What every clone of a client shares.
 struct ClientState {
-    /// Where requests go.
+    /// Which transport is used to reach the server.
     transport: Arc<dyn Transport>,
     /// The base every path is joined onto.
     server_url: Url,
@@ -81,7 +80,7 @@ impl ChatClient {
     /// handle to one, and never spawns anything.
     pub async fn new(config: ClientConfig) -> Result<Self, ChatError> {
         let transport: Arc<dyn Transport> = match config.transport {
-            TransportKind::Tcp => Arc::new(TcpTransport::new(&config)?),
+            TransportKind::Tcp => Arc::new(TcpTransport::new()?),
             TransportKind::Scion => {
                 return Err(ChatError::Config(
                     "the scion transport is not implemented yet; use the tcp transport".to_owned(),
@@ -127,7 +126,7 @@ impl ChatClient {
             password: password.to_owned(),
         };
 
-        self.post_unauth::<_, IgnoredReply>("/api/v1/register", &body)
+        self.post::<_, IgnoredReply>("/api/v1/register", &body, Auth::None)
             .await
             .map(drop)
     }
@@ -138,7 +137,7 @@ impl ChatClient {
             username: username.to_owned(),
             password: password.to_owned(),
         };
-        let reply: LoginResponse = self.post_unauth("/api/v1/login", &body).await?;
+        let reply: LoginResponse = self.post("/api/v1/login", &body, Auth::None).await?;
 
         Ok(self.store_session(username, reply))
     }
@@ -157,7 +156,7 @@ impl ChatClient {
 
     /// Checks that the server is running.
     pub async fn health(&self) -> Result<(), ChatError> {
-        self.get_unauth::<IgnoredReply>("/api/v1/healthz")
+        self.get::<IgnoredReply>("/api/v1/healthz", Auth::None)
             .await
             .map(drop)
     }
@@ -165,12 +164,15 @@ impl ChatClient {
     /// Reads the version and the limits the server enforces. Needs no login, so a user interface
     /// can show them before anyone signs in.
     pub async fn server_info(&self) -> Result<ServerInfo, ChatError> {
-        self.get_unauth("/api/v1/server").await
+        self.get("/api/v1/server", Auth::None).await
     }
 
     /// Lists every room.
     pub async fn rooms(&self) -> Result<Vec<Room>, ChatError> {
-        Ok(self.get::<RoomsResponse>("/api/v1/rooms").await?.rooms)
+        Ok(self
+            .get::<RoomsResponse>("/api/v1/rooms", Auth::Required)
+            .await?
+            .rooms)
     }
 
     /// Creates a room, or returns the one already holding the name.
@@ -179,7 +181,7 @@ impl ChatClient {
             name: name.to_owned(),
         };
 
-        self.post("/api/v1/rooms", &body).await
+        self.post("/api/v1/rooms", &body, Auth::Required).await
     }
 
     /// Posts a message to a room.
@@ -188,8 +190,12 @@ impl ChatClient {
             body: body.to_owned(),
         };
 
-        self.post(&format!("/api/v1/rooms/{room}/messages"), &body)
-            .await
+        self.post(
+            &format!("/api/v1/rooms/{room}/messages"),
+            &body,
+            Auth::Required,
+        )
+        .await
     }
 
     /// Reads the newest `limit` messages in a room, oldest first.
@@ -200,7 +206,10 @@ impl ChatClient {
     ) -> Result<Vec<Message>, ChatError> {
         let path = format!("/api/v1/rooms/{room}/messages?limit={limit}");
 
-        Ok(self.get::<MessagesResponse>(&path).await?.messages)
+        Ok(self
+            .get::<MessagesResponse>(&path, Auth::Required)
+            .await?
+            .messages)
     }
 
     /// Reads what arrived after `seq`, exclusive, oldest first.
@@ -212,7 +221,10 @@ impl ChatClient {
     ) -> Result<Vec<Message>, ChatError> {
         let path = format!("/api/v1/rooms/{room}/messages?limit={limit}&after_seq={seq}");
 
-        Ok(self.get::<MessagesResponse>(&path).await?.messages)
+        Ok(self
+            .get::<MessagesResponse>(&path, Auth::Required)
+            .await?
+            .messages)
     }
 
     /// Reads what came before `seq`, exclusive, oldest first. This is paging backwards through
@@ -225,44 +237,30 @@ impl ChatClient {
     ) -> Result<Vec<Message>, ChatError> {
         let path = format!("/api/v1/rooms/{room}/messages?limit={limit}&before_seq={seq}");
 
-        Ok(self.get::<MessagesResponse>(&path).await?.messages)
+        Ok(self
+            .get::<MessagesResponse>(&path, Auth::Required)
+            .await?
+            .messages)
     }
 
-    /// An authenticated read.
-    async fn get<Reply: DeserializeOwned>(&self, path: &str) -> Result<Reply, ChatError> {
-        let body = self.execute(Method::GET, path, None, true).await?;
+    async fn get<Reply: DeserializeOwned>(
+        &self,
+        path: &str,
+        auth: Auth,
+    ) -> Result<Reply, ChatError> {
+        let body = self.execute(Method::GET, path, None, auth).await?;
 
         decode(&body)
     }
 
-    /// An authenticated write.
     async fn post<Body: Serialize, Reply: DeserializeOwned>(
         &self,
         path: &str,
         body: &Body,
+        auth: Auth,
     ) -> Result<Reply, ChatError> {
         let body = self
-            .execute(Method::POST, path, Some(encode(body)?), true)
-            .await?;
-
-        decode(&body)
-    }
-
-    /// A read that needs no login.
-    async fn get_unauth<Reply: DeserializeOwned>(&self, path: &str) -> Result<Reply, ChatError> {
-        let body = self.execute(Method::GET, path, None, false).await?;
-
-        decode(&body)
-    }
-
-    /// A write that needs no login: registering, and logging in.
-    async fn post_unauth<Body: Serialize, Reply: DeserializeOwned>(
-        &self,
-        path: &str,
-        body: &Body,
-    ) -> Result<Reply, ChatError> {
-        let body = self
-            .execute(Method::POST, path, Some(encode(body)?), false)
+            .execute(Method::POST, path, Some(encode(body)?), auth)
             .await?;
 
         decode(&body)
@@ -277,7 +275,7 @@ impl ChatClient {
         method: Method,
         path: &str,
         body: Option<Bytes>,
-        auth: bool,
+        auth: Auth,
     ) -> Result<Bytes, ChatError> {
         let base = self.state.server_url.as_str().trim_end_matches('/');
         let mut request = http::Request::builder()
@@ -287,7 +285,7 @@ impl ChatClient {
         if body.is_some() {
             request = request.header(CONTENT_TYPE, "application/json");
         }
-        if auth {
+        if auth == Auth::Required {
             let token = self.token().ok_or(ChatError::NotLoggedIn)?;
             request = request.header(AUTHORIZATION, format!("Bearer {token}"));
         }
@@ -297,13 +295,16 @@ impl ChatClient {
             .map_err(|error| ChatError::Config(error.to_string()))?;
 
         let reply = self.state.transport.request(request).await?;
-        let status = reply.status().as_u16();
+        let status = reply.status();
         let body = reply.into_body();
 
-        if (200..300).contains(&status) {
+        if status.is_success() {
             Ok(body)
+        } else if status == StatusCode::UNAUTHORIZED && auth == Auth::Required {
+            self.logout();
+            Err(ChatError::SessionExpired)
         } else {
-            Err(refusal(status, &body))
+            Err(refusal(status.as_u16(), &body))
         }
     }
 
@@ -334,6 +335,17 @@ impl ChatClient {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
+}
+
+/// Whether a request carries the bearer token.
+///
+/// An enum rather than a `bool` so a call site says which it means.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Auth {
+    /// Attach the token, and refuse to send the request without one.
+    Required,
+    /// Send no token: liveness, server metadata, registering, logging in.
+    None,
 }
 
 /// A reply whose contents are not used. Accepts any valid JSON and keeps none of it.

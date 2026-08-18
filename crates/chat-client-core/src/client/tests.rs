@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! What each method puts on the wire, and what it makes of what comes back.
+//! Tests for the request each method sends and the reply it decodes.
 //!
 //! The wire form is asserted against a mock that records requests, so these are the cheapest guard
 //! against drifting from the server's contract.
@@ -255,22 +255,59 @@ async fn an_authenticated_call_without_a_login_never_reaches_the_wire() {
     assert_eq!(mock.request_count(), 0, "nothing was sent");
 }
 
-/// The acceptance criterion: a 401 is the session ending, whichever call met it.
+/// A refused token ends the session, and the client stops claiming a login it cannot use.
 #[tokio::test]
-async fn a_401_ends_the_session_rather_than_becoming_an_api_error() {
+async fn a_refused_token_ends_the_session_and_is_forgotten() {
     let expired = r#"{"error":{"code":"expired_token","message":"log in again"}}"#;
     let mock = scripted("GET /api/v1/rooms", 401, expired);
+    let client = logged_in(&mock).await;
+    assert!(client.session().is_some(), "logged in to begin with");
 
-    let error = logged_in(&mock)
-        .await
-        .rooms()
-        .await
-        .expect_err("the token is refused");
+    let error = client.rooms().await.expect_err("the token is refused");
 
     assert!(
         matches!(error, ChatError::SessionExpired),
         "expected the session to end, got {error:?}",
     );
+    assert_eq!(client.session(), None, "the token is not worth keeping");
+}
+
+/// Having forgotten the token, the next call says so instead of spending a request to be refused
+/// again.
+#[tokio::test]
+async fn a_call_after_a_refused_token_never_reaches_the_wire() {
+    let expired = r#"{"error":{"code":"expired_token","message":"log in again"}}"#;
+    let mock = scripted("GET /api/v1/rooms", 401, expired);
+    let client = logged_in(&mock).await;
+    client.rooms().await.expect_err("the token is refused");
+    let sent = mock.request_count();
+
+    let error = client.rooms().await.expect_err("nothing is logged in now");
+
+    assert!(
+        matches!(error, ChatError::NotLoggedIn),
+        "expected to be told to log in, got {error:?}",
+    );
+    assert_eq!(mock.request_count(), sent, "no second request went out");
+}
+
+/// A 401 on a call that carried no token is not a session ending — there was no session. A wrong
+/// password arrives as the code the server sent.
+#[tokio::test]
+async fn a_401_without_a_token_reports_what_the_server_said() {
+    let refused = r#"{"error":{"code":"invalid_credentials","message":"no match"}}"#;
+    let mock = MockTransport::new().respond("POST /api/v1/login", 401, refused);
+
+    let error = client(&mock)
+        .login("alice", "the wrong password")
+        .await
+        .expect_err("that password is wrong");
+
+    let ChatError::Api { status, code, .. } = error else {
+        panic!("expected an api error, got {error:?}");
+    };
+    assert_eq!(status, 401);
+    assert_eq!(code, ErrorCode::InvalidCredentials);
 }
 
 #[tokio::test]
