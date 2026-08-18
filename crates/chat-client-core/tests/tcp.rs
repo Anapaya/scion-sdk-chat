@@ -119,7 +119,7 @@ async fn a_refusal_comes_back_as_a_reply_rather_than_an_error() {
 }
 
 /// The whole client against the whole server: register, log in, list, create, post, read back, then
-/// load older. One scenario rather than a test per call, because what it proves is that the
+/// page backwards. One scenario rather than a test per call, because what it proves is that the
 /// sequence works — the wire form of each call is asserted against the mock.
 #[tokio::test]
 async fn the_client_speaks_the_real_protocol_end_to_end() {
@@ -187,7 +187,7 @@ async fn the_client_speaks_the_real_protocol_end_to_end() {
     assert_eq!(
         older.iter().map(|message| message.seq).collect::<Vec<_>>(),
         [first.seq],
-        "load older stops before the cursor",
+        "paging backwards stops before the cursor",
     );
 }
 

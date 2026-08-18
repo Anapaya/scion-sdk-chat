@@ -215,7 +215,8 @@ impl ChatClient {
         Ok(self.get::<MessagesResponse>(&path).await?.messages)
     }
 
-    /// Reads what came before `seq`, exclusive, oldest first. This is "load older".
+    /// Reads what came before `seq`, exclusive, oldest first. This is paging backwards through
+    /// history, as a reader scrolling up asks for.
     pub async fn messages_before(
         &self,
         room: RoomId,
