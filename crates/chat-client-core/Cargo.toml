@@ -1,0 +1,32 @@
+[package]
+name = "chat-client-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Every part of a chat client except the user interface"
+
+[dependencies]
+async-trait = { workspace = true }
+bytes = { workspace = true }
+chat-core = { workspace = true }
+http = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+url = { workspace = true }
+
+[dev-dependencies]
+axum = { workspace = true }
+chat-server = { workspace = true }
+clap = { workspace = true }
+tempfile = { workspace = true }
+# test-util is what lets a test pause the clock and assert the gaps between fetches.
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }
+
+[lints]
+workspace = true

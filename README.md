@@ -2,12 +2,13 @@
 
 Chat demo application using scion-sdk.
 
-The workspace holds two crates:
+The workspace holds three crates:
 
 - `chat-core`, the API's request and response types
 - `chat-server`, the server
+- `chat-client-core`, every part of a client except the user interface
 
-`cargo doc_dx --open` renders both.
+`cargo doc_dx --open` renders them all.
 
 ## chat-server guide
 
@@ -34,6 +35,27 @@ rewrites the file when run as:
 ```sh
 CHAT_UPDATE_OPENAPI=1 cargo test -p chat-server
 ```
+
+## chat-client-core guide
+
+A user interface talks to this crate and never to a transport, so the choice of interface framework
+and the choice of transport are independent. Which transport is behind it is configuration:
+
+- `TcpTransport` — plain HTTP against the server's `--transport tcp` mode. Development only.
+- `MockTransport` — a script instead of a network. It answers what a real server cannot answer on
+  cue: a body that is not JSON, a 401 mid-run, a connection that drops. Not test-only, so an offline
+  demo can use it too.
+
+Both meet the same one-method seam, which receives a fully formed request and returns the reply:
+
+```rust
+async fn request(&self, request: http::Request<Bytes>)
+    -> Result<http::Response<Bytes>, TransportError>;
+```
+
+Nothing below that line knows anything about chat. The tests bear it out both ways: the mock is
+handed bodies no server would send, and `tests/tcp.rs` drives a request built by hand against the
+real `chat-server`, embedded as a library on a port the operating system picks.
 
 ## Development
 
