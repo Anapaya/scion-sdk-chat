@@ -11,11 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! What a client is told before it starts.
+//! Configuration for a client.
 
-use std::{path::PathBuf, time::Duration};
+use std::{fmt, path::PathBuf, time::Duration};
 
-use chat_core::api::v1::Seq;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -36,6 +35,32 @@ pub enum TransportKind {
     Tcp,
 }
 
+/// A token for the SNAP underlay.
+///
+/// `Debug` prints a placeholder, so logging a config, or a panic that includes one, cannot expose
+/// it. Serialization is not redacted: a settings screen that persists a config has to write it.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct SnapToken(String);
+
+impl SnapToken {
+    /// Wraps a token read from configuration.
+    pub fn new(token: impl Into<String>) -> Self {
+        Self(token.into())
+    }
+
+    /// The token, for the transport that sends it.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Debug for SnapToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("SnapToken(<redacted>)")
+    }
+}
+
 /// Everything a client reads at startup.
 ///
 /// Plain data with no SDK types in it, so a settings screen can persist the whole value.
@@ -47,8 +72,8 @@ pub struct ClientConfig {
     pub server_url: Url,
     /// The endhost API to reach the SCION network through. Read by the SCION transport only.
     pub endhost_api: Option<Url>,
-    /// A SNAP token, needed only on the SNAP underlay.
-    pub snap_token: Option<String>,
+    /// A token, needed only on the SNAP underlay.
+    pub snap_token: Option<SnapToken>,
     /// The SCION address to dial, for a host with no TSAR record. Portless: the port always comes
     /// from `server_url`.
     pub target: Option<String>,
@@ -91,18 +116,6 @@ impl Default for PollConfig {
     }
 }
 
-/// Where watching a room starts from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Since {
-    /// The newest `limit` messages: opening a room fresh.
-    Newest {
-        /// How many to fetch.
-        limit: usize,
-    },
-    /// Everything after this position, exclusive: resuming where a client left off.
-    After(Seq),
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,7 +136,7 @@ mod tests {
             transport: TransportKind::Tcp,
             server_url: Url::parse("http://127.0.0.1:8080").expect("a url"),
             endhost_api: Some(Url::parse("http://127.0.0.1:8041").expect("a url")),
-            snap_token: Some("a token".to_owned()),
+            snap_token: Some(SnapToken::new("a token")),
             target: Some("2-ff00:0:212,10.0.0.5".to_owned()),
             cert_path: Some(PathBuf::from("chat-server.pem")),
             poll: PollConfig {
@@ -142,6 +155,32 @@ mod tests {
         assert_eq!(decoded.target, config.target);
         assert_eq!(decoded.cert_path, config.cert_path);
         assert_eq!(decoded.poll, config.poll);
+    }
+
+    /// A config reaches a log or a panic message through `Debug`, and the token must not go with
+    /// it.
+    #[test]
+    fn the_snap_token_is_redacted_in_debug_output() {
+        let config = ClientConfig {
+            snap_token: Some(SnapToken::new("s3cret")),
+            ..ClientConfig::default()
+        };
+
+        let shown = format!("{config:?}");
+
+        assert!(!shown.contains("s3cret"), "the token is in {shown}");
+        assert!(
+            shown.contains("<redacted>"),
+            "and its absence is visible: {shown}"
+        );
+    }
+
+    /// Persisting a config has to write the real token, so serialization is not redacted.
+    #[test]
+    fn the_snap_token_is_written_as_a_plain_string() {
+        let json = serde_json::to_string(&SnapToken::new("s3cret")).expect("serialize");
+
+        assert_eq!(json, r#""s3cret""#);
     }
 
     /// The names a persisted config uses, which a settings file is written in.
