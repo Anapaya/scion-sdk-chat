@@ -161,7 +161,7 @@ mod tests {
     /// though the server had explained itself.
     #[test]
     fn a_refusal_without_an_envelope_is_a_protocol_failure() {
-        for body in [b"<html>502 Bad Gateway</html>".as_slice(), b"{}", b""] {
+        for body in [b"{}".as_slice(), b"", b"not json"] {
             let error = refusal(502, body);
 
             assert!(

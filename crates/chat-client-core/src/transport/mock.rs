@@ -236,14 +236,14 @@ mod tests {
     /// The point of the mock: bodies a real server would never send.
     #[tokio::test]
     async fn a_reply_that_is_not_json_is_scriptable() {
-        let mock = MockTransport::new().respond("GET /api/v1/rooms", 200, "<html>nope</html>");
+        let mock = MockTransport::new().respond("GET /api/v1/rooms", 200, "not json");
 
         let reply = mock
             .request(get("http://host/api/v1/rooms"))
             .await
             .expect("a reply");
 
-        assert_eq!(reply.body(), &Bytes::from("<html>nope</html>"));
+        assert_eq!(reply.body(), &Bytes::from("not json"));
     }
 
     #[tokio::test]

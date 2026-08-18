@@ -294,14 +294,14 @@ async fn a_refusal_the_server_explained_arrives_with_its_code() {
 /// A reply the client cannot read is the server's fault, not the caller's, and it says so instead
 /// of pretending the call succeeded.
 #[tokio::test]
-async fn a_reply_that_is_not_the_expected_shape_is_a_protocol_failure() {
-    let mock = scripted("GET /api/v1/rooms", 200, "<html>nope</html>");
+async fn a_reply_the_client_cannot_read_is_a_protocol_failure() {
+    let mock = scripted("GET /api/v1/rooms", 200, "{}");
 
     let error = logged_in(&mock)
         .await
         .rooms()
         .await
-        .expect_err("that is not json");
+        .expect_err("no rooms field");
 
     assert!(
         matches!(error, ChatError::Protocol(_)),

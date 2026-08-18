@@ -19,7 +19,6 @@ argon2 = "0.5"
 async-trait = "0.1"
 axum = "0.8"
 bytes = "1"
-chat-client-core = { path = "crates/chat-client-core" }
 chat-core = { path = "crates/chat-core" }
 chat-server = { path = "crates/chat-server" }
 clap = { version = "4", features = ["derive", "env"] }
