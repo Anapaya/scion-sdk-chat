@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! The seam between the client and the wire.
+//! The trait every transport implements.
 
 use async_trait::async_trait;
 use bytes::Bytes;

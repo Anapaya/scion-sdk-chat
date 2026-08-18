@@ -13,7 +13,7 @@
 // limitations under the License.
 //! A transport that answers from a script instead of a network.
 //!
-//! It exists to produce what a real server cannot produce on cue: a body that is not JSON, a 401
+//! It exists to produce what a real server cannot produce on demand: a body that is not JSON, a 401
 //! in the middle of a run, a connection that drops. Always compiled, not just under `cfg(test)`,
 //! so that an offline demo can use it too.
 
@@ -39,7 +39,6 @@ pub struct MockTransport {
     state: Arc<Mutex<MockState>>,
 }
 
-/// What every clone of a mock sees.
 #[derive(Default)]
 struct MockState {
     /// Answers still to be given, per `METHOD /path`.

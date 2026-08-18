@@ -6,14 +6,13 @@ The workspace holds three crates:
 
 - `chat-core`, the API's request and response types
 - `chat-server`, the server
-- `chat-client-core`, every part of a client except the UI
+- `chat-client-core`, chat client functionality as library
 
 `cargo doc_dx --open` renders them all.
 
 ## chat-server guide
 
-`--transport tcp` serves the API as plain HTTP, with no TLS and no SCION, so every endpoint is
-reachable with `curl`. It is a development mode.
+`--transport tcp` serves the API as plain HTTP, with no TLS and no SCION. It is a development mode.
 
 ```sh
 cargo run -p chat-server -- --transport tcp --listen 127.0.0.1:8080 --data-dir ./data
@@ -38,18 +37,11 @@ CHAT_UPDATE_OPENAPI=1 cargo test -p chat-server
 
 ## chat-client-core guide
 
-The typed API, the session, and the transport they go over:
+The typed API, the session, and the underlying transport:
 
 - `TcpTransport` speaks plain HTTP to the server's `--transport tcp` mode
 - `MockTransport` answers from a script instead of a network, which is how a test produces what a
-  real server cannot produce on cue
-
-Two suites:
-
-- `cargo test -p chat-client-core --lib` asserts what each method puts on the wire, against the mock
-  that records it
-- `cargo test -p chat-client-core --test tcp` runs the client against the real `chat-server`,
-  embedded as a library on a port the operating system picks, so there is nothing to start
+  real server cannot produce on demand
 
 ## Development
 

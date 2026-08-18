@@ -77,7 +77,7 @@ pub async fn state(config: &Config) -> Result<AppState, RunError> {
     })
 }
 
-/// Serves over plain TCP. Development only: no TLS, and every endpoint is curl-able.
+/// Serves over plain TCP. Development only: no TLS, so nothing on the wire is protected.
 async fn serve_tcp(config: &Config, router: axum::Router) -> Result<(), RunError> {
     let addr = config.listen;
     let fail = |source| RunError::Serve { addr, source };
