@@ -6,7 +6,7 @@ The workspace holds three crates:
 
 - `chat-core`, the API's request and response types
 - `chat-server`, the server
-- `chat-client-core`, every part of a client except the user interface
+- `chat-client-core`, every part of a client except the UI
 
 `cargo doc_dx --open` renders them all.
 
@@ -38,24 +38,18 @@ CHAT_UPDATE_OPENAPI=1 cargo test -p chat-server
 
 ## chat-client-core guide
 
-A user interface talks to this crate and never to a transport, so the choice of interface framework
-and the choice of transport are independent. Which transport is behind it is configuration:
+The typed API, the session, and the transport they go over:
 
-- `TcpTransport` — plain HTTP against the server's `--transport tcp` mode. Development only.
-- `MockTransport` — a script instead of a network. It answers what a real server cannot answer on
-  cue: a body that is not JSON, a 401 mid-run, a connection that drops. Not test-only, so an offline
-  demo can use it too.
+- `TcpTransport` speaks plain HTTP to the server's `--transport tcp` mode
+- `MockTransport` answers from a script instead of a network, which is how a test produces what a
+  real server cannot produce on cue
 
-Both meet the same one-method seam, which receives a fully formed request and returns the reply:
+Two suites:
 
-```rust
-async fn request(&self, request: http::Request<Bytes>)
-    -> Result<http::Response<Bytes>, TransportError>;
-```
-
-Nothing below that line knows anything about chat. The tests bear it out both ways: the mock is
-handed bodies no server would send, and `tests/tcp.rs` drives a request built by hand against the
-real `chat-server`, embedded as a library on a port the operating system picks.
+- `cargo test -p chat-client-core --lib` asserts what each method puts on the wire, against the mock
+  that records it
+- `cargo test -p chat-client-core --test tcp` runs the client against the real `chat-server`,
+  embedded as a library on a port the operating system picks, so there is nothing to start
 
 ## Development
 
