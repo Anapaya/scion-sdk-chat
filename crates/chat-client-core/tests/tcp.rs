@@ -17,7 +17,10 @@
 //! and this cannot.
 
 use bytes::Bytes;
-use chat_client_core::{ClientConfig, TcpTransport, Transport as _, TransportKind};
+use chat_client_core::{
+    ChatClient, ChatError, ClientConfig, TcpTransport, Transport as _, TransportKind,
+    v1::{RoomId, Seq},
+};
 use clap::Parser as _;
 use tempfile::TempDir;
 
@@ -49,12 +52,17 @@ async fn server() -> (String, TempDir) {
     (format!("http://{address}"), dir)
 }
 
-fn transport() -> TcpTransport {
-    TcpTransport::new(&ClientConfig {
+/// The configuration a client uses against `base`.
+fn config(base: &str) -> ClientConfig {
+    ClientConfig {
         transport: TransportKind::Tcp,
+        server_url: base.parse().expect("a url"),
         ..ClientConfig::default()
-    })
-    .expect("a transport")
+    }
+}
+
+fn transport() -> TcpTransport {
+    TcpTransport::new(&config("http://127.0.0.1:8080")).expect("a transport")
 }
 
 /// The acceptance criterion: a request built by hand, with no client above it, reaches the real
@@ -107,5 +115,165 @@ async fn a_refusal_comes_back_as_a_reply_rather_than_an_error() {
         reply.body().starts_with(br#"{"error":"#),
         "the server's error envelope reaches the caller untouched: {:?}",
         reply.body(),
+    );
+}
+
+/// The whole client against the whole server: register, log in, list, create, post, read back, then
+/// load older. One scenario rather than a test per call, because what it proves is that the
+/// sequence works — the wire form of each call is asserted against the mock.
+#[tokio::test]
+async fn the_client_speaks_the_real_protocol_end_to_end() {
+    let (base, _dir) = server().await;
+    let client = ChatClient::new(config(&base)).await.expect("a client");
+
+    client.health().await.expect("the server is up");
+    let info = client.server_info().await.expect("the metadata");
+    assert_eq!(info.isd_as, None, "this server is on tcp");
+
+    client
+        .register("alice", "correct horse battery staple")
+        .await
+        .expect("the account is created");
+    let session = client
+        .login("alice", "correct horse battery staple")
+        .await
+        .expect("a login");
+    assert_eq!(session.username, "alice");
+    assert_eq!(client.session(), Some(session));
+
+    let rooms = client.rooms().await.expect("the rooms");
+    assert_eq!(rooms.len(), 1, "only the lobby exists at first");
+    assert_eq!(rooms[0].name, "lobby");
+
+    let room = client.create_room("scion").await.expect("a new room");
+    assert_eq!(room.name, "scion");
+    assert_eq!(room.latest_seq, Seq::START, "nothing has been posted yet");
+
+    let first = client.send(room.id, "hello").await.expect("a message");
+    let second = client.send(room.id, "again").await.expect("a message");
+    assert!(second.seq > first.seq, "seq only ever increases");
+
+    let newest = client
+        .messages_newest(room.id, 50)
+        .await
+        .expect("the newest page");
+    assert_eq!(
+        newest
+            .iter()
+            .map(|message| message.body.as_str())
+            .collect::<Vec<_>>(),
+        ["hello", "again"],
+        "oldest first, whichever cursor asked",
+    );
+    assert_eq!(
+        newest[0].username, "alice",
+        "attributed to the token holder"
+    );
+
+    let after = client
+        .messages_after(room.id, first.seq, 50)
+        .await
+        .expect("what came later");
+    assert_eq!(
+        after.iter().map(|message| message.seq).collect::<Vec<_>>(),
+        [second.seq],
+        "the cursor is exclusive",
+    );
+
+    let older = client
+        .messages_before(room.id, second.seq, 50)
+        .await
+        .expect("what came earlier");
+    assert_eq!(
+        older.iter().map(|message| message.seq).collect::<Vec<_>>(),
+        [first.seq],
+        "load older stops before the cursor",
+    );
+}
+
+/// The server's refusals arrive as refusals, with the code the caller branches on.
+#[tokio::test]
+async fn the_servers_own_refusals_arrive_with_their_codes() {
+    let (base, _dir) = server().await;
+    let client = ChatClient::new(config(&base)).await.expect("a client");
+
+    let error = client.rooms().await.expect_err("nobody is logged in");
+    assert!(
+        matches!(error, ChatError::NotLoggedIn),
+        "the client stops this before the wire: {error:?}",
+    );
+
+    client
+        .register("alice", "correct horse battery staple")
+        .await
+        .expect("the account is created");
+    let error = client
+        .register("alice", "correct horse battery staple")
+        .await
+        .expect_err("that name is taken");
+    assert!(
+        matches!(
+            error,
+            ChatError::Api {
+                status: 409,
+                code: chat_client_core::v1::ErrorCode::UsernameTaken,
+                ..
+            }
+        ),
+        "expected the name to be reported as taken, got {error:?}",
+    );
+
+    let error = client
+        .login("alice", "the wrong password")
+        .await
+        .expect_err("that password is wrong");
+    assert!(
+        matches!(error, ChatError::SessionExpired),
+        "a 401 is the session ending, whichever call met it: {error:?}",
+    );
+
+    client
+        .login("alice", "correct horse battery staple")
+        .await
+        .expect("a login");
+    let error = client
+        .messages_newest(RoomId::new(999), 50)
+        .await
+        .expect_err("no such room");
+    assert!(
+        matches!(
+            error,
+            ChatError::Api {
+                status: 404,
+                code: chat_client_core::v1::ErrorCode::RoomNotFound,
+                ..
+            }
+        ),
+        "expected the room to be reported missing, got {error:?}",
+    );
+}
+
+/// Logging out is enough to stop authenticated calls: the client refuses before the wire.
+#[tokio::test]
+async fn logging_out_stops_authenticated_calls() {
+    let (base, _dir) = server().await;
+    let client = ChatClient::new(config(&base)).await.expect("a client");
+
+    client
+        .register("alice", "correct horse battery staple")
+        .await
+        .expect("the account is created");
+    client
+        .login("alice", "correct horse battery staple")
+        .await
+        .expect("a login");
+    client.rooms().await.expect("the rooms");
+
+    client.logout();
+
+    let error = client.rooms().await.expect_err("the login is gone");
+    assert!(
+        matches!(error, ChatError::NotLoggedIn),
+        "expected to be told to log in, got {error:?}",
     );
 }

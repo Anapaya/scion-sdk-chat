@@ -31,11 +31,13 @@
 //! Every wire type comes from `chat-core` and is re-exported here, so a caller needs one dependency
 //! rather than two.
 
+pub mod client;
 pub mod config;
 pub mod error;
 pub mod transport;
 
 pub use chat_core::api::v1;
+pub use client::{ChatClient, SessionInfo};
 pub use config::{ClientConfig, PollConfig, Since, TransportKind};
 pub use error::{ChatError, TransportError};
 pub use transport::{Transport, mock::MockTransport, tcp::TcpTransport};

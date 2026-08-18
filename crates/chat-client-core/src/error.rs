@@ -13,7 +13,7 @@
 // limitations under the License.
 //! What a call can fail with.
 
-use chat_core::api::v1::ErrorCode;
+use chat_core::api::v1::{ErrorCode, ErrorResponse};
 
 /// Anything a client method can fail with. The one error type a user interface sees.
 #[derive(Debug, thiserror::Error)]
@@ -75,9 +75,101 @@ pub enum TransportError {
     Timeout,
 }
 
+/// Turns a refused reply into the error a caller sees.
+///
+/// A 401 is the one status with a meaning of its own — only the user can fix it — so it becomes
+/// [`ChatError::SessionExpired`] whatever the body says. Every other refusal is read out of the
+/// server's error envelope; a body that is not one is the server breaking its own contract, which
+/// is a protocol failure rather than something to repeat as the server's own words.
+pub(crate) fn refusal(status: u16, body: &[u8]) -> ChatError {
+    if status == 401 {
+        return ChatError::SessionExpired;
+    }
+
+    match serde_json::from_slice::<ErrorResponse>(body) {
+        Ok(envelope) => {
+            ChatError::Api {
+                status,
+                code: envelope.error.code().clone(),
+                message: envelope.error.message().to_owned(),
+            }
+        }
+        Err(error) => ChatError::Protocol(format!("{status} carried no error envelope: {error}")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A refusal the server described reaches the caller as the server described it.
+    #[test]
+    fn an_envelope_becomes_the_code_and_message_it_carries() {
+        let body = br#"{"error":{"code":"room_not_found","message":"no room with that id"}}"#;
+
+        let error = refusal(404, body);
+
+        let ChatError::Api {
+            status,
+            code,
+            message,
+        } = error
+        else {
+            panic!("expected an api error, got {error:?}");
+        };
+        assert_eq!(status, 404);
+        assert_eq!(code, ErrorCode::RoomNotFound);
+        assert_eq!(message, "no room with that id");
+    }
+
+    /// A code added to the server after this client was built still arrives, rather than failing to
+    /// decode.
+    #[test]
+    fn a_code_this_build_does_not_know_still_arrives() {
+        let body = br#"{"error":{"code":"teapot","message":"short and stout"}}"#;
+
+        let error = refusal(418, body);
+
+        let ChatError::Api { code, .. } = error else {
+            panic!("expected an api error, got {error:?}");
+        };
+        let ErrorCode::Other(unknown) = code else {
+            panic!("expected an unknown code, got {code:?}");
+        };
+        assert_eq!(unknown.as_str(), "teapot");
+    }
+
+    /// 401 is read before the body, because nothing the body says can change what it means.
+    #[test]
+    fn a_401_ends_the_session_whatever_it_carries() {
+        for body in [
+            br#"{"error":{"code":"unauthorized","message":"no token"}}"#.as_slice(),
+            br#"{"error":{"code":"expired_token","message":"log in again"}}"#.as_slice(),
+            b"not json at all",
+            b"",
+        ] {
+            let error = refusal(401, body);
+
+            assert!(
+                matches!(error, ChatError::SessionExpired),
+                "expected the session to end, got {error:?}",
+            );
+        }
+    }
+
+    /// A refusal outside the envelope is the server breaking its contract, so it is not reported as
+    /// though the server had explained itself.
+    #[test]
+    fn a_refusal_without_an_envelope_is_a_protocol_failure() {
+        for body in [b"<html>502 Bad Gateway</html>".as_slice(), b"{}", b""] {
+            let error = refusal(502, body);
+
+            assert!(
+                matches!(error, ChatError::Protocol(_)),
+                "expected a protocol failure, got {error:?}",
+            );
+        }
+    }
 
     /// A transport failure reaches the caller without being reworded on the way.
     #[test]
