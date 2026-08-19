@@ -11,9 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! Keeping one open room up to date.
-
-use std::{mem, time::Duration};
+//! A message poller for one room, behind an event stream.
+//!
+//! The API has no push: new messages are found by asking for what came after the last `seq`. This
+//! wraps that loop so a caller asks for the next event instead of running a timer and a cursor.
 
 use chat_core::api::v1::{Message, RoomId, Seq};
 use futures::Stream;
@@ -25,46 +26,26 @@ use crate::{client::ChatClient, error::ChatError};
 #[cfg(test)]
 mod tests;
 
-/// Longer than `room_interval`, or backing off would poll as often as not backing off.
-const BACKOFF: Duration = Duration::from_secs(10);
-
 /// Where watching a room starts from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Since {
-    /// The newest `limit` messages.
-    Newest {
-        /// How many to fetch.
-        limit: usize,
-    },
+    /// A page of the newest messages.
+    Newest,
     /// Everything after this position, exclusive.
     After(Seq),
-}
-
-/// Whether the feed is reaching the server. Reported on change, not per fetch.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case", tag = "state")]
-pub enum ConnectionState {
-    /// Fetching works.
-    Healthy,
-    /// The feed retries by itself; a caller shows this and does nothing.
-    Degraded {
-        /// What went wrong, for showing to a user.
-        error: String,
-        /// How long before the next attempt.
-        retry_in: Duration,
-    },
 }
 
 /// What a feed hands over.
 ///
 /// `Serialize` so an interface that forwards events, a Tauri webview say, passes them on untouched.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case", tag = "event")]
+#[serde(rename_all = "snake_case")]
 pub enum RoomEvent {
     /// Oldest first, to append. The first batch is the backfill, and fires even when empty.
     Messages(Vec<Message>),
-    /// Reaching the server has changed.
-    Connection(ConnectionState),
+    /// A fetch failed. The feed tries again on its next call, and the batch after is the sign it
+    /// recovered.
+    Degraded(String),
     /// Terminal: the feed is over after this.
     SessionExpired,
 }
@@ -77,19 +58,14 @@ pub struct RoomFeed {
     client: ChatClient,
     room: RoomId,
     cursor: Seq,
-    state: State,
+    /// A page in hand, or `None` once it has been handed over.
+    holding: Option<Vec<Message>>,
     catching_up: bool,
-    degraded: bool,
+    over: bool,
     /// A deadline rather than a duration, so a `next` dropped mid-wait resumes it. Otherwise a
     /// caller whose `select!` holds another timer of the same interval starves the feed: its
     /// deadlines are fixed, and a wait started afresh always lands later.
     due: Option<Instant>,
-}
-
-enum State {
-    Holding(Vec<Message>),
-    Fetching,
-    Over,
 }
 
 impl ChatClient {
@@ -99,21 +75,19 @@ impl ChatClient {
     /// that never delivers.
     pub async fn watch_room(&self, room: RoomId, since: Since) -> Result<RoomFeed, ChatError> {
         let page = self.poll().page_limit;
-        let (backfill, from) = match since {
-            Since::Newest { limit } => (self.messages_newest(room, limit).await?, Seq::START),
+        let (holding, from) = match since {
+            Since::Newest => (self.messages_newest(room, page).await?, Seq::START),
             Since::After(seq) => (self.messages_after(room, seq, page).await?, seq),
         };
-
-        // Only a resume can have more waiting: the newest page is the end.
-        let catching_up = matches!(since, Since::After(_)) && backfill.len() >= page;
 
         Ok(RoomFeed {
             client: self.clone(),
             room,
-            cursor: backfill.last().map_or(from, |message| message.seq),
-            state: State::Holding(backfill),
-            catching_up,
-            degraded: false,
+            cursor: holding.last().map_or(from, |message| message.seq),
+            // Only a resume can have more waiting: the newest page is the end.
+            catching_up: since != Since::Newest && holding.len() >= page,
+            holding: Some(holding),
+            over: false,
             due: None,
         })
     }
@@ -125,77 +99,52 @@ impl RoomFeed {
         self.room
     }
 
-    /// The next batch, or `None` once the feed is over.
+    /// The next event, or `None` once the feed is over.
     ///
     /// Cancel-safe: the cursor moves only after a batch has been decoded, and the wait is a
     /// deadline, so dropping this future loses neither messages nor elapsed time.
     pub async fn next(&mut self) -> Option<RoomEvent> {
-        if matches!(self.state, State::Over) {
+        if self.over {
             return None;
         }
-        if let State::Holding(messages) = mem::replace(&mut self.state, State::Fetching) {
+        if let Some(messages) = self.holding.take() {
             return Some(RoomEvent::Messages(messages));
         }
 
         let page = self.client.poll().page_limit;
-        loop {
-            if self.due.is_none() {
-                let wait = match (self.degraded, self.catching_up) {
-                    (true, _) => Some(BACKOFF),
-                    // A full page means more is already waiting, so draining it does not pay the
-                    // interval.
-                    (false, true) => None,
-                    (false, false) => Some(self.client.poll().room_interval),
-                };
-                self.due = wait.map(|wait| Instant::now() + wait);
+        // A full page means more is already waiting, so draining it does not pay the interval.
+        self.due = self.due.or_else(|| {
+            (!self.catching_up).then(|| Instant::now() + self.client.poll().room_interval)
+        });
+        if let Some(due) = self.due {
+            tokio::time::sleep_until(due).await;
+        }
+        self.due = None;
+
+        match self
+            .client
+            .messages_after(self.room, self.cursor, page)
+            .await
+        {
+            Ok(messages) => {
+                self.catching_up = messages.len() >= page;
+                if let Some(newest) = messages.last() {
+                    self.cursor = newest.seq;
+                }
+
+                Some(RoomEvent::Messages(messages))
             }
-            if let Some(due) = self.due {
-                tokio::time::sleep_until(due).await;
+            Err(ChatError::SessionExpired) => {
+                self.over = true;
+
+                Some(RoomEvent::SessionExpired)
             }
+            // No classification: everything but a refused token is the same to a feed. Nothing
+            // arrived, so there is nothing to chase and the next call pays the interval.
+            Err(error) => {
+                self.catching_up = false;
 
-            match self
-                .client
-                .messages_after(self.room, self.cursor, page)
-                .await
-            {
-                Ok(messages) => {
-                    let recovered = mem::take(&mut self.degraded);
-
-                    self.due = None;
-                    self.catching_up = messages.len() >= page;
-                    if let Some(newest) = messages.last() {
-                        self.cursor = newest.seq;
-                    }
-
-                    if recovered {
-                        // One event per call, so the batch recovery came with waits for the next
-                        // rather than being dropped.
-                        self.state = State::Holding(messages);
-
-                        return Some(RoomEvent::Connection(ConnectionState::Healthy));
-                    }
-
-                    return Some(RoomEvent::Messages(messages));
-                }
-                Err(ChatError::SessionExpired) => {
-                    self.state = State::Over;
-                    return Some(RoomEvent::SessionExpired);
-                }
-                // No classification: everything but a refused token is retried the same way, and
-                // only the first is reported, so a server that is down produces one event.
-                Err(error) => {
-                    let first = !self.degraded;
-
-                    self.degraded = true;
-                    self.due = None;
-
-                    if first {
-                        return Some(RoomEvent::Connection(ConnectionState::Degraded {
-                            error: error.to_string(),
-                            retry_in: BACKOFF,
-                        }));
-                    }
-                }
+                Some(RoomEvent::Degraded(error.to_string()))
             }
         }
     }

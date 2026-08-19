@@ -320,7 +320,7 @@ async fn a_feed_delivers_what_is_posted_while_it_is_open() {
         .expect("a message");
 
     let mut feed = client
-        .watch_room(room.id, Since::Newest { limit: 50 })
+        .watch_room(room.id, Since::Newest)
         .await
         .expect("a feed");
 
@@ -370,10 +370,7 @@ async fn watching_a_room_that_does_not_exist_fails_at_once() {
         .await
         .expect("a login");
 
-    let Err(error) = client
-        .watch_room(RoomId::new(999), Since::Newest { limit: 50 })
-        .await
-    else {
+    let Err(error) = client.watch_room(RoomId::new(999), Since::Newest).await else {
         panic!("expected no such room");
     };
 

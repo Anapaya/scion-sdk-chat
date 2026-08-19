@@ -16,7 +16,7 @@
 //! Every one runs under a paused clock, so a minute of fetching takes microseconds and the gaps
 //! between fetches can be asserted exactly rather than approximately.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use chat_core::api::v1::ErrorCode;
 use futures::StreamExt as _;
@@ -92,7 +92,7 @@ async fn the_first_event_is_the_page_watch_room_already_fetched() {
     let client = client(&mock, 50).await;
 
     let mut feed = client
-        .watch_room(room(), Since::Newest { limit: 50 })
+        .watch_room(room(), Since::Newest)
         .await
         .expect("a feed");
     let fetched = mock.request_count();
@@ -111,7 +111,7 @@ async fn an_empty_backfill_is_still_delivered() {
     let mock = scripted(&[page(&[])]);
     let client = client(&mock, 50).await;
     let mut feed = client
-        .watch_room(room(), Since::Newest { limit: 50 })
+        .watch_room(room(), Since::Newest)
         .await
         .expect("a feed");
 
@@ -133,7 +133,7 @@ async fn a_missing_room_fails_at_watch_room() {
 
     // A feed holds a client, which holds a transport object, so it cannot be Debug and cannot go
     // through expect_err.
-    let Err(error) = client.watch_room(room(), Since::Newest { limit: 50 }).await else {
+    let Err(error) = client.watch_room(room(), Since::Newest).await else {
         panic!("expected no such room");
     };
 
@@ -155,7 +155,7 @@ async fn later_calls_wait_out_the_interval() {
     let mock = scripted(&[page(&[1]), page(&[])]);
     let client = client(&mock, 50).await;
     let mut feed = client
-        .watch_room(room(), Since::Newest { limit: 50 })
+        .watch_room(room(), Since::Newest)
         .await
         .expect("a feed");
     feed.next().await;
@@ -213,7 +213,7 @@ async fn each_fetch_asks_from_the_newest_seq_delivered() {
     let mock = scripted(&[page(&[1, 2]), page(&[7])]);
     let client = client(&mock, 50).await;
     let mut feed = client
-        .watch_room(room(), Since::Newest { limit: 50 })
+        .watch_room(room(), Since::Newest)
         .await
         .expect("a feed");
     feed.next().await;
@@ -231,9 +231,9 @@ async fn each_fetch_asks_from_the_newest_seq_delivered() {
     );
 }
 
-/// A failed fetch does not end the feed: it reports the trouble, waits, and carries on.
+/// A failed fetch does not end the feed: it reports the trouble and tries again next call.
 #[tokio::test(start_paused = true)]
-async fn a_failure_is_reported_once_and_backs_off_to_a_ceiling() {
+async fn a_failure_is_reported_and_the_feed_carries_on() {
     let mock = MockTransport::new()
         .respond(
             "POST /api/v1/login",
@@ -244,26 +244,25 @@ async fn a_failure_is_reported_once_and_backs_off_to_a_ceiling() {
         .fail(MESSAGES, TransportError::Timeout);
     let client = client(&mock, 50).await;
     let mut feed = client
-        .watch_room(room(), Since::Newest { limit: 50 })
+        .watch_room(room(), Since::Newest)
         .await
         .expect("a feed");
     feed.next().await;
 
     let event = feed.next().await;
 
-    let Some(RoomEvent::Connection(ConnectionState::Degraded { retry_in, error })) = event else {
+    let Some(RoomEvent::Degraded(error)) = event else {
         panic!("expected the connection to be reported, got {event:?}");
     };
-    assert_eq!(retry_in, BACKOFF);
     assert!(
         error.contains("did not answer"),
         "it says what failed: {error}"
     );
 }
 
-/// Recovery is reported once, and the batch it arrived with is not lost.
+/// A batch after a failure is the recovery: nothing separate announces it, and nothing is lost.
 #[tokio::test(start_paused = true)]
-async fn recovery_is_reported_and_the_batch_survives_it() {
+async fn a_batch_after_a_failure_arrives_intact() {
     let mock = MockTransport::new()
         .respond(
             "POST /api/v1/login",
@@ -275,24 +274,16 @@ async fn recovery_is_reported_and_the_batch_survives_it() {
         .respond(MESSAGES, 200, page(&[9]));
     let client = client(&mock, 50).await;
     let mut feed = client
-        .watch_room(room(), Since::Newest { limit: 50 })
+        .watch_room(room(), Since::Newest)
         .await
         .expect("a feed");
     feed.next().await;
 
     let degraded = feed.next().await;
-    let healthy = feed.next().await;
     let batch = feed.next().await;
 
-    assert!(matches!(
-        degraded,
-        Some(RoomEvent::Connection(ConnectionState::Degraded { .. }))
-    ));
-    assert_eq!(
-        healthy,
-        Some(RoomEvent::Connection(ConnectionState::Healthy)),
-    );
-    assert_eq!(seqs(batch), [9], "the batch recovery arrived with");
+    assert!(matches!(degraded, Some(RoomEvent::Degraded(_))));
+    assert_eq!(seqs(batch), [9], "the batch that says it recovered");
 }
 
 /// The acceptance criterion for the terminal event: a refused token ends the feed.
@@ -309,7 +300,7 @@ async fn the_feed_ends_after_the_session_expires() {
         .respond(MESSAGES, 401, expired);
     let client = client(&mock, 50).await;
     let mut feed = client
-        .watch_room(room(), Since::Newest { limit: 50 })
+        .watch_room(room(), Since::Newest)
         .await
         .expect("a feed");
     feed.next().await;
@@ -327,7 +318,7 @@ async fn nothing_is_fetched_until_it_is_asked_for() {
     let mock = scripted(&[page(&[1]), page(&[])]);
     let client = client(&mock, 50).await;
     let mut feed = client
-        .watch_room(room(), Since::Newest { limit: 50 })
+        .watch_room(room(), Since::Newest)
         .await
         .expect("a feed");
     feed.next().await;
@@ -352,7 +343,7 @@ async fn a_feed_reads_as_a_stream() {
         .respond(MESSAGES, 401, expired);
     let client = client(&mock, 50).await;
     let feed = client
-        .watch_room(room(), Since::Newest { limit: 50 })
+        .watch_room(room(), Since::Newest)
         .await
         .expect("a feed");
 
@@ -372,7 +363,7 @@ async fn a_next_dropped_mid_wait_resumes_rather_than_restarts() {
     let mock = scripted(&[page(&[1]), page(&[2]), page(&[3])]);
     let client = client(&mock, 50).await;
     let mut feed = client
-        .watch_room(room(), Since::Newest { limit: 50 })
+        .watch_room(room(), Since::Newest)
         .await
         .expect("a feed");
     feed.next().await;
@@ -394,4 +385,50 @@ async fn a_next_dropped_mid_wait_resumes_rather_than_restarts() {
     }
 
     assert!(batches > 0, "the feed never reached a fetch");
+}
+
+/// Failing while catching up must still pay the interval, or the feed spins on a server that is
+/// already struggling.
+#[tokio::test(start_paused = true)]
+async fn failing_mid_catch_up_still_waits() {
+    let mock = MockTransport::new()
+        .respond(
+            "POST /api/v1/login",
+            200,
+            r#"{"token":"a.b.c","expires_at":1893456000000}"#,
+        )
+        .respond(MESSAGES, 200, page(&[1, 2]))
+        .fail(MESSAGES, TransportError::Timeout);
+    let client = client(&mock, 2).await;
+    let mut feed = client
+        .watch_room(room(), Since::After(Seq::START))
+        .await
+        .expect("a feed");
+    feed.next().await;
+
+    for _ in 0..3 {
+        feed.next().await;
+    }
+
+    let arrivals = mock.arrivals();
+    let gaps: Vec<_> = arrivals[1..]
+        .windows(2)
+        .map(|pair| pair[1] - pair[0])
+        .collect();
+    assert!(
+        gaps.iter().skip(1).all(|gap| *gap > Duration::ZERO),
+        "a failure must not be chased at once: {gaps:?}",
+    );
+}
+
+/// The derive exists so an interface can forward events untouched, so every one has to serialize.
+#[test]
+fn every_event_serializes() {
+    for event in [
+        RoomEvent::Messages(vec![]),
+        RoomEvent::Degraded("boom".to_owned()),
+        RoomEvent::SessionExpired,
+    ] {
+        serde_json::to_string(&event).unwrap_or_else(|error| panic!("{event:?}: {error}"));
+    }
 }
