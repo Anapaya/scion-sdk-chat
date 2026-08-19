@@ -34,10 +34,12 @@
 pub mod client;
 pub mod config;
 pub mod error;
+pub mod feed;
 pub mod transport;
 
 pub use chat_core::api::v1;
 pub use client::{ChatClient, SessionInfo};
 pub use config::{ClientConfig, PollConfig, SnapToken, TransportKind};
 pub use error::{ChatError, TransportError};
+pub use feed::{ConnectionState, RoomEvent, RoomFeed, Since};
 pub use transport::{Transport, mock::MockTransport, tcp::TcpTransport};
