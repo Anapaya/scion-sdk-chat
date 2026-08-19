@@ -17,6 +17,7 @@ use std::{error::Error as _, time::Duration};
 
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
+use reqwest::redirect::Policy;
 
 use super::{MAX_BODY_BYTES, Transport};
 use crate::error::{ChatError, TransportError};
@@ -34,6 +35,7 @@ impl TcpTransport {
     pub fn new() -> Result<Self, ChatError> {
         let client = reqwest::Client::builder()
             .timeout(REQUEST_TIMEOUT)
+            .redirect(Policy::none())
             .build()
             .map_err(|error| ChatError::Config(error.to_string()))?;
 
