@@ -2,6 +2,7 @@
 resolver = "2"
 
 members = [
+    "crates/chat-client-core",
     "crates/chat-core",
     "crates/chat-server",
 ]
@@ -17,10 +18,14 @@ repository = "https://github.com/anapaya/scion-sdk-chat"
 argon2 = "0.5"
 async-trait = "0.1"
 axum = "0.8"
+bytes = "1"
 chat-core = { path = "crates/chat-core" }
+chat-server = { path = "crates/chat-server" }
 clap = { version = "4", features = ["derive", "env"] }
+http = "1"
 jsonwebtoken = { version = "11", features = ["rust_crypto"] }
 rand = "0.10"
+reqwest = { version = "0.13", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sqlx = { version = "0.9", default-features = false, features = [
@@ -39,6 +44,7 @@ tokio = { version = "1", features = [
 tower = "0.5"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = { version = "2", features = ["serde"] }
 utoipa = { version = "5.4", features = ["axum_extras", "yaml"] }
 utoipa-axum = "0.2"
 

@@ -2,17 +2,17 @@
 
 Chat demo application using scion-sdk.
 
-The workspace holds two crates:
+The workspace holds three crates:
 
 - `chat-core`, the API's request and response types
 - `chat-server`, the server
+- `chat-client-core`, chat client functionality as library
 
-`cargo doc_dx --open` renders both.
+`cargo doc_dx --open` renders them all.
 
 ## chat-server guide
 
-`--transport tcp` serves the API as plain HTTP, with no TLS and no SCION, so every endpoint is
-reachable with `curl`. It is a development mode.
+`--transport tcp` serves the API as plain HTTP, with no TLS and no SCION. It is a development mode.
 
 ```sh
 cargo run -p chat-server -- --transport tcp --listen 127.0.0.1:8080 --data-dir ./data
@@ -34,6 +34,14 @@ rewrites the file when run as:
 ```sh
 CHAT_UPDATE_OPENAPI=1 cargo test -p chat-server
 ```
+
+## chat-client-core guide
+
+The typed API, the session, and the underlying transport:
+
+- `TcpTransport` speaks plain HTTP to the server's `--transport tcp` mode
+- `MockTransport` answers from a script instead of a network, which is how a test produces what a
+  real server cannot produce on demand
 
 ## Development
 

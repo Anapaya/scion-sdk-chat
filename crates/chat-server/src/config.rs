@@ -22,7 +22,7 @@ use clap::{Parser, ValueEnum};
 pub enum Transport {
     /// HTTP/3 over SCION.
     Scion,
-    /// Plain HTTP over TCP. Development only: no TLS, and curl-able.
+    /// Plain HTTP over TCP. Development only: no TLS.
     Tcp,
 }
 
