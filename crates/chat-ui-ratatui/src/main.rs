@@ -22,6 +22,7 @@ mod connection;
 mod field;
 mod layout;
 mod sign_in;
+mod theme;
 
 use std::io;
 

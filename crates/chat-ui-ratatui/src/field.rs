@@ -16,11 +16,13 @@
 use ratatui::{
     Frame,
     layout::{Position, Rect},
-    style::Stylize,
-    text::Span,
-    widgets::{Block, Paragraph},
+    style::{Style, Stylize},
+    text::Line,
+    widgets::{Block, BorderType, Paragraph},
 };
 use tui_input::Input;
+
+use crate::theme;
 
 /// What a masked field shows instead of what was typed.
 const MASK: char = '•';
@@ -30,12 +32,20 @@ const MASK: char = '•';
 ///
 /// The value is scrolled here rather than by the input, because what fits depends on how wide the
 /// box is and nothing knows that until it is being drawn.
-pub fn draw(frame: &mut Frame, area: Rect, title: &str, input: &Input, focused: bool, mask: bool) {
-    let block = if focused {
-        Block::bordered().title(title.bold()).blue()
-    } else {
-        Block::bordered().title(Span::from(title))
-    };
+pub fn draw(
+    frame: &mut Frame,
+    area: Rect,
+    title: Line<'_>,
+    input: &Input,
+    focused: bool,
+    mask: bool,
+) {
+    let border = if focused { theme::FOCUS } else { theme::BORDER };
+    let block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .border_style(Style::new().fg(border))
+        .title(title)
+        .style(Style::new().bg(theme::INPUT));
     let inner = block.inner(area);
 
     // A mask stands one character per character typed, so the cursor still lands in the right
@@ -49,6 +59,7 @@ pub fn draw(frame: &mut Frame, area: Rect, title: &str, input: &Input, focused: 
 
     frame.render_widget(
         Paragraph::new(shown)
+            .fg(theme::TEXT)
             .scroll((0, scroll as u16))
             .block(block),
         area,

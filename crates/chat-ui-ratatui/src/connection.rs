@@ -23,7 +23,7 @@ use ratatui::{
 };
 use tui_input::{Input, backend::crossterm::EventHandler as _};
 
-use crate::{field, layout::screen};
+use crate::{field, layout::screen, theme};
 
 /// The address the server listens on in development mode, so the common case is one keypress.
 const DEV_SERVER_URL: &str = "http://localhost:8080";
@@ -55,14 +55,21 @@ impl Connection {
         .flex(Flex::Center)
         .areas(screen(area, 60));
 
-        frame.render_widget(Line::from("Connect".bold()), title);
-        field::draw(frame, url, " Server URL ", &self.url, true, false);
+        frame.render_widget(Line::from("Connect".fg(theme::TITLE).bold()), title);
+        field::draw(frame, url, label(" Server URL "), &self.url, true, false);
         frame.render_widget(
-            Line::from(vec![" Connect ".into(), "<Enter>".blue().bold()]).right_aligned(),
+            Line::from(vec![
+                " Connect ".fg(theme::DIM),
+                "<Enter>".fg(theme::FOCUS).bold(),
+            ])
+            .right_aligned(),
             hint,
         );
         if let Some(message) = &self.error {
-            frame.render_widget(Paragraph::new(format!("⚠ {message}")).red(), error);
+            frame.render_widget(
+                Paragraph::new(format!("⚠ {message}")).fg(theme::ERROR),
+                error,
+            );
         }
     }
 
@@ -76,4 +83,9 @@ impl Connection {
         self.url.handle_event(&Event::Key(key));
         None
     }
+}
+
+/// The name of a field, in the colour every screen gives one.
+fn label(text: &str) -> Line<'_> {
+    Line::from(text.fg(theme::TITLE))
 }

@@ -23,7 +23,7 @@ use ratatui::{
 };
 use tui_input::{Input, backend::crossterm::EventHandler as _};
 
-use crate::{field, layout::screen};
+use crate::{field, layout::screen, theme};
 
 /// What the screen is asking for.
 pub enum Intent {
@@ -63,11 +63,11 @@ impl SignIn {
         .flex(Flex::Center)
         .areas(screen(area, 60));
 
-        frame.render_widget(Line::from("Sign in".bold()), title);
+        frame.render_widget(Line::from("Sign in".fg(theme::TITLE).bold()), title);
         field::draw(
             frame,
             username,
-            " Username ",
+            label(" Username "),
             &self.username,
             self.focus == Focus::Username,
             false,
@@ -75,25 +75,28 @@ impl SignIn {
         field::draw(
             frame,
             password,
-            " Password ",
+            label(" Password "),
             &self.password,
             self.focus == Focus::Password,
             true,
         );
         frame.render_widget(
             Line::from(vec![
-                " Register ".into(),
-                "<Ctrl+R>".blue().bold(),
-                "  Log in ".into(),
-                "<Enter>".blue().bold(),
-                "  Next field ".into(),
-                "<Tab>".blue().bold(),
+                " Register ".fg(theme::DIM),
+                "<Ctrl+R>".fg(theme::FOCUS).bold(),
+                "  Log in ".fg(theme::DIM),
+                "<Enter>".fg(theme::FOCUS).bold(),
+                "  Next field ".fg(theme::DIM),
+                "<Tab>".fg(theme::FOCUS).bold(),
             ])
             .right_aligned(),
             hint,
         );
         if let Some(message) = &self.error {
-            frame.render_widget(Paragraph::new(format!("⚠ {message}")).red(), error);
+            frame.render_widget(
+                Paragraph::new(format!("⚠ {message}")).fg(theme::ERROR),
+                error,
+            );
         }
     }
 
@@ -133,4 +136,9 @@ impl SignIn {
             Focus::Password => &mut self.password,
         }
     }
+}
+
+/// The name of a field, in the colour every screen gives one.
+fn label(text: &str) -> Line<'_> {
+    Line::from(text.fg(theme::TITLE))
 }

@@ -16,17 +16,24 @@
 //! The screens read keys and draw; they never talk to a server. Everything that does is in this
 //! file, so "where does this app use the SDK" has one answer.
 
-use std::io;
+use std::{io, time::Duration};
 
 use chat_client_core::{ChatClient, ChatError, ClientConfig, TransportKind, Url, v1::Message};
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use futures::StreamExt as _;
-use ratatui::{DefaultTerminal, Frame};
+use ratatui::{DefaultTerminal, Frame, style::Style, widgets::Block};
 
-use crate::{chat::Chat, connection::Connection, sign_in, sign_in::SignIn};
+use crate::{chat::Chat, connection::Connection, sign_in, sign_in::SignIn, theme};
 
 /// How many messages a room opens with.
 const PAGE: usize = 50;
+
+/// How often the chat screen re-reads the server.
+///
+/// TEMPORARY. A client is not supposed to write a timer: the room feed owns cadence, catch-up and
+/// backoff, and hands each batch over as an event. There is no feed yet, so this stands in for one.
+/// Delete it, and [`App::refresh`], when `watch_room` lands.
+const REFRESH: Duration = Duration::from_secs(2);
 
 /// Which screen is showing. The flow is one way, except that an ended session goes back to signing
 /// in.
@@ -61,17 +68,22 @@ impl App {
     /// terminal and on the network at the same time.
     pub async fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         let mut keys = EventStream::new();
+        let mut refresh = tokio::time::interval(REFRESH);
 
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
 
-            if let Some(event) = keys.next().await {
-                match event? {
-                    Event::Key(key) if key.kind == KeyEventKind::Press => {
-                        self.handle_key(key).await;
-                    }
-                    _ => {}
-                }
+            tokio::select! {
+                event = keys.next() => match event {
+                    Some(event) => match event? {
+                        Event::Key(key) if key.kind == KeyEventKind::Press => {
+                            self.handle_key(key).await;
+                        }
+                        _ => {}
+                    },
+                    None => self.exit = true,
+                },
+                _ = refresh.tick() => self.refresh().await,
             }
         }
         Ok(())
@@ -79,6 +91,7 @@ impl App {
 
     fn draw(&mut self, frame: &mut Frame) {
         let area = frame.area();
+        frame.render_widget(Block::new().style(Style::new().bg(theme::BACKGROUND)), area);
 
         match &mut self.screen {
             Screen::Connection(screen) => screen.draw(frame, area),
@@ -116,6 +129,7 @@ impl App {
                 };
                 match intent {
                     crate::chat::Intent::Send(body) => self.send(body).await,
+                    crate::chat::Intent::Create(name) => self.create_room(&name).await,
                     crate::chat::Intent::Open => self.open_room().await,
                 }
             }
@@ -151,14 +165,18 @@ impl App {
         }
     }
 
-    /// Creates the account and stays put. The user then logs in, as the API requires.
+    /// Creates the account, then signs in with it.
+    ///
+    /// The API keeps the two apart, so this is the screen composing them rather than the client
+    /// doing it behind the caller's back.
     async fn register(&mut self, username: &str, password: &str) {
         let Some(client) = self.client.clone() else {
             return;
         };
 
-        if let Err(error) = client.register(username, password).await {
-            self.failed(error);
+        match client.register(username, password).await {
+            Ok(()) => self.log_in(username, password).await,
+            Err(error) => self.failed(error),
         }
     }
 
@@ -176,7 +194,7 @@ impl App {
 
         match opened.await {
             Ok(rooms) => {
-                self.screen = Screen::Chat(Chat::new(rooms));
+                self.screen = Screen::Chat(Chat::new(rooms, username.to_owned()));
                 self.open_room().await;
             }
             Err(error) => self.failed(error),
@@ -218,9 +236,44 @@ impl App {
         }
     }
 
+    /// Creates a room and lets the sidebar pick it up.
+    async fn create_room(&mut self, name: &str) {
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+
+        match client.create_room(name).await {
+            Ok(_) => self.refresh().await,
+            Err(error) => self.failed(error),
+        }
+    }
+
+    /// Re-reads the rooms and the open room's messages. Does nothing on the other screens.
+    ///
+    /// TEMPORARY, with [`REFRESH`]: this is the feed's job.
+    async fn refresh(&mut self) {
+        let (Some(client), Screen::Chat(_)) = (self.client.clone(), &self.screen) else {
+            return;
+        };
+
+        match client.rooms().await {
+            Ok(rooms) => {
+                if let Screen::Chat(screen) = &mut self.screen {
+                    screen.show_rooms(rooms);
+                }
+            }
+            Err(error) => {
+                self.failed(error);
+                return;
+            }
+        }
+        self.open_room().await;
+    }
+
     fn showing(&mut self, messages: Vec<Message>) {
         if let Screen::Chat(screen) = &mut self.screen {
             screen.show(messages);
+            screen.error = None;
         }
     }
 
