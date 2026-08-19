@@ -29,7 +29,9 @@ futures = "0.3"
 http = "1"
 jsonwebtoken = { version = "11", features = ["rust_crypto"] }
 rand = "0.10"
-ratatui = "0.30"
+# unstable-rendered-line-info is Paragraph::line_count, which is how the message pane
+# finds the newest row once a long message has wrapped onto several.
+ratatui = { version = "0.30", features = ["unstable-rendered-line-info"] }
 reqwest = { version = "0.13", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

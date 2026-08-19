@@ -18,7 +18,10 @@
 
 use std::{io, time::Duration};
 
-use chat_client_core::{ChatClient, ChatError, ClientConfig, TransportKind, Url, v1::Message};
+use chat_client_core::{
+    ChatClient, ChatError, ClientConfig, ConnectionState, RoomEvent, RoomFeed, Since,
+    TransportKind, Url,
+};
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use futures::StreamExt as _;
 use ratatui::{DefaultTerminal, Frame, style::Style, widgets::Block};
@@ -28,12 +31,21 @@ use crate::{chat::Chat, connection::Connection, sign_in, sign_in::SignIn, theme}
 /// How many messages a room opens with.
 const PAGE: usize = 50;
 
-/// How often the chat screen re-reads the server.
+/// How often the sidebar is re-read.
 ///
-/// TEMPORARY. A client is not supposed to write a timer: the room feed owns cadence, catch-up and
-/// backoff, and hands each batch over as an event. There is no feed yet, so this stands in for one.
-/// Delete it, and [`App::refresh`], when `watch_room` lands.
-const REFRESH: Duration = Duration::from_secs(2);
+/// The feed covers the open room's messages. The room list has no feed, so a client that wants it
+/// fresh owns this timer.
+const ROOMS_REFRESH: Duration = Duration::from_secs(2);
+
+/// What woke the loop.
+enum Woken {
+    /// Something from the terminal, or `None` once it is closed.
+    Terminal(Option<Event>),
+    /// The feed reported something, or `None` once it is over.
+    Feed(Option<RoomEvent>),
+    /// The sidebar is due a re-read.
+    Rooms,
+}
 
 /// Which screen is showing. The flow is one way, except that an ended session goes back to signing
 /// in.
@@ -48,6 +60,8 @@ pub struct App {
     screen: Screen,
     /// Built on the connection screen. Cloning is cheap and shares the session.
     client: Option<ChatClient>,
+    /// The open room's feed. One at a time: switching rooms drops this and opens another.
+    feed: Option<RoomFeed>,
     exit: bool,
 }
 
@@ -56,6 +70,7 @@ impl Default for App {
         Self {
             screen: Screen::Connection(Connection::default()),
             client: None,
+            feed: None,
             exit: false,
         }
     }
@@ -68,25 +83,56 @@ impl App {
     /// terminal and on the network at the same time.
     pub async fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         let mut keys = EventStream::new();
-        let mut refresh = tokio::time::interval(REFRESH);
+        let mut rooms = tokio::time::interval(ROOMS_REFRESH);
 
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
 
-            tokio::select! {
-                event = keys.next() => match event {
-                    Some(event) => match event? {
-                        Event::Key(key) if key.kind == KeyEventKind::Press => {
-                            self.handle_key(key).await;
-                        }
-                        _ => {}
-                    },
-                    None => self.exit = true,
-                },
-                _ = refresh.tick() => self.refresh().await,
+            // Each arm produces what happened, so the borrows the select holds end before anything
+            // acts on it.
+            let woken = tokio::select! {
+                event = keys.next() => Woken::Terminal(event.transpose()?),
+                event = self.next_event(), if self.feed.is_some() => Woken::Feed(event),
+                _ = rooms.tick() => Woken::Rooms,
+            };
+
+            match woken {
+                Woken::Terminal(Some(Event::Key(key))) if key.kind == KeyEventKind::Press => {
+                    self.handle_key(key).await;
+                }
+                Woken::Terminal(None) => self.exit = true,
+                Woken::Terminal(Some(_)) => {}
+                Woken::Feed(Some(event)) => self.apply(event),
+                // The feed is over, and said why before it ended.
+                Woken::Feed(None) => self.feed = None,
+                Woken::Rooms => self.refresh_rooms().await,
             }
         }
         Ok(())
+    }
+
+    /// The feed's next event, or `None` when there is no feed or it has ended.
+    async fn next_event(&mut self) -> Option<RoomEvent> {
+        match &mut self.feed {
+            Some(feed) => feed.next().await,
+            None => None,
+        }
+    }
+
+    /// Applies what the feed reported.
+    fn apply(&mut self, event: RoomEvent) {
+        let Screen::Chat(screen) = &mut self.screen else {
+            return;
+        };
+
+        match event {
+            RoomEvent::Messages(messages) => screen.append(messages),
+            RoomEvent::Connection(ConnectionState::Healthy) => screen.error = None,
+            RoomEvent::Connection(ConnectionState::Degraded { error, retry_in }) => {
+                screen.error = Some(format!("{error} — retrying in {}s", retry_in.as_secs()));
+            }
+            RoomEvent::SessionExpired => self.failed(ChatError::SessionExpired),
+        }
     }
 
     fn draw(&mut self, frame: &mut Frame) {
@@ -201,7 +247,10 @@ impl App {
         }
     }
 
-    /// Fills the message pane with the open room's newest page.
+    /// Watches the open room, dropping whatever was being watched before.
+    ///
+    /// One feed at a time: the design keeps only the room on screen watched, and there is nothing
+    /// to unsubscribe from — dropping the old one ends it.
     async fn open_room(&mut self) {
         let (Some(client), Screen::Chat(screen)) = (self.client.clone(), &mut self.screen) else {
             return;
@@ -209,16 +258,24 @@ impl App {
         let Some(room) = screen.open_room().map(|room| room.id) else {
             return;
         };
+        screen.clear();
+        self.feed = None;
 
-        match client.messages_newest(room, PAGE).await {
-            Ok(messages) => self.showing(messages),
+        match client.watch_room(room, Since::Newest { limit: PAGE }).await {
+            Ok(feed) => {
+                if let Screen::Chat(screen) = &mut self.screen {
+                    screen.watching(feed.room());
+                }
+                self.feed = Some(feed);
+            }
             Err(error) => self.failed(error),
         }
     }
 
-    /// Posts a message, then reads the room back so the sent line appears.
+    /// Posts a message.
     ///
-    /// A failed send puts the text back in the composer rather than losing it.
+    /// It is not shown here: it arrives on the feed like everyone else's, which is what keeps every
+    /// client showing the same order. A failed send puts the text back rather than losing it.
     async fn send(&mut self, body: String) {
         let (Some(client), Screen::Chat(screen)) = (self.client.clone(), &mut self.screen) else {
             return;
@@ -227,12 +284,9 @@ impl App {
             return;
         };
 
-        match client.send(room, &body).await {
-            Ok(_) => self.open_room().await,
-            Err(error) => {
-                screen.restore(body);
-                self.failed(error);
-            }
+        if let Err(error) = client.send(room, &body).await {
+            screen.restore(body);
+            self.failed(error);
         }
     }
 
@@ -243,15 +297,13 @@ impl App {
         };
 
         match client.create_room(name).await {
-            Ok(_) => self.refresh().await,
+            Ok(_) => self.refresh_rooms().await,
             Err(error) => self.failed(error),
         }
     }
 
-    /// Re-reads the rooms and the open room's messages. Does nothing on the other screens.
-    ///
-    /// TEMPORARY, with [`REFRESH`]: this is the feed's job.
-    async fn refresh(&mut self) {
+    /// Re-reads the sidebar. Does nothing on the other screens.
+    async fn refresh_rooms(&mut self) {
         let (Some(client), Screen::Chat(_)) = (self.client.clone(), &self.screen) else {
             return;
         };
@@ -262,18 +314,7 @@ impl App {
                     screen.show_rooms(rooms);
                 }
             }
-            Err(error) => {
-                self.failed(error);
-                return;
-            }
-        }
-        self.open_room().await;
-    }
-
-    fn showing(&mut self, messages: Vec<Message>) {
-        if let Screen::Chat(screen) = &mut self.screen {
-            screen.show(messages);
-            screen.error = None;
+            Err(error) => self.failed(error),
         }
     }
 
@@ -288,6 +329,7 @@ impl App {
             let mut screen = SignIn::default();
             screen.error = Some(message);
             self.screen = Screen::SignIn(screen);
+            self.feed = None;
             return;
         }
 

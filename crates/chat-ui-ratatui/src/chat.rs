@@ -21,8 +21,8 @@ use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
-    text::{Line, Span},
-    widgets::{Block, BorderType, List, ListState, Paragraph},
+    text::{Line, Span, Text},
+    widgets::{Block, BorderType, List, ListState, Paragraph, Wrap},
 };
 use tui_input::{Input, backend::crossterm::EventHandler as _};
 
@@ -58,6 +58,13 @@ pub struct Chat {
     /// The newest `seq` the user has actually seen in each room. Only the room on screen advances
     /// it, which is what makes it the badge cursor rather than a resume cursor.
     last_read: HashMap<RoomId, Seq>,
+    /// The room a feed is watching, which is therefore being read.
+    watched: Option<RoomId>,
+    /// How far down the pane is scrolled, or `None` to follow the newest message.
+    scroll: Option<u16>,
+    /// What the last draw measured: the largest offset, and how many rows fit. Scrolling by a
+    /// screenful needs both, and only a draw knows the pane's size.
+    measured: (u16, u16),
     /// Who is logged in, so their own name is drawn apart from everyone else's.
     me: String,
     input: Input,
@@ -75,6 +82,9 @@ impl Chat {
             open: ListState::default().with_selected(Some(0)),
             messages: Vec::new(),
             last_read,
+            watched: None,
+            scroll: None,
+            measured: (0, 0),
             me,
             input: Input::default(),
             error: None,
@@ -97,13 +107,29 @@ impl Chat {
         self.open.select(Some(index));
     }
 
-    /// Replaces what is on screen with the page just fetched, and marks the open room read.
-    pub fn show(&mut self, messages: Vec<Message>) {
-        if let Some(room) = self.open_room() {
-            let (id, latest) = (room.id, room.latest_seq);
-            self.last_read.insert(id, latest);
+    /// Appends a batch the feed delivered, and marks the open room read up to it.
+    ///
+    /// Batches arrive oldest first and never overlap, so appending is all there is to do.
+    pub fn append(&mut self, messages: Vec<Message>) {
+        let newest = messages.last().map(|message| message.seq);
+        let open = self.open_room().map(|room| room.id);
+
+        if let (Some(room), Some(seq)) = (open, newest) {
+            self.last_read.insert(room, seq);
         }
-        self.messages = messages;
+        self.messages.extend(messages);
+    }
+
+    /// Empties the message pane, for a room that is about to be watched.
+    pub fn clear(&mut self) {
+        self.messages.clear();
+        self.watched = None;
+        self.scroll = None;
+    }
+
+    /// Records which room a feed is now watching.
+    pub fn watching(&mut self, room: RoomId) {
+        self.watched = Some(room);
     }
 
     /// Puts back what a failed send did not deliver, so the text is not lost.
@@ -123,7 +149,8 @@ impl Chat {
         .areas(opened);
 
         self.draw_rooms(frame, sidebar);
-        self.draw_messages(frame, messages);
+        let measured = self.draw_messages(frame, messages);
+        self.measured = measured;
         field::draw(frame, composer, instructions(), &self.input, true, false);
         if let Some(message) = &self.error {
             frame.render_widget(
@@ -159,20 +186,42 @@ impl Chat {
         frame.render_stateful_widget(list, area, &mut self.open);
     }
 
-    fn draw_messages(&self, frame: &mut Frame, area: Rect) {
+    /// Draws the messages, and reports the largest offset and how many rows fit.
+    fn draw_messages(&self, frame: &mut Frame, area: Rect) -> (u16, u16) {
         let title = match self.open_room() {
             Some(room) => format!(" #{} ", room.name),
             None => " no rooms ".to_owned(),
         };
-        let lines = self.messages.iter().map(|message| {
-            Line::from(vec![
-                Span::from(format!("{:<NAME_WIDTH$}", message.username))
-                    .fg(self.colour(&message.username)),
-                Span::from(message.body.as_str()).fg(theme::TEXT),
-            ])
-        });
+        let lines: Vec<Line<'_>> = self
+            .messages
+            .iter()
+            .map(|message| {
+                Line::from(vec![
+                    Span::from(format!("{:<NAME_WIDTH$}", message.username))
+                        .fg(self.colour(&message.username)),
+                    Span::from(message.body.as_str()).fg(theme::TEXT),
+                ])
+            })
+            .collect();
 
-        frame.render_widget(List::new(lines).block(panel(&title)), area);
+        let block = panel(&title);
+        let inner = block.inner(area);
+        let messages = Paragraph::new(Text::from(lines))
+            .wrap(Wrap { trim: false })
+            .block(block);
+
+        // A message longer than the pane takes several rows, so the newest is found by counting the
+        // rows a wrap actually produces rather than the messages. The count includes the block's
+        // own two rows, so it is compared against the height that also has them.
+        let rows = messages.line_count(inner.width) as u16;
+        let bottom = rows.saturating_sub(area.height);
+        // Following the newest until the reader says otherwise, and never past the end when the
+        // pane has grown a message since they last looked.
+        let scroll = self.scroll.unwrap_or(bottom).min(bottom);
+
+        frame.render_widget(messages.scroll((scroll, 0)), area);
+
+        (bottom, inner.height)
     }
 
     /// Claims the keys that mean something here and leaves the rest to the input.
@@ -184,6 +233,8 @@ impl Chat {
             KeyCode::Enter => return self.submit(),
             KeyCode::Up => return self.open(self.selected().saturating_sub(1)),
             KeyCode::Down => return self.open(self.selected() + 1),
+            KeyCode::PageUp => self.scroll_by(-1),
+            KeyCode::PageDown => self.scroll_by(1),
             _ => {
                 self.input.handle_event(&Event::Key(key));
             }
@@ -218,6 +269,19 @@ impl Chat {
         Some(Intent::Create(name.to_owned()))
     }
 
+    /// Moves the pane by `pages`, and resumes following the newest on reaching the end.
+    fn scroll_by(&mut self, pages: i16) {
+        let (bottom, page) = self.measured;
+        let from = self.scroll.unwrap_or(bottom);
+
+        let to = if pages < 0 {
+            from.saturating_sub(page)
+        } else {
+            from.saturating_add(page)
+        };
+        self.scroll = (to < bottom).then_some(to);
+    }
+
     /// Selects a room, stopping at the last one rather than wrapping.
     ///
     /// `ListState::select_next` would count past the end — the list only clamps that while it
@@ -239,6 +303,10 @@ impl Chat {
     /// A yes or no, never a count: `seq` is assigned server-wide, so the gap between two of them
     /// includes messages posted to other rooms. Counting needs that room's messages.
     fn unread(&self, room: &Room) -> bool {
+        if self.watched == Some(room.id) {
+            return false;
+        }
+
         let last_read = self.last_read.get(&room.id).copied().unwrap_or(Seq::START);
 
         room.latest_seq > last_read
@@ -268,6 +336,8 @@ fn instructions() -> Line<'static> {
         "<↑↓>".fg(theme::FOCUS).bold(),
         "  Create ".fg(theme::DIM),
         "</room name>".fg(theme::FOCUS).bold(),
+        "  Scroll ".fg(theme::DIM),
+        "<PgUp/PgDn>".fg(theme::FOCUS).bold(),
         " ".fg(theme::DIM),
     ])
 }
