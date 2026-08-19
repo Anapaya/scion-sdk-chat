@@ -254,7 +254,7 @@ async fn a_failure_is_reported_once_and_backs_off_to_a_ceiling() {
     let Some(RoomEvent::Connection(ConnectionState::Degraded { retry_in, error })) = event else {
         panic!("expected the connection to be reported, got {event:?}");
     };
-    assert_eq!(retry_in, BACKOFF_START);
+    assert_eq!(retry_in, BACKOFF);
     assert!(
         error.contains("did not answer"),
         "it says what failed: {error}"
