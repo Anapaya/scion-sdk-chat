@@ -21,6 +21,7 @@ tokio = { workspace = true, features = ["time"] }
 url = { workspace = true }
 
 [dev-dependencies]
+async-trait = { workspace = true }
 axum = { workspace = true }
 chat-server = { workspace = true }
 clap = { workspace = true }

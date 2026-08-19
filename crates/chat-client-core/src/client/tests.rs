@@ -399,3 +399,85 @@ async fn a_transport_failure_reaches_the_caller_as_it_was() {
         "expected the timeout to pass through, got {error:?}",
     );
 }
+
+/// A transport that parks until released, so a test can hold one request in flight while it runs
+/// another to completion.
+///
+/// [`MockTransport`] answers on the first poll, which is what makes it useless here: two calls over
+/// it run one after the other and never overlap.
+#[derive(Clone)]
+struct Held {
+    /// Fires once, releasing whatever is parked.
+    release: Arc<tokio::sync::Notify>,
+    /// What the parked request answers with when it is let go.
+    status: u16,
+    /// What every other route answers with, straight away.
+    passthrough: MockTransport,
+    /// The path that parks. Everything else goes to `passthrough`.
+    parked: &'static str,
+}
+
+#[async_trait::async_trait]
+impl Transport for Held {
+    async fn request(
+        &self,
+        request: http::Request<Bytes>,
+    ) -> Result<http::Response<Bytes>, TransportError> {
+        if request.uri().path() != self.parked {
+            return self.passthrough.request(request).await;
+        }
+
+        self.release.notified().await;
+
+        Ok(http::Response::builder()
+            .status(self.status)
+            .body(Bytes::from(
+                r#"{"error":{"code":"expired_token","message":"log in again"}}"#,
+            ))
+            .expect("a scripted status is valid"))
+    }
+}
+
+/// Two calls carry the same token, it expires, and a fresh login lands between the two refusals.
+/// The late 401 is about a token nobody holds any more, so it must leave the new session alone.
+#[tokio::test]
+async fn a_late_401_does_not_discard_a_session_logged_in_since() {
+    let second_login = r#"{"token":"d.e.f","expires_at":1893456000000}"#;
+    let transport = Held {
+        release: Arc::new(tokio::sync::Notify::new()),
+        status: 401,
+        passthrough: MockTransport::new()
+            .respond("POST /api/v1/login", 200, LOGIN_JSON)
+            .respond("POST /api/v1/login", 200, second_login),
+        parked: "/api/v1/rooms",
+    };
+    let client = ChatClient::new_with_transport(
+        Arc::new(transport.clone()),
+        Url::parse("http://host:8080").expect("a url"),
+        PollConfig::default(),
+    );
+    client.login("alice", "a password").await.expect("a login");
+
+    // A sends the first token and parks, holding it in flight.
+    let refused = tokio::spawn({
+        let client = client.clone();
+        async move { client.rooms().await }
+    });
+    tokio::task::yield_now().await;
+
+    // Someone logs in again while A is still waiting.
+    client.login("alice", "a password").await.expect("a login");
+    assert!(client.session().is_some(), "the new session is stored");
+
+    transport.release.notify_waiters();
+    let error = refused.await.expect("the task").expect_err("the old token");
+
+    assert!(
+        matches!(error, ChatError::SessionExpired),
+        "the call still failed on auth: {error:?}",
+    );
+    assert!(
+        client.session().is_some(),
+        "the late 401 was about a token nobody holds now",
+    );
+}

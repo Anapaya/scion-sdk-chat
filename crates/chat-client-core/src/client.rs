@@ -190,12 +190,7 @@ impl ChatClient {
             body: body.to_owned(),
         };
 
-        self.post(
-            &format!("/api/v1/rooms/{room}/messages"),
-            &body,
-            Auth::Required,
-        )
-        .await
+        self.post(&messages_path(room), &body, Auth::Required).await
     }
 
     /// Reads the newest `limit` messages in a room, oldest first.
@@ -204,12 +199,7 @@ impl ChatClient {
         room: RoomId,
         limit: usize,
     ) -> Result<Vec<Message>, ChatError> {
-        let path = format!("/api/v1/rooms/{room}/messages?limit={limit}");
-
-        Ok(self
-            .get::<MessagesResponse>(&path, Auth::Required)
-            .await?
-            .messages)
+        self.messages(room, limit, Cursor::Newest).await
     }
 
     /// Reads what arrived after `seq`, exclusive, oldest first.
@@ -219,12 +209,7 @@ impl ChatClient {
         seq: Seq,
         limit: usize,
     ) -> Result<Vec<Message>, ChatError> {
-        let path = format!("/api/v1/rooms/{room}/messages?limit={limit}&after_seq={seq}");
-
-        Ok(self
-            .get::<MessagesResponse>(&path, Auth::Required)
-            .await?
-            .messages)
+        self.messages(room, limit, Cursor::After(seq)).await
     }
 
     /// Reads what came before `seq`, exclusive, oldest first. This is paging backwards through
@@ -235,7 +220,22 @@ impl ChatClient {
         seq: Seq,
         limit: usize,
     ) -> Result<Vec<Message>, ChatError> {
-        let path = format!("/api/v1/rooms/{room}/messages?limit={limit}&before_seq={seq}");
+        self.messages(room, limit, Cursor::Before(seq)).await
+    }
+
+    /// One page of a room's messages, which the three named fetches differ only by.
+    async fn messages(
+        &self,
+        room: RoomId,
+        limit: usize,
+        cursor: Cursor,
+    ) -> Result<Vec<Message>, ChatError> {
+        let page = format!("{}?limit={limit}", messages_path(room));
+        let path = match cursor {
+            Cursor::Newest => page,
+            Cursor::After(seq) => format!("{page}&after_seq={seq}"),
+            Cursor::Before(seq) => format!("{page}&before_seq={seq}"),
+        };
 
         Ok(self
             .get::<MessagesResponse>(&path, Auth::Required)
@@ -285,9 +285,13 @@ impl ChatClient {
         if body.is_some() {
             request = request.header(CONTENT_TYPE, "application/json");
         }
+        // Kept past the request, so the reply can tell whether the token it carried is still the
+        // one stored.
+        let mut sent = None;
         if auth == Auth::Required {
             let token = self.token().ok_or(ChatError::NotLoggedIn)?;
             request = request.header(AUTHORIZATION, format!("Bearer {token}"));
+            sent = Some(token);
         }
 
         let request = request
@@ -300,15 +304,28 @@ impl ChatClient {
 
         if status.is_success() {
             Ok(body)
-        } else if status == StatusCode::UNAUTHORIZED && auth == Auth::Required {
-            self.logout();
+        } else if status == StatusCode::UNAUTHORIZED
+            && let Some(token) = &sent
+        {
+            self.forget_if_current(token);
             Err(ChatError::SessionExpired)
         } else {
             Err(refusal(status.as_u16(), &body))
         }
     }
 
-    /// The token to send, copied out so the lock is not held across the request.
+    /// Forgets the session, but only if it is still the one whose token was refused.
+    fn forget_if_current(&self, refused: &str) {
+        let mut session = self.locked_session();
+
+        if session
+            .as_ref()
+            .is_some_and(|current| current.token == refused)
+        {
+            *session = None;
+        }
+    }
+
     fn token(&self) -> Option<String> {
         self.locked_session()
             .as_ref()
@@ -335,6 +352,22 @@ impl ChatClient {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
+}
+
+/// Where a room's messages are.
+fn messages_path(room: RoomId) -> String {
+    format!("/api/v1/rooms/{room}/messages")
+}
+
+/// Which messages a fetch asks for, beyond how many.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Cursor {
+    /// The newest page.
+    Newest,
+    /// What arrived after this position, exclusive.
+    After(Seq),
+    /// What came before this position, exclusive.
+    Before(Seq),
 }
 
 /// Whether a request carries the bearer token.
