@@ -18,6 +18,7 @@ use std::{mem, time::Duration};
 use chat_core::api::v1::{Message, RoomId, Seq};
 use futures::Stream;
 use serde::Serialize;
+use tokio::time::Instant;
 
 use crate::{client::ChatClient, error::ChatError};
 
@@ -90,6 +91,13 @@ pub struct RoomFeed {
     /// How long to wait after a failure, and nothing while fetching works. Holding one is what it
     /// means to be degraded.
     backoff: Option<Duration>,
+    /// When the next fetch is due.
+    ///
+    /// A deadline rather than a duration, so a `next` dropped part-way through its wait resumes
+    /// that wait instead of starting it again. Without this a caller whose `select!` holds
+    /// another timer of the same interval starves the feed: the timer's deadline is fixed
+    /// while a fresh sleep is always later, so the fetch is never reached.
+    due: Option<Instant>,
 }
 
 /// What the feed owes its caller next.
@@ -124,11 +132,17 @@ impl ChatClient {
             state: State::Holding(backfill),
             catching_up,
             backoff: None,
+            due: None,
         })
     }
 }
 
 impl RoomFeed {
+    /// The room this feed watches.
+    pub fn room(&self) -> RoomId {
+        self.room
+    }
+
     /// The next batch, or `None` once the feed is over.
     ///
     /// Waits out the interval, fetches, and reports what happened. Cancel-safe: the cursor moves
@@ -144,8 +158,11 @@ impl RoomFeed {
 
         let page = self.client.poll().page_limit;
         loop {
-            if let Some(wait) = self.wait() {
-                tokio::time::sleep(wait).await;
+            if self.due.is_none() {
+                self.due = self.wait().map(|wait| Instant::now() + wait);
+            }
+            if let Some(due) = self.due {
+                tokio::time::sleep_until(due).await;
             }
 
             match self
@@ -153,7 +170,11 @@ impl RoomFeed {
                 .messages_after(self.room, self.cursor, page)
                 .await
             {
-                Ok(messages) => return Some(self.delivered(messages, page)),
+                Ok(messages) => {
+                    self.due = None;
+
+                    return Some(self.delivered(messages, page));
+                }
                 Err(ChatError::SessionExpired) => {
                     self.state = State::Over;
                     return Some(RoomEvent::SessionExpired);
@@ -164,6 +185,7 @@ impl RoomFeed {
                 Err(error) => {
                     let first = self.backoff.is_none();
                     let retry_in = self.back_off();
+                    self.due = None;
 
                     if first {
                         return Some(RoomEvent::Connection(ConnectionState::Degraded {

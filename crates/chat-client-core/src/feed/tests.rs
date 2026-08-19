@@ -361,3 +361,37 @@ async fn a_feed_reads_as_a_stream() {
     assert_eq!(events.len(), 2, "the backfill, then the end: {events:?}");
     assert_eq!(events[1], RoomEvent::SessionExpired);
 }
+
+/// A feed sharing a `select!` with another timer still fetches.
+///
+/// This is what your caller's loop does. `select!` drops the losing future, so a wait started
+/// afresh each call never completes against a timer whose deadline is fixed — the feed would report
+/// the backfill and then nothing, for ever.
+#[tokio::test(start_paused = true)]
+async fn a_next_dropped_mid_wait_resumes_rather_than_restarts() {
+    let mock = scripted(&[page(&[1]), page(&[2]), page(&[3])]);
+    let client = client(&mock, 50).await;
+    let mut feed = client
+        .watch_room(room(), Since::Newest { limit: 50 })
+        .await
+        .expect("a feed");
+    feed.next().await;
+
+    // The same interval the app uses for its room list, racing the feed. Its handler takes a
+    // moment, as a fetch does, which is what puts a freshly started wait behind the timer for
+    // ever.
+    let mut ticks = tokio::time::interval(Duration::from_secs(2));
+    let mut batches = 0;
+    for _ in 0..6 {
+        tokio::select! {
+            event = feed.next() => {
+                if matches!(event, Some(RoomEvent::Messages(_))) {
+                    batches += 1;
+                }
+            }
+            _ = ticks.tick() => tokio::time::sleep(Duration::from_millis(1)).await,
+        }
+    }
+
+    assert!(batches > 0, "the feed never reached a fetch");
+}
