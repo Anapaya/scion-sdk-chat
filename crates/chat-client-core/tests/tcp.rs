@@ -16,9 +16,12 @@
 //! The real server rather than a hand-written stand-in, because a stand-in can drift from the API
 //! and this cannot.
 
+use std::time::Duration;
+
 use bytes::Bytes;
 use chat_client_core::{
-    ChatClient, ChatError, ClientConfig, TcpTransport, Transport as _, TransportKind,
+    ChatClient, ChatError, ClientConfig, PollConfig, Since, TcpTransport, Transport as _,
+    TransportKind,
     v1::{RoomId, Seq},
 };
 use clap::Parser as _;
@@ -282,5 +285,98 @@ async fn logging_out_stops_authenticated_calls() {
     assert!(
         matches!(error, ChatError::NotLoggedIn),
         "expected to be told to log in, got {error:?}",
+    );
+}
+
+/// The feed against the real server: open a room, post, and watch it arrive.
+///
+/// The interval is set to nothing so the test does not wait out a real two seconds. What the
+/// cadence is under a controlled clock is asserted in the unit tests.
+#[tokio::test]
+async fn a_feed_delivers_what_is_posted_while_it_is_open() {
+    let (base, _dir) = server().await;
+    let client = ChatClient::new(ClientConfig {
+        poll: PollConfig {
+            room_interval: Duration::ZERO,
+            page_limit: 50,
+        },
+        ..config(&base)
+    })
+    .await
+    .expect("a client");
+
+    client
+        .register("alice", "correct horse battery staple")
+        .await
+        .expect("the account is created");
+    client
+        .login("alice", "correct horse battery staple")
+        .await
+        .expect("a login");
+    let room = client.create_room("scion").await.expect("a room");
+    let first = client
+        .send(room.id, "before watching")
+        .await
+        .expect("a message");
+
+    let mut feed = client
+        .watch_room(room.id, Since::Newest)
+        .await
+        .expect("a feed");
+
+    let backfill = feed.next().await.expect("the backfill");
+    assert_eq!(
+        backfill,
+        client
+            .messages_newest(room.id, 50)
+            .await
+            .expect("the same page"),
+        "the opening batch is the newest page",
+    );
+
+    let second = client
+        .send(room.id, "while watching")
+        .await
+        .expect("a message");
+    let messages = feed.next().await.expect("what came after");
+
+    assert_eq!(
+        messages
+            .iter()
+            .map(|message| message.seq)
+            .collect::<Vec<_>>(),
+        [second.seq],
+        "only what the cursor had not passed, and the cursor started at {first:?}",
+    );
+    assert_eq!(messages[0].body, "while watching");
+}
+
+/// A room that does not exist fails where the feed is opened.
+#[tokio::test]
+async fn watching_a_room_that_does_not_exist_fails_at_once() {
+    let (base, _dir) = server().await;
+    let client = ChatClient::new(config(&base)).await.expect("a client");
+    client
+        .register("alice", "correct horse battery staple")
+        .await
+        .expect("the account is created");
+    client
+        .login("alice", "correct horse battery staple")
+        .await
+        .expect("a login");
+
+    let Err(error) = client.watch_room(RoomId::new(999), Since::Newest).await else {
+        panic!("expected no such room");
+    };
+
+    assert!(
+        matches!(
+            error,
+            ChatError::Api {
+                code: chat_client_core::v1::ErrorCode::RoomNotFound,
+                ..
+            }
+        ),
+        "expected the room to be reported missing, got {error:?}",
     );
 }

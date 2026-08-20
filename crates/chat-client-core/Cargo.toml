@@ -12,6 +12,7 @@ description = "Every part of a chat client except the user interface"
 async-trait = { workspace = true }
 bytes = { workspace = true }
 chat-core = { workspace = true }
+futures = { workspace = true }
 http = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
