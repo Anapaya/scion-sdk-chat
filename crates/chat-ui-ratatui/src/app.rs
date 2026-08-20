@@ -19,17 +19,13 @@
 use std::{io, time::Duration};
 
 use chat_client_core::{
-    ChatClient, ChatError, ClientConfig, ConnectionState, RoomEvent, RoomFeed, Since,
-    TransportKind, Url,
+    ChatClient, ChatError, ClientConfig, RoomEvent, RoomFeed, Since, TransportKind, Url,
 };
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use futures::StreamExt as _;
 use ratatui::{DefaultTerminal, Frame, style::Style, widgets::Block};
 
 use crate::{chat::Chat, connection::Connection, sign_in, sign_in::SignIn, theme};
-
-/// How many messages a room opens with.
-const PAGE: usize = 50;
 
 /// How often the sidebar is re-read.
 ///
@@ -126,11 +122,12 @@ impl App {
         };
 
         match event {
-            RoomEvent::Messages(messages) => screen.append(messages),
-            RoomEvent::Connection(ConnectionState::Healthy) => screen.error = None,
-            RoomEvent::Connection(ConnectionState::Degraded { error, retry_in }) => {
-                screen.error = Some(format!("{error} — retrying in {}s", retry_in.as_secs()));
+            // A batch is also the sign the server is answering again.
+            RoomEvent::Messages(messages) => {
+                screen.append(messages);
+                screen.error = None;
             }
+            RoomEvent::Degraded(error) => screen.error = Some(error),
             RoomEvent::SessionExpired => self.failed(ChatError::SessionExpired),
         }
     }
@@ -261,7 +258,7 @@ impl App {
         screen.clear();
         self.feed = None;
 
-        match client.watch_room(room, Since::Newest { limit: PAGE }).await {
+        match client.watch_room(room, Since::Newest).await {
             Ok(feed) => {
                 if let Screen::Chat(screen) = &mut self.screen {
                     screen.watching(feed.room());
