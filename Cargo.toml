@@ -5,6 +5,7 @@ members = [
     "crates/chat-client-core",
     "crates/chat-core",
     "crates/chat-server",
+    "crates/chat-ui-iced",
 ]
 
 [workspace.package]
@@ -19,11 +20,15 @@ argon2 = "0.5"
 async-trait = "0.1"
 axum = "0.8"
 bytes = "1"
+chat-client-core = { path = "crates/chat-client-core" }
 chat-core = { path = "crates/chat-core" }
 chat-server = { path = "crates/chat-server" }
 clap = { version = "4", features = ["derive", "env"] }
 futures = "0.3"
 http = "1"
+# The tokio feature picks tokio as iced's executor. Without it the runtime under the UI is not the
+# one reqwest and the feed's timers expect, and the first request panics for want of a reactor.
+iced = { version = "0.14", features = ["tokio"] }
 jsonwebtoken = { version = "11", features = ["rust_crypto"] }
 rand = "0.10"
 reqwest = { version = "0.13", default-features = false }

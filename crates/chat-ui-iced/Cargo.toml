@@ -1,0 +1,18 @@
+[package]
+name = "chat-ui-iced"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "A desktop chat client on iced, for the UI bake-off"
+
+[dependencies]
+chat-client-core = { workspace = true }
+futures = { workspace = true }
+iced = { workspace = true }
+url = { workspace = true }
+
+[lints]
+workspace = true
