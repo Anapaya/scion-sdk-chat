@@ -11,14 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! A message poller for one room, behind an event stream.
+//! A message poller for one room, behind a stream.
 //!
 //! The API has no push: new messages are found by asking for what came after the last `seq`. This
-//! wraps that loop so a caller asks for the next event instead of running a timer and a cursor.
+//! wraps that loop so a caller asks for the next batch instead of running a timer and a cursor.
+
+use std::mem;
 
 use chat_core::api::v1::{Message, RoomId, Seq};
 use futures::Stream;
-use serde::Serialize;
 use tokio::time::Instant;
 
 use crate::{client::ChatClient, error::ChatError};
@@ -35,22 +36,7 @@ pub enum Since {
     After(Seq),
 }
 
-/// What a feed hands over.
-///
-/// `Serialize` so an interface that forwards events, a Tauri webview say, passes them on untouched.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RoomEvent {
-    /// Oldest first, to append. The first batch is the backfill, and fires even when empty.
-    Messages(Vec<Message>),
-    /// A fetch failed. The feed tries again on its next call, and the batch after is the sign it
-    /// recovered.
-    Degraded(String),
-    /// Terminal: the feed is over after this.
-    SessionExpired,
-}
-
-/// One watched room, which fetches when asked for its next event.
+/// One watched room, which fetches when asked for its next batch.
 ///
 /// There is no background task and no queue: stop calling [`next`](Self::next) and fetching stops.
 /// Dropping the feed ends it. One consumer each — two views of a room means two feeds.
@@ -58,10 +44,9 @@ pub struct RoomFeed {
     client: ChatClient,
     room: RoomId,
     cursor: Seq,
-    /// A page in hand, or `None` once it has been handed over.
-    holding: Option<Vec<Message>>,
+    /// Fetched but not yet handed over.
+    holding: Vec<Message>,
     catching_up: bool,
-    over: bool,
     /// A deadline rather than a duration, so a `next` dropped mid-wait resumes it. Otherwise a
     /// caller whose `select!` holds another timer of the same interval starves the feed: its
     /// deadlines are fixed, and a wait started afresh always lands later.
@@ -74,7 +59,7 @@ impl ChatClient {
     /// Fetching here is what turns a room that does not exist into an error, rather than a feed
     /// that never delivers.
     pub async fn watch_room(&self, room: RoomId, since: Since) -> Result<RoomFeed, ChatError> {
-        let page = self.poll().page_limit;
+        let page = self.poll().page_size();
         let (holding, from) = match since {
             Since::Newest => (self.messages_newest(room, page).await?, Seq::START),
             Since::After(seq) => (self.messages_after(room, seq, page).await?, seq),
@@ -86,8 +71,7 @@ impl ChatClient {
             cursor: holding.last().map_or(from, |message| message.seq),
             // Only a resume can have more waiting: the newest page is the end.
             catching_up: since != Since::Newest && holding.len() >= page,
-            holding: Some(holding),
-            over: false,
+            holding,
             due: None,
         })
     }
@@ -99,52 +83,41 @@ impl RoomFeed {
         self.room
     }
 
-    /// The next event, or `None` once the feed is over.
+    /// The next batch, oldest first, never empty.
     ///
+    /// Waits until a message exists, so a caller sees nothing of the polling underneath.
     /// Cancel-safe: the cursor moves only after a batch has been decoded, and the wait is a
     /// deadline, so dropping this future loses neither messages nor elapsed time.
-    pub async fn next(&mut self) -> Option<RoomEvent> {
-        if self.over {
-            return None;
-        }
-        if let Some(messages) = self.holding.take() {
-            return Some(RoomEvent::Messages(messages));
+    pub async fn next(&mut self) -> Result<Vec<Message>, ChatError> {
+        if !self.holding.is_empty() {
+            return Ok(mem::take(&mut self.holding));
         }
 
-        let page = self.client.poll().page_limit;
-        // A full page means more is already waiting, so draining it does not pay the interval.
-        self.due = self.due.or_else(|| {
-            (!self.catching_up).then(|| Instant::now() + self.client.poll().room_interval)
-        });
-        if let Some(due) = self.due {
-            tokio::time::sleep_until(due).await;
-        }
-        self.due = None;
-
-        match self
-            .client
-            .messages_after(self.room, self.cursor, page)
-            .await
-        {
-            Ok(messages) => {
-                self.catching_up = messages.len() >= page;
-                if let Some(newest) = messages.last() {
-                    self.cursor = newest.seq;
-                }
-
-                Some(RoomEvent::Messages(messages))
+        let page = self.client.poll().page_size();
+        loop {
+            self.due = self.due.or_else(|| {
+                (!self.catching_up).then(|| Instant::now() + self.client.poll().room_interval)
+            });
+            if let Some(due) = self.due {
+                tokio::time::sleep_until(due).await;
             }
-            Err(ChatError::SessionExpired) => {
-                self.over = true;
 
-                Some(RoomEvent::SessionExpired)
-            }
-            // No classification: everything but a refused token is the same to a feed. Nothing
-            // arrived, so there is nothing to chase and the next call pays the interval.
-            Err(error) => {
-                self.catching_up = false;
+            let fetched = self
+                .client
+                .messages_after(self.room, self.cursor, page)
+                .await;
+            // Held until the fetch settles, so a drop anywhere above resumes this wait instead of
+            // starting another.
+            self.due = None;
+            // Nothing arrived on a failure either, so there is nothing to chase and the next
+            // attempt pays the interval.
+            self.catching_up = matches!(&fetched, Ok(messages) if messages.len() >= page);
 
-                Some(RoomEvent::Degraded(error.to_string()))
+            let messages = fetched?;
+            if let Some(newest) = messages.last() {
+                self.cursor = newest.seq;
+
+                return Ok(messages);
             }
         }
     }
@@ -153,9 +126,10 @@ impl RoomFeed {
     ///
     /// Consuming rather than implementing `Stream`: `next` borrows the feed, so a `poll_next` would
     /// hold a future borrowing the struct it lives in.
-    pub fn into_stream(self) -> impl Stream<Item = RoomEvent> {
-        futures::stream::unfold(self, |mut feed| {
-            async move { feed.next().await.map(|event| (event, feed)) }
-        })
+    pub fn into_stream(self) -> impl Stream<Item = Result<Vec<Message>, ChatError>> {
+        futures::stream::unfold(
+            self,
+            |mut feed| async move { Some((feed.next().await, feed)) },
+        )
     }
 }

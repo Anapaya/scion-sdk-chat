@@ -107,6 +107,16 @@ pub struct PollConfig {
     pub page_limit: usize,
 }
 
+impl PollConfig {
+    /// The page size to ask for, never zero.
+    ///
+    /// A zero would make every page count as full, which reads as "more is waiting" for ever and
+    /// leaves a feed fetching without pause.
+    pub fn page_size(&self) -> usize {
+        self.page_limit.max(1)
+    }
+}
+
 impl Default for PollConfig {
     fn default() -> Self {
         Self {

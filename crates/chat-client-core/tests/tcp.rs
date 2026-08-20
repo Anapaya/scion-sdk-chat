@@ -20,8 +20,8 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use chat_client_core::{
-    ChatClient, ChatError, ClientConfig, PollConfig, RoomEvent, Since, TcpTransport,
-    Transport as _, TransportKind,
+    ChatClient, ChatError, ClientConfig, PollConfig, Since, TcpTransport, Transport as _,
+    TransportKind,
     v1::{RoomId, Seq},
 };
 use clap::Parser as _;
@@ -327,12 +327,10 @@ async fn a_feed_delivers_what_is_posted_while_it_is_open() {
     let backfill = feed.next().await.expect("the backfill");
     assert_eq!(
         backfill,
-        RoomEvent::Messages(
-            client
-                .messages_newest(room.id, 50)
-                .await
-                .expect("the same page"),
-        ),
+        client
+            .messages_newest(room.id, 50)
+            .await
+            .expect("the same page"),
         "the opening batch is the newest page",
     );
 
@@ -340,11 +338,8 @@ async fn a_feed_delivers_what_is_posted_while_it_is_open() {
         .send(room.id, "while watching")
         .await
         .expect("a message");
-    let event = feed.next().await.expect("what came after");
+    let messages = feed.next().await.expect("what came after");
 
-    let RoomEvent::Messages(messages) = event else {
-        panic!("expected a batch, got {event:?}");
-    };
     assert_eq!(
         messages
             .iter()
