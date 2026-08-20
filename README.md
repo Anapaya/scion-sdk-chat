@@ -2,11 +2,12 @@
 
 Chat demo application using scion-sdk.
 
-The workspace holds three crates:
+The workspace holds four crates:
 
 - `chat-core`, the API's request and response types
 - `chat-server`, the server
 - `chat-client-core`, chat client functionality as library
+- `chat-ui-ratatui`, a terminal UI on top of it
 
 `cargo doc_dx --open` renders them all.
 
@@ -42,6 +43,22 @@ The typed API, the session, and the underlying transport:
 - `TcpTransport` speaks plain HTTP to the server's `--transport tcp` mode
 - `MockTransport` answers from a script instead of a network, which is how a test produces what a
   real server cannot produce on demand
+
+## chat-ui-ratatui guide
+
+Three screens over `chat-client-core` — connect, sign in, chat — against a server in
+`--transport tcp` mode:
+
+```sh
+cargo run -p chat-server -- --transport tcp --listen 127.0.0.1:8080 --data-dir ./data
+cargo run -p chat-ui-ratatui
+```
+
+Enter connects, then Ctrl+R registers and Enter logs in. Tab moves between fields, ↑↓ switches rooms,
+Esc quits.
+
+The screens draw and read keys; `app.rs` holds every call to the client, so there is one place to
+look for how the SDK is used.
 
 ## Development
 
