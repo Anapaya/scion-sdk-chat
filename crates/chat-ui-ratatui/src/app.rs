@@ -19,7 +19,7 @@
 use std::{io, time::Duration};
 
 use chat_client_core::{
-    ChatClient, ChatError, ClientConfig, RoomEvent, RoomFeed, Since, TransportKind, Url,
+    ChatClient, ChatError, ClientConfig, RoomFeed, Since, TransportKind, Url, v1::Message,
 };
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use futures::StreamExt as _;
@@ -37,8 +37,8 @@ const ROOMS_REFRESH: Duration = Duration::from_secs(2);
 enum Woken {
     /// Something from the terminal, or `None` once it is closed.
     Terminal(Option<Event>),
-    /// The feed reported something, or `None` once it is over.
-    Feed(Option<RoomEvent>),
+    /// The feed delivered a batch, or failed.
+    Feed(Result<Vec<Message>, ChatError>),
     /// The sidebar is due a re-read.
     Rooms,
 }
@@ -88,7 +88,7 @@ impl App {
             // acts on it.
             let woken = tokio::select! {
                 event = keys.next() => Woken::Terminal(event.transpose()?),
-                event = self.next_event(), if self.feed.is_some() => Woken::Feed(event),
+                batch = self.next_batch(), if self.feed.is_some() => Woken::Feed(batch),
                 _ = rooms.tick() => Woken::Rooms,
             };
 
@@ -98,37 +98,32 @@ impl App {
                 }
                 Woken::Terminal(None) => self.exit = true,
                 Woken::Terminal(Some(_)) => {}
-                Woken::Feed(Some(event)) => self.apply(event),
-                // The feed is over, and said why before it ended.
-                Woken::Feed(None) => self.feed = None,
+                Woken::Feed(batch) => self.apply(batch),
                 Woken::Rooms => self.refresh_rooms().await,
             }
         }
         Ok(())
     }
 
-    /// The feed's next event, or `None` when there is no feed or it has ended.
-    async fn next_event(&mut self) -> Option<RoomEvent> {
+    /// The feed's next batch. Only called with a feed open.
+    async fn next_batch(&mut self) -> Result<Vec<Message>, ChatError> {
         match &mut self.feed {
             Some(feed) => feed.next().await,
-            None => None,
+            None => Err(ChatError::NotLoggedIn),
         }
     }
 
-    /// Applies what the feed reported.
-    fn apply(&mut self, event: RoomEvent) {
-        let Screen::Chat(screen) = &mut self.screen else {
-            return;
-        };
-
-        match event {
-            // A batch is also the sign the server is answering again.
-            RoomEvent::Messages(messages) => {
-                screen.append(messages);
-                screen.error = None;
+    /// Appends what the feed delivered, or reports why it could not.
+    fn apply(&mut self, batch: Result<Vec<Message>, ChatError>) {
+        match batch {
+            // Arriving at all is the sign the server is answering again.
+            Ok(messages) => {
+                if let Screen::Chat(screen) = &mut self.screen {
+                    screen.append(messages);
+                    screen.error = None;
+                }
             }
-            RoomEvent::Degraded(error) => screen.error = Some(error),
-            RoomEvent::SessionExpired => self.failed(ChatError::SessionExpired),
+            Err(error) => self.failed(error),
         }
     }
 
@@ -320,9 +315,11 @@ impl App {
     fn failed(&mut self, error: ChatError) {
         let message = error.to_string();
 
-        if matches!(error, ChatError::SessionExpired)
-            && matches!(self.screen, Screen::Chat(_) | Screen::SignIn(_))
-        {
+        // Both mean the session is gone: one because the server refused the token, the other
+        // because the client already forgot it. Retrying either only repeats it.
+        let signed_out = matches!(error, ChatError::SessionExpired | ChatError::NotLoggedIn);
+
+        if signed_out && matches!(self.screen, Screen::Chat(_) | Screen::SignIn(_)) {
             let mut screen = SignIn::default();
             screen.error = Some(message);
             self.screen = Screen::SignIn(screen);
