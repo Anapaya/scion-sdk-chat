@@ -19,11 +19,12 @@
 use std::{io, time::Duration};
 
 use chat_client_core::{
-    ChatClient, ChatError, ClientConfig, RoomFeed, Since, TransportKind, Url, v1::Message,
+    ChatClient, ChatError, ClientConfig, RoomFeed, Since, TransportKind, v1::Message,
 };
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use futures::StreamExt as _;
 use ratatui::{DefaultTerminal, Frame, style::Style, widgets::Block};
+use url::Url;
 
 use crate::{chat::Chat, connection::Connection, sign_in, sign_in::SignIn, theme};
 

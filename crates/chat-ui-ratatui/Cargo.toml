@@ -15,6 +15,7 @@ futures = { workspace = true }
 ratatui = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tui-input = { workspace = true }
+url = { workspace = true }
 
 [lints]
 workspace = true

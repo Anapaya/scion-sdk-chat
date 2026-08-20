@@ -43,4 +43,3 @@ pub use config::{ClientConfig, PollConfig, SnapToken, TransportKind};
 pub use error::{ChatError, TransportError};
 pub use feed::{RoomFeed, Since};
 pub use transport::{Transport, mock::MockTransport, tcp::TcpTransport};
-pub use url::Url;
