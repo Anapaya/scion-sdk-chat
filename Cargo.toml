@@ -5,6 +5,7 @@ members = [
     "crates/chat-client-core",
     "crates/chat-core",
     "crates/chat-server",
+    "crates/chat-ui-dioxus",
     "crates/chat-ui-iced",
     "crates/chat-ui-ratatui",
 ]
@@ -26,6 +27,9 @@ chat-core = { path = "crates/chat-core" }
 chat-server = { path = "crates/chat-server" }
 clap = { version = "4", features = ["derive", "env"] }
 crossterm = { version = "0.29", features = ["event-stream"] }
+# The desktop feature renders through the system WebView, which is what makes this a desktop app
+# rather than a served page.
+dioxus = { version = "0.7", features = ["desktop"] }
 futures = "0.3"
 http = "1"
 # The tokio feature picks tokio as iced's executor. Without it the runtime under the UI is not the

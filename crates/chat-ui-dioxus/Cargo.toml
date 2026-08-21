@@ -1,0 +1,19 @@
+[package]
+name = "chat-ui-dioxus"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "A desktop chat client on Dioxus, for the UI bake-off"
+
+[dependencies]
+chat-client-core = { workspace = true }
+dioxus = { workspace = true }
+futures = { workspace = true }
+tokio = { workspace = true }
+url = { workspace = true }
+
+[lints]
+workspace = true
