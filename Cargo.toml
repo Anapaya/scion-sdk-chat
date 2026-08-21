@@ -5,6 +5,7 @@ members = [
     "crates/chat-client-core",
     "crates/chat-core",
     "crates/chat-server",
+    "crates/chat-ui-iced",
     "crates/chat-ui-ratatui",
 ]
 
@@ -27,6 +28,9 @@ clap = { version = "4", features = ["derive", "env"] }
 crossterm = { version = "0.29", features = ["event-stream"] }
 futures = "0.3"
 http = "1"
+# The tokio feature picks tokio as iced's executor. Without it the runtime under the UI is not the
+# one reqwest and the feed's timers expect, and the first request panics for want of a reactor.
+iced = { version = "0.14", features = ["tokio"] }
 jsonwebtoken = { version = "11", features = ["rust_crypto"] }
 rand = "0.10"
 # unstable-rendered-line-info is Paragraph::line_count, which is how the message pane

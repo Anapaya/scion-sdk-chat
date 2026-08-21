@@ -8,6 +8,7 @@ The workspace holds four crates:
 - `chat-server`, the server
 - `chat-client-core`, chat client functionality as library
 - `chat-ui-ratatui`, a terminal UI on top of it
+- `chat-ui-iced`, a desktop UI on top of it
 
 `cargo doc_dx --open` renders them all.
 
@@ -55,10 +56,24 @@ cargo run -p chat-ui-ratatui
 ```
 
 Enter connects, then Ctrl+R registers and Enter logs in. Tab moves between fields, ↑↓ switches rooms,
-Esc quits.
+Esc quits. `/room name` in the composer creates a room.
 
 The screens draw and read keys; `app.rs` holds every call to the client, so there is one place to
 look for how the SDK is used.
+
+## chat-ui-iced guide
+
+The same three screens, in a window:
+
+```sh
+cargo run -p chat-server -- --transport tcp --listen 127.0.0.1:8080 --data-dir ./data
+cargo run -p chat-ui-iced
+```
+
+Enter connects, then Register creates the account and signs in with it. Click a room to switch,
+Enter sends, and `/room name` creates a room.
+
+The screens draw and hold their fields; `app.rs` holds every call to the client.
 
 ## Development
 
