@@ -21,10 +21,14 @@ use chat_client_core::{
     v1::{Message as ChatMessage, Room, RoomId},
 };
 use futures::{Stream, StreamExt as _, stream};
-use iced::{Element, Subscription, Task, Theme, task, time, widget::Id};
+use iced::{Element, Subscription, Task, Theme, task, time};
 use url::Url;
 
-use crate::{chat, chat::Chat, connection::Connection, sign_in::SignIn};
+use crate::{
+    chat::{Chat, Submission},
+    connection::Connection,
+    sign_in::SignIn,
+};
 
 /// How often the sidebar is re-read.
 ///
@@ -71,10 +75,6 @@ pub enum Message {
     LoggedIn(Result<Vec<Room>, Failure>),
     RoomsDue,
     RoomsRefreshed(Result<Vec<Room>, Failure>),
-    NewRoom,
-    NameEdited(String),
-    CreateRoom,
-    CancelNewRoom,
     RoomCreated(Result<Room, Failure>),
     RoomOpened(RoomId),
     /// A batch from the open room's feed, oldest first.
@@ -240,48 +240,6 @@ impl App {
                 Task::none()
             }
 
-            Message::NewRoom => {
-                let Screen::Chat(screen) = &mut self.screen else {
-                    return Task::none();
-                };
-                screen.naming = Some(String::new());
-                // The button both opens the field and puts the cursor in it, which is the whole
-                // reason the field has a name.
-                iced::widget::operation::focus(Id::new(chat::NEW_ROOM_INPUT))
-            }
-
-            Message::NameEdited(name) => {
-                if let Screen::Chat(screen) = &mut self.screen {
-                    screen.naming = Some(name);
-                }
-                Task::none()
-            }
-
-            Message::CancelNewRoom => {
-                if let Screen::Chat(screen) = &mut self.screen {
-                    screen.naming = None;
-                }
-                Task::none()
-            }
-
-            // The typed name is kept until the call succeeds, the same rule the draft follows, so a
-            // failure does not throw away what was typed.
-            Message::CreateRoom => {
-                let (Some(client), Screen::Chat(screen)) = (self.client.clone(), &mut self.screen)
-                else {
-                    return Task::none();
-                };
-                let Some(name) = screen.name_to_create().map(str::to_owned) else {
-                    return Task::none();
-                };
-                screen.error = None;
-
-                Task::perform(
-                    async move { client.create_room(&name).await.map_err(Failure::from) },
-                    Message::RoomCreated,
-                )
-            }
-
             // `create_room` answers with the existing room when the name is taken, so a name
             // already in use lands here rather than as an error, and opens that room.
             Message::RoomCreated(Ok(room)) => {
@@ -290,7 +248,8 @@ impl App {
                 };
                 let opening = room.id;
                 screen.add_room(room);
-                screen.naming = None;
+                // The command is consumed, the same as a message that was posted.
+                screen.draft.clear();
 
                 self.update(Message::RoomOpened(opening))
             }
@@ -333,25 +292,35 @@ impl App {
                 else {
                     return Task::none();
                 };
-                let (Some(room), body) = (screen.open_room(), screen.draft.trim().to_owned())
-                else {
+                let Some(submission) = screen.submission() else {
                     return Task::none();
                 };
-                if body.is_empty() {
-                    return Task::none();
-                }
                 screen.error = None;
 
-                Task::perform(
-                    async move {
-                        client
-                            .send(room, &body)
-                            .await
-                            .map(|_| ())
-                            .map_err(Failure::from)
-                    },
-                    Message::Sent,
-                )
+                match submission {
+                    Submission::Create(name) => {
+                        Task::perform(
+                            async move { client.create_room(&name).await.map_err(Failure::from) },
+                            Message::RoomCreated,
+                        )
+                    }
+                    Submission::Send(body) => {
+                        let Some(room) = screen.open_room() else {
+                            return Task::none();
+                        };
+
+                        Task::perform(
+                            async move {
+                                client
+                                    .send(room, &body)
+                                    .await
+                                    .map(|_| ())
+                                    .map_err(Failure::from)
+                            },
+                            Message::Sent,
+                        )
+                    }
+                }
             }
 
             Message::Sent(Ok(())) => {
