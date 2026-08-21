@@ -17,10 +17,9 @@
 //! what proves `--transport scion` end to end, since nothing below the axum router is exercised by
 //! the TCP tests.
 //!
-//! The client here is deliberately the low-level [`Http3Client`] from `scion-quic`.
+//! The client here is the low-level [`Http3Client`] from `scion-quic`.
 //!
-//! @TODO: replace with scion-http3-client — it is the supported client surface, and it would remove
-//! the socket, the QUIC config and the address plumbing below. It is not published yet.
+//! @TODO: replace with scion-http3-client.
 
 use std::{path::Path, sync::Arc};
 

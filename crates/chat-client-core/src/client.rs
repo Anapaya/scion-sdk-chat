@@ -81,6 +81,7 @@ impl ChatClient {
     pub async fn new(config: ClientConfig) -> Result<Self, ChatError> {
         let transport: Arc<dyn Transport> = match config.transport {
             TransportKind::Tcp => Arc::new(TcpTransport::new()?),
+            // @TODO: replace with scion-http3-client.
             TransportKind::Scion => {
                 return Err(ChatError::Config(
                     "the scion transport is not implemented yet; use the tcp transport".to_owned(),
