@@ -13,9 +13,12 @@
 // limitations under the License.
 //! The rooms, the open room's messages, and what is being typed.
 
-use chat_client_core::v1::{Message as ChatMessage, Room, RoomId};
+use std::collections::HashMap;
+
+use chat_client_core::v1::{Message as ChatMessage, Room, RoomId, Seq};
 use iced::{
-    Element, Length,
+    Element, Font, Length,
+    font::Weight,
     widget::{button, column, container, row, rule, scrollable, text, text_input},
 };
 
@@ -27,6 +30,12 @@ const SENDER: f32 = 90.0;
 
 /// What typing this in the composer creates a room instead of sending a message.
 const ROOM_COMMAND: &str = "/room";
+
+/// What an unread room's name is drawn in, next to everyone else's.
+const BOLD: Font = Font {
+    weight: Weight::Bold,
+    ..Font::DEFAULT
+};
 
 /// What the composer is asking for.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,6 +52,9 @@ pub struct Chat {
     open: Option<RoomId>,
     /// The open room's messages, oldest first.
     messages: Vec<ChatMessage>,
+    /// The newest `seq` the user has actually seen in each room. Only the room on screen advances
+    /// it, which is what makes it the badge's cursor rather than a resume cursor.
+    last_read: HashMap<RoomId, Seq>,
     pub draft: String,
     pub error: Option<String>,
     /// Who is signed in, so their own lines can be told apart.
@@ -52,6 +64,7 @@ pub struct Chat {
 impl Chat {
     pub fn new(rooms: Vec<Room>, username: String) -> Self {
         Chat {
+            last_read: read_from(&rooms),
             rooms,
             open: None,
             messages: Vec::new(),
@@ -74,9 +87,26 @@ impl Chat {
         self.messages.clear();
     }
 
-    /// Appends a batch. They arrive oldest first, and the first one is the backfill.
+    /// Appends a batch, and marks the open room read up to it.
+    ///
+    /// They arrive oldest first and never overlap, so appending is all there is to do.
     pub fn append(&mut self, messages: Vec<ChatMessage>) {
+        if let (Some(room), Some(newest)) = (self.open, messages.last().map(|last| last.seq)) {
+            self.last_read.insert(room, newest);
+        }
         self.messages.extend(messages);
+    }
+
+    /// Whether a room holds anything the user has not seen.
+    ///
+    /// A yes or no, never a count: `seq` is assigned server-wide, so the gap between two of them
+    /// counts messages posted to every other room as well. A real count needs that room's messages.
+    fn unread(&self, room: &Room) -> bool {
+        if self.open == Some(room.id) {
+            return false;
+        }
+
+        room.latest_seq > self.last_read.get(&room.id).copied().unwrap_or(Seq::START)
     }
 
     /// Replaces the room list, keeping whichever room is open.
@@ -137,7 +167,26 @@ pub fn view(state: &Chat) -> Element<'_, Message> {
 fn sidebar(state: &Chat) -> Element<'_, Message> {
     let rooms = state.rooms.iter().map(|room| {
         let open = Some(room.id) == state.open;
-        button(text(format!("#{}", room.name)))
+        let unread = state.unread(room);
+
+        // A dot rather than a number, for the reason `unread` gives.
+        let name = text(if unread {
+            format!("#{} ●", room.name)
+        } else {
+            format!("#{}", room.name)
+        })
+        .font(if unread { BOLD } else { Font::DEFAULT })
+        // The open room keeps the filled button's own foreground; dimming it there would put low
+        // contrast on a solid background.
+        .style(if open {
+            text::default
+        } else if unread {
+            text::primary
+        } else {
+            text::secondary
+        });
+
+        button(name)
             .on_press(Message::RoomOpened(room.id))
             // The open room is the only one that reads as pressed.
             .style(if open { button::primary } else { button::text })
@@ -201,6 +250,15 @@ fn composer(state: &Chat) -> Element<'_, Message> {
     ]
     .spacing(6)
     .into()
+}
+
+/// Marks every room read as it stands, so a fresh launch starts quiet rather than claiming the
+/// whole history is new.
+fn read_from(rooms: &[Room]) -> HashMap<RoomId, Seq> {
+    rooms
+        .iter()
+        .map(|room| (room.id, room.latest_seq))
+        .collect()
 }
 
 /// The same rule the server applies: 1 to 64 printable ASCII characters.
