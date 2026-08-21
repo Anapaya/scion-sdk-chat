@@ -25,6 +25,7 @@ fn main() -> iced::Result {
     iced::application(App::default, App::update, App::view)
         .title("scion chat")
         .theme(App::theme)
+        .subscription(App::subscription)
         .window_size((900.0, 600.0))
         .run()
 }

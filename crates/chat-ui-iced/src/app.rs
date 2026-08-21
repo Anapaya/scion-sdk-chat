@@ -21,10 +21,16 @@ use chat_client_core::{
     v1::{Message as ChatMessage, Room, RoomId},
 };
 use futures::{Stream, StreamExt as _, stream};
-use iced::{Element, Task, Theme, task};
+use iced::{Element, Subscription, Task, Theme, task, time, widget::Id};
 use url::Url;
 
-use crate::{chat::Chat, connection::Connection, sign_in::SignIn};
+use crate::{chat, chat::Chat, connection::Connection, sign_in::SignIn};
+
+/// How often the sidebar is re-read.
+///
+/// The feed covers the open room's messages. The room list has no feed, and another client can add
+/// a room at any time, so this app owns the timer that notices.
+const ROOMS_REFRESH: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// A failure, flattened to what a screen can show.
 ///
@@ -63,6 +69,13 @@ pub enum Message {
     Registered(Result<(), Failure>),
     LogIn,
     LoggedIn(Result<Vec<Room>, Failure>),
+    RoomsDue,
+    RoomsRefreshed(Result<Vec<Room>, Failure>),
+    NewRoom,
+    NameEdited(String),
+    CreateRoom,
+    CancelNewRoom,
+    RoomCreated(Result<Room, Failure>),
     RoomOpened(RoomId),
     /// A batch from the open room's feed, oldest first.
     Batch(Result<Vec<ChatMessage>, Failure>),
@@ -98,6 +111,14 @@ impl Default for Screen {
 impl App {
     pub fn theme(&self) -> Theme {
         Theme::CatppuccinMacchiato
+    }
+
+    /// Re-reads the room list while the chat screen is showing, and never before.
+    pub fn subscription(&self) -> Subscription<Message> {
+        match self.screen {
+            Screen::Chat(_) => time::every(ROOMS_REFRESH).map(|_| Message::RoomsDue),
+            _ => Subscription::none(),
+        }
     }
 
     pub fn view(&self) -> Element<'_, Message> {
@@ -202,6 +223,78 @@ impl App {
                 }
             }
 
+            Message::RoomsDue => {
+                let (Some(client), Screen::Chat(_)) = (self.client.clone(), &self.screen) else {
+                    return Task::none();
+                };
+                Task::perform(
+                    async move { client.rooms().await.map_err(Failure::from) },
+                    Message::RoomsRefreshed,
+                )
+            }
+
+            Message::RoomsRefreshed(Ok(rooms)) => {
+                if let Screen::Chat(screen) = &mut self.screen {
+                    screen.show_rooms(rooms);
+                }
+                Task::none()
+            }
+
+            Message::NewRoom => {
+                let Screen::Chat(screen) = &mut self.screen else {
+                    return Task::none();
+                };
+                screen.naming = Some(String::new());
+                // The button both opens the field and puts the cursor in it, which is the whole
+                // reason the field has a name.
+                iced::widget::operation::focus(Id::new(chat::NEW_ROOM_INPUT))
+            }
+
+            Message::NameEdited(name) => {
+                if let Screen::Chat(screen) = &mut self.screen {
+                    screen.naming = Some(name);
+                }
+                Task::none()
+            }
+
+            Message::CancelNewRoom => {
+                if let Screen::Chat(screen) = &mut self.screen {
+                    screen.naming = None;
+                }
+                Task::none()
+            }
+
+            // The typed name is kept until the call succeeds, the same rule the draft follows, so a
+            // failure does not throw away what was typed.
+            Message::CreateRoom => {
+                let (Some(client), Screen::Chat(screen)) = (self.client.clone(), &mut self.screen)
+                else {
+                    return Task::none();
+                };
+                let Some(name) = screen.name_to_create().map(str::to_owned) else {
+                    return Task::none();
+                };
+                screen.error = None;
+
+                Task::perform(
+                    async move { client.create_room(&name).await.map_err(Failure::from) },
+                    Message::RoomCreated,
+                )
+            }
+
+            // `create_room` answers with the existing room when the name is taken, so a name
+            // already in use lands here rather than as an error, and opens that room.
+            Message::RoomCreated(Ok(room)) => {
+                let Screen::Chat(screen) = &mut self.screen else {
+                    return Task::none();
+                };
+                let opening = room.id;
+                screen.add_room(room);
+                screen.naming = None;
+
+                self.update(Message::RoomOpened(opening))
+            }
+
             Message::RoomOpened(room) => {
                 let (Some(client), Screen::Chat(screen)) = (self.client.clone(), &mut self.screen)
                 else {
@@ -272,7 +365,9 @@ impl App {
             | Message::Registered(Err(failure))
             | Message::LoggedIn(Err(failure))
             | Message::Batch(Err(failure))
-            | Message::Sent(Err(failure)) => self.failed(failure),
+            | Message::Sent(Err(failure))
+            | Message::RoomsRefreshed(Err(failure))
+            | Message::RoomCreated(Err(failure)) => self.failed(failure),
         }
     }
 

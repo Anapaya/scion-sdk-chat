@@ -16,6 +16,7 @@
 use chat_client_core::v1::{Message as ChatMessage, Room, RoomId};
 use iced::{
     Element, Length,
+    alignment::Vertical,
     widget::{button, column, container, row, rule, scrollable, text, text_input},
 };
 
@@ -25,6 +26,9 @@ use crate::{app::Message, ui::error_line};
 const SIDEBAR: f32 = 170.0;
 const SENDER: f32 = 90.0;
 
+/// Names the new-room field so pressing `+` can put the cursor in it.
+pub const NEW_ROOM_INPUT: &str = "new-room";
+
 /// The chat screen's state.
 pub struct Chat {
     rooms: Vec<Room>,
@@ -32,6 +36,8 @@ pub struct Chat {
     /// The open room's messages, oldest first.
     messages: Vec<ChatMessage>,
     pub draft: String,
+    /// Some while the sidebar is asking for a name, holding what has been typed.
+    pub naming: Option<String>,
     pub error: Option<String>,
     /// Who is signed in, so their own lines can be told apart.
     username: String,
@@ -44,6 +50,7 @@ impl Chat {
             open: None,
             messages: Vec::new(),
             draft: String::new(),
+            naming: None,
             error: None,
             username,
         }
@@ -65,6 +72,34 @@ impl Chat {
     /// Appends a batch. They arrive oldest first, and the first one is the backfill.
     pub fn append(&mut self, messages: Vec<ChatMessage>) {
         self.messages.extend(messages);
+    }
+
+    /// Replaces the room list, keeping whichever room is open.
+    ///
+    /// Rooms are never deleted, so the open room is always still in the new list.
+    pub fn show_rooms(&mut self, rooms: Vec<Room>) {
+        self.rooms = rooms;
+    }
+
+    /// Adds a room, or leaves it alone if the list already has it.
+    ///
+    /// `create_room` answers with the existing room when the name is taken, so this is the same
+    /// call whether the room was just made or was already there.
+    pub fn add_room(&mut self, room: Room) {
+        if !self.rooms.iter().any(|known| known.id == room.id) {
+            self.rooms.push(room);
+        }
+    }
+
+    /// Whether the typed name is one the server will accept.
+    ///
+    /// The same rule the server applies, on the trimmed name: 1 to 64 printable ASCII characters.
+    /// Checking it here is what turns a bad name into a disabled button instead of a round trip.
+    pub fn name_to_create(&self) -> Option<&str> {
+        let name = self.naming.as_deref()?.trim();
+        let printable = name.chars().all(|c| c.is_ascii_graphic() || c == ' ');
+
+        ((1..=64).contains(&name.len()) && printable).then_some(name)
     }
 
     fn open_name(&self) -> &str {
@@ -91,6 +126,15 @@ pub fn view(state: &Chat) -> Element<'_, Message> {
 }
 
 fn sidebar(state: &Chat) -> Element<'_, Message> {
+    let header = row![
+        text("Rooms").size(14).width(Length::Fill),
+        button(text("+").size(18))
+            .on_press(Message::NewRoom)
+            .style(button::text)
+            .padding([0, 6]),
+    ]
+    .align_y(Vertical::Center);
+
     let rooms = state.rooms.iter().map(|room| {
         let open = Some(room.id) == state.open;
         button(text(format!("#{}", room.name)))
@@ -101,14 +145,42 @@ fn sidebar(state: &Chat) -> Element<'_, Message> {
             .into()
     });
 
-    container(
-        column![
-            container(text("Rooms").size(14)).padding([12, 8]),
-            column(rooms).spacing(2),
+    let mut body = column![container(header).padding([12, 8])].spacing(4);
+    if let Some(name) = &state.naming {
+        body = body.push(container(new_room(state, name)).padding([0, 8]));
+    }
+
+    container(body.push(column(rooms).spacing(2)))
+        .padding(4)
+        .into()
+}
+
+/// The field the `+` button reveals.
+fn new_room<'a>(state: &Chat, name: &'a str) -> Element<'a, Message> {
+    let create = state
+        .name_to_create()
+        .is_some()
+        .then_some(Message::CreateRoom);
+
+    column![
+        text_input("room name", name)
+            .id(NEW_ROOM_INPUT)
+            .on_input(Message::NameEdited)
+            .on_submit(Message::CreateRoom)
+            .size(14)
+            .padding(6),
+        row![
+            button(text("Create").size(12))
+                .on_press_maybe(create)
+                .padding([4, 8]),
+            button(text("Cancel").size(12))
+                .on_press(Message::CancelNewRoom)
+                .style(button::text)
+                .padding([4, 8]),
         ]
         .spacing(4),
-    )
-    .padding(4)
+    ]
+    .spacing(4)
     .into()
 }
 
