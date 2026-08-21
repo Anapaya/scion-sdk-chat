@@ -5,6 +5,7 @@ members = [
     "crates/chat-client-core",
     "crates/chat-core",
     "crates/chat-server",
+    "crates/chat-ui-dioxus",
 ]
 
 [workspace.package]
@@ -19,9 +20,13 @@ argon2 = "0.5"
 async-trait = "0.1"
 axum = "0.8"
 bytes = "1"
+chat-client-core = { path = "crates/chat-client-core" }
 chat-core = { path = "crates/chat-core" }
 chat-server = { path = "crates/chat-server" }
 clap = { version = "4", features = ["derive", "env"] }
+# The desktop feature renders through the system WebView, which is what makes this a desktop app
+# rather than a served page.
+dioxus = { version = "0.7", features = ["desktop"] }
 futures = "0.3"
 http = "1"
 jsonwebtoken = { version = "11", features = ["rust_crypto"] }
