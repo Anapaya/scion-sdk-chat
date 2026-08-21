@@ -1,0 +1,21 @@
+[package]
+name = "chat-ui-ratatui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "A terminal chat client, built with ratatui"
+
+[dependencies]
+chat-client-core = { workspace = true }
+crossterm = { workspace = true }
+futures = { workspace = true }
+ratatui = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tui-input = { workspace = true }
+url = { workspace = true }
+
+[lints]
+workspace = true
