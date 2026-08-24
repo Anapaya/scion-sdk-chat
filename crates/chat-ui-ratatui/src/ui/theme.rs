@@ -11,11 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! Ferra, the palette Halloy opens with.
+//! Every colour the client draws with.
 //!
-//! Taken from <https://github.com/squidowl/halloy/blob/main/assets/themes/ferra.toml>. The colours
-//! are given as RGB, so the terminal's own palette does not apply and every screen looks the same
-//! whatever the user's theme.
+//! The colours are given as RGB, so the terminal's own palette does not apply and every screen
+//! looks the same whatever the user's theme.
 
 use ratatui::style::Color;
 
@@ -56,7 +55,7 @@ pub const HIGHLIGHT: Color = Color::Rgb(0xf5, 0xd7, 0x6e);
 /// Something went wrong.
 pub const ERROR: Color = Color::Rgb(0xe0, 0x6b, 0x75);
 
-/// A room holding messages nobody has read. Ferra names this one for the purpose.
+/// A room holding messages nobody has read.
 pub const UNREAD: Color = Color::Rgb(0xff, 0xa0, 0x7a);
 
 /// Whoever is logged in, so their own lines are found at a glance.
