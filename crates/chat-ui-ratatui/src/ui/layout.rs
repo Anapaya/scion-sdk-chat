@@ -15,9 +15,13 @@
 
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
 
-/// A column of `width`, centred in `area`, or all of it when the terminal is narrower.
-pub fn screen(area: Rect, width: u16) -> Rect {
-    let [centred] = Layout::horizontal([Constraint::Max(width)])
+/// How wide a form is drawn, whatever room the terminal gives it.
+const FORM_WIDTH: u16 = 60;
+
+/// The column a form sits in: [`FORM_WIDTH`] centred in `area`, or all of it when the terminal is
+/// narrower.
+pub fn form(area: Rect) -> Rect {
+    let [centred] = Layout::horizontal([Constraint::Max(FORM_WIDTH)])
         .flex(Flex::Center)
         .areas(area);
 

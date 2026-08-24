@@ -17,16 +17,16 @@
 //! draw and read keys; [`app`] holds every call to the client.
 
 mod app;
-mod chat;
-mod connection;
-mod field;
-mod layout;
-mod sign_in;
-mod theme;
+mod screens;
+mod ui;
 
 use std::io;
 
-pub use app::CONTROL;
+use crossterm::event::KeyModifiers;
+
+/// The modifier a screen checks for, named once so the screens do not import crossterm's whole
+/// keyboard.
+pub const CONTROL: KeyModifiers = KeyModifiers::CONTROL;
 
 /// The app provides the runtime. The client never makes one, and never spawns anything of its own.
 #[tokio::main]

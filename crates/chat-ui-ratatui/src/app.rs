@@ -21,12 +21,20 @@ use std::{io, time::Duration};
 use chat_client_core::{
     ChatClient, ChatError, ClientConfig, PollConfig, RoomFeed, Since, TransportKind, v1::Message,
 };
-use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use futures::StreamExt as _;
 use ratatui::{DefaultTerminal, Frame, style::Style, widgets::Block};
 use url::Url;
 
-use crate::{chat::Chat, connection::Connection, sign_in, sign_in::SignIn, theme};
+use crate::{
+    CONTROL,
+    screens::{
+        chat::{self, Chat},
+        connection::Connection,
+        sign_in::{self, SignIn},
+    },
+    ui::theme,
+};
 
 /// How often the sidebar is re-read.
 const ROOMS_REFRESH: Duration = Duration::from_secs(2);
@@ -171,9 +179,9 @@ impl App {
                     return;
                 };
                 match intent {
-                    crate::chat::Intent::Send(body) => self.send(body).await,
-                    crate::chat::Intent::Create(name) => self.create_room(&name).await,
-                    crate::chat::Intent::Open => self.open_room().await,
+                    chat::Intent::Send(body) => self.send(body).await,
+                    chat::Intent::Create(name) => self.create_room(&name).await,
+                    chat::Intent::Open => self.open_room().await,
                 }
             }
         }
@@ -346,7 +354,3 @@ impl App {
         }
     }
 }
-
-/// The modifier a screen checks for, named once so the screens do not import crossterm's whole
-/// keyboard.
-pub const CONTROL: KeyModifiers = KeyModifiers::CONTROL;

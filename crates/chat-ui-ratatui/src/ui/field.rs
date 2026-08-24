@@ -16,13 +16,13 @@
 use ratatui::{
     Frame,
     layout::{Position, Rect},
-    style::{Style, Stylize},
+    style::Stylize,
     text::Line,
-    widgets::{Block, BorderType, Paragraph},
+    widgets::Paragraph,
 };
 use tui_input::Input;
 
-use crate::theme;
+use crate::ui::{self, theme};
 
 /// What a masked field shows instead of what was typed.
 const MASK: char = '•';
@@ -41,11 +41,7 @@ pub fn draw(
     mask: bool,
 ) {
     let border = if focused { theme::FOCUS } else { theme::BORDER };
-    let block = Block::bordered()
-        .border_type(BorderType::Rounded)
-        .border_style(Style::new().fg(border))
-        .title(title)
-        .style(Style::new().bg(theme::INPUT));
+    let block = ui::bordered(title, border, theme::INPUT);
     let inner = block.inner(area);
 
     // A mask stands one character per character typed, so the cursor still lands in the right

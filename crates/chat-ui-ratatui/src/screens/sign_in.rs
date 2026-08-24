@@ -19,11 +19,10 @@ use ratatui::{
     layout::{Constraint, Flex, Layout, Rect},
     style::Stylize,
     text::Line,
-    widgets::Paragraph,
 };
 use tui_input::{Input, backend::crossterm::EventHandler as _};
 
-use crate::{chat::NAME_WIDTH, field, layout::screen, theme};
+use crate::ui::{self, NAME_WIDTH, field, layout::form, theme};
 
 /// What the screen is asking for.
 pub enum Intent {
@@ -61,13 +60,13 @@ impl SignIn {
             Constraint::Length(1),
         ])
         .flex(Flex::Center)
-        .areas(screen(area, 60));
+        .areas(form(area));
 
         frame.render_widget(Line::from("Sign in".fg(theme::TITLE).bold()), title);
         field::draw(
             frame,
             username,
-            label(" Username "),
+            ui::label(" Username "),
             &self.username,
             self.focus == Focus::Username,
             false,
@@ -75,7 +74,7 @@ impl SignIn {
         field::draw(
             frame,
             password,
-            label(" Password "),
+            ui::label(" Password "),
             &self.password,
             self.focus == Focus::Password,
             true,
@@ -92,12 +91,7 @@ impl SignIn {
             .right_aligned(),
             hint,
         );
-        if let Some(message) = &self.error {
-            frame.render_widget(
-                Paragraph::new(format!("⚠ {message}")).fg(theme::ERROR),
-                error,
-            );
-        }
+        ui::draw_error(frame, error, self.error.as_deref());
     }
 
     /// The username and password as typed.
@@ -148,9 +142,4 @@ impl SignIn {
             Focus::Password => &mut self.password,
         }
     }
-}
-
-/// The name of a field, in the colour every screen gives one.
-fn label(text: &str) -> Line<'_> {
-    Line::from(text.fg(theme::TITLE))
 }
