@@ -19,10 +19,13 @@ use chat_client_core::v1::{Message, Room, RoomId, Seq};
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::{
     Frame,
-    layout::{Constraint, Layout, Rect},
+    layout::{Constraint, Layout, Margin, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, Text},
-    widgets::{Block, BorderType, List, ListState, Paragraph, Wrap},
+    widgets::{
+        Block, BorderType, List, ListState, Paragraph, Scrollbar, ScrollbarOrientation,
+        ScrollbarState, Wrap,
+    },
 };
 use tui_input::{Input, backend::crossterm::EventHandler as _};
 
@@ -32,10 +35,23 @@ use crate::{field, theme};
 const SIDEBAR_WIDTH: u16 = 18;
 
 /// How much room a name is given before the message it sent.
-const NAME_WIDTH: usize = 10;
+///
+/// Also the longest name this client will register, since a wider one would push its own messages
+/// out of line with every other row. The server accepts more; this is the limit of what the pane
+/// can draw tidily.
+pub const NAME_WIDTH: usize = 10;
+
+/// The longest room name this client will create.
+///
+/// What the sidebar can hold: [`SIDEBAR_WIDTH`] less its two borders, the highlight arrow, the `#`,
+/// and the unread dot leaves eleven columns for the name itself.
+const ROOM_NAME_MAX: usize = 10;
 
 /// The word that turns a line into a room rather than a message.
 const CREATE: &str = "/room";
+
+/// The word that lists what the other words do.
+const HELP: &str = "/help";
 
 /// What the screen is asking for.
 pub enum Intent {
@@ -55,6 +71,9 @@ pub struct Chat {
     open: ListState,
     /// The open room's messages, oldest first.
     messages: Vec<Message>,
+    /// Lines this client wrote itself, drawn under the messages. Nobody else sees them and the
+    /// server never hears about them, which is what makes them the right place for `/help`.
+    notices: Vec<Line<'static>>,
     /// The newest `seq` the user has actually seen in each room. Only the room on screen advances
     /// it, which is what makes it the badge cursor rather than a resume cursor.
     last_read: HashMap<RoomId, Seq>,
@@ -81,6 +100,7 @@ impl Chat {
             rooms,
             open: ListState::default().with_selected(Some(0)),
             messages: Vec::new(),
+            notices: Vec::new(),
             last_read,
             watched: None,
             scroll: None,
@@ -123,6 +143,7 @@ impl Chat {
     /// Empties the message pane, for a room that is about to be watched.
     pub fn clear(&mut self) {
         self.messages.clear();
+        self.notices.clear();
         self.watched = None;
         self.scroll = None;
     }
@@ -141,10 +162,12 @@ impl Chat {
         let [sidebar, opened] =
             Layout::horizontal([Constraint::Length(SIDEBAR_WIDTH), Constraint::Min(20)])
                 .areas(area);
+        // The error line is given no row at all when there is nothing to report, so the message
+        // pane grows into it rather than the screen carrying a blank row.
         let [messages, composer, error] = Layout::vertical([
             Constraint::Min(1),
             Constraint::Length(3),
-            Constraint::Length(1),
+            Constraint::Length(u16::from(self.error.is_some())),
         ])
         .areas(opened);
 
@@ -192,17 +215,18 @@ impl Chat {
             Some(room) => format!(" #{} ", room.name),
             None => " no rooms ".to_owned(),
         };
-        let lines: Vec<Line<'_>> = self
+        let mut lines: Vec<Line<'_>> = self
             .messages
             .iter()
             .map(|message| {
                 Line::from(vec![
-                    Span::from(format!("{:<NAME_WIDTH$}", message.username))
+                    Span::from(format!("{:>NAME_WIDTH$} ", message.username))
                         .fg(self.colour(&message.username)),
                     Span::from(message.body.as_str()).fg(theme::TEXT),
                 ])
             })
             .collect();
+        lines.extend(self.notices.iter().cloned());
 
         let block = panel(&title);
         let inner = block.inner(area);
@@ -220,21 +244,25 @@ impl Chat {
         let scroll = self.scroll.unwrap_or(bottom).min(bottom);
 
         frame.render_widget(messages.scroll((scroll, 0)), area);
+        draw_scrollbar(frame, area, inner.height, scroll, bottom);
 
         (bottom, inner.height)
     }
 
     /// Claims the keys that mean something here and leaves the rest to the input.
     ///
-    /// Up and Down are free for the sidebar because the composer is one line and does not read
-    /// them.
+    /// Tab moves rooms because the composer is the only field on this screen, so there is nothing
+    /// for it to move between. That leaves the arrows for the messages, which the composer does
+    /// not read either, being one line.
     pub fn handle_key(&mut self, key: KeyEvent) -> Option<Intent> {
         match key.code {
             KeyCode::Enter => return self.submit(),
-            KeyCode::Up => return self.open(self.selected().saturating_sub(1)),
-            KeyCode::Down => return self.open(self.selected() + 1),
-            KeyCode::PageUp => self.scroll_by(-1),
-            KeyCode::PageDown => self.scroll_by(1),
+            KeyCode::BackTab => return self.open(self.selected().saturating_sub(1)),
+            KeyCode::Tab => return self.open(self.selected() + 1),
+            KeyCode::Up => self.scroll_by(-1),
+            KeyCode::Down => self.scroll_by(1),
+            KeyCode::PageUp => self.scroll_by(-self.page()),
+            KeyCode::PageDown => self.scroll_by(self.page()),
             _ => {
                 self.input.handle_event(&Event::Key(key));
             }
@@ -254,6 +282,19 @@ impl Chat {
         }
 
         let (first, rest) = typed.split_once(char::is_whitespace).unwrap_or((typed, ""));
+
+        if first == HELP {
+            self.notices = help();
+            self.error = None;
+            // The list is written at the end of the pane, so following the newest is what puts it
+            // on screen for a reader who had scrolled up to ask for it.
+            self.scroll = None;
+            return None;
+        }
+
+        // Anything else is the reader moving on, and the list has been read.
+        self.notices.clear();
+
         if first != CREATE {
             return Some(Intent::Send(typed.to_owned()));
         }
@@ -265,21 +306,31 @@ impl Chat {
             self.error = Some(format!("a room name is one word: {CREATE} scion"));
             return None;
         }
+        if name.chars().count() > ROOM_NAME_MAX {
+            self.error = Some(format!(
+                "room name is too long - {ROOM_NAME_MAX} characters max"
+            ));
+            return None;
+        }
 
         Some(Intent::Create(name.to_owned()))
     }
 
-    /// Moves the pane by `pages`, and resumes following the newest on reaching the end.
-    fn scroll_by(&mut self, pages: i16) {
-        let (bottom, page) = self.measured;
-        let from = self.scroll.unwrap_or(bottom);
+    /// Moves the pane by `rows`, up when negative, and resumes following the newest on reaching the
+    /// end.
+    fn scroll_by(&mut self, rows: i32) {
+        let bottom = i32::from(self.measured.0);
+        let from = i32::from(self.scroll.unwrap_or(self.measured.0));
+        let to = from.saturating_add(rows).clamp(0, bottom);
 
-        let to = if pages < 0 {
-            from.saturating_sub(page)
-        } else {
-            from.saturating_add(page)
-        };
-        self.scroll = (to < bottom).then_some(to);
+        // Landing on the end gives up the fixed offset rather than holding it, so a message posted
+        // afterwards still arrives on screen.
+        self.scroll = (to < bottom).then_some(to as u16);
+    }
+
+    /// How many rows the last draw fitted, which is what a page means here.
+    fn page(&self) -> i32 {
+        i32::from(self.measured.1)
     }
 
     /// Selects a room, stopping at the last one rather than wrapping.
@@ -327,19 +378,79 @@ impl Chat {
     }
 }
 
+/// Every command and key `/help` lists, and what each one does.
+///
+/// Kept beside [`instructions`] because the composer's hint line names a few of the same keys, and
+/// the two have to be changed together.
+const COMMANDS: [(&str, &str); 8] = [
+    (HELP, "list these commands"),
+    ("/room <name>", "create a room and open it"),
+    ("<Enter>", "send what is typed"),
+    ("<Tab>", "next room"),
+    ("<Shift+Tab>", "previous room"),
+    ("<↑↓>", "scroll a line"),
+    ("<PgUp/PgDn>", "scroll a screenful"),
+    ("<Esc>", "quit"),
+];
+
+/// How much room a command is given before what it does. The widest is `/room <name>`.
+const COMMAND_WIDTH: usize = 14;
+
+/// The `/help` output: a heading where a sender's name would go, then one command per line, lined
+/// up under the message column rather than the name column.
+fn help() -> Vec<Line<'static>> {
+    let heading = Line::from(format!("{HELP:>NAME_WIDTH$} commands")).fg(theme::DIM);
+    let commands = COMMANDS.map(|(command, does)| {
+        Line::from(format!(
+            "{blank:NAME_WIDTH$} {command:COMMAND_WIDTH$}{does}",
+            blank = ""
+        ))
+        .fg(theme::DIM)
+    });
+
+    std::iter::once(heading).chain(commands).collect()
+}
+
 /// What the composer can do, in the shape the forms use: the label dim, the key lit.
 fn instructions() -> Line<'static> {
     Line::from(vec![
         " Send ".fg(theme::DIM),
         "<Enter>".fg(theme::FOCUS).bold(),
         "  Room ".fg(theme::DIM),
-        "<↑↓>".fg(theme::FOCUS).bold(),
+        "<Tab>".fg(theme::FOCUS).bold(),
         "  Create ".fg(theme::DIM),
         "</room name>".fg(theme::FOCUS).bold(),
-        "  Scroll ".fg(theme::DIM),
-        "<PgUp/PgDn>".fg(theme::FOCUS).bold(),
+        "  Help ".fg(theme::DIM),
+        HELP.fg(theme::FOCUS).bold(),
         " ".fg(theme::DIM),
     ])
+}
+
+/// Draws how far down the pane is, on its own right border.
+///
+/// `offset` is a count of rows scrolled past and `bottom` the largest it reaches, so `bottom + 1`
+/// is how many positions there are and `visible` is how many of them a thumb covers. Nothing is
+/// drawn for a pane that fits, where a thumb would fill the track and say nothing.
+fn draw_scrollbar(frame: &mut Frame, area: Rect, visible: u16, offset: u16, bottom: u16) {
+    if bottom == 0 {
+        return;
+    }
+
+    let mut state = ScrollbarState::new(bottom as usize + 1)
+        .position(offset as usize)
+        .viewport_content_length(visible as usize);
+
+    frame.render_stateful_widget(
+        Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            // The arrow heads would land on the rounded corners, so the track is inset past them
+            // and drawn without heads instead.
+            .begin_symbol(None)
+            .end_symbol(None)
+            .track_style(Style::new().fg(theme::BORDER))
+            .thumb_style(Style::new().fg(theme::FOCUS)),
+        area.inner(Margin::new(0, 1)),
+        &mut state,
+    );
 }
 
 /// A panel: rounded, named, and a shade lighter than the screen behind it.

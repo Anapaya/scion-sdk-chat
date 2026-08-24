@@ -23,7 +23,7 @@ use ratatui::{
 };
 use tui_input::{Input, backend::crossterm::EventHandler as _};
 
-use crate::{field, layout::screen, theme};
+use crate::{chat::NAME_WIDTH, field, layout::screen, theme};
 
 /// What the screen is asking for.
 pub enum Intent {
@@ -112,8 +112,7 @@ impl SignIn {
         // Registering has no key of its own on the wireframe, and every plain key belongs to a
         // field, so it takes the modifier.
         if key.code == KeyCode::Char('r') && key.modifiers.contains(crate::CONTROL) {
-            self.error = None;
-            return Some(Intent::Register);
+            return self.register();
         }
 
         match key.code {
@@ -128,6 +127,19 @@ impl SignIn {
             }
         }
         None
+    }
+
+    /// Asks for the account, unless the name is longer than the chat pane gives a name.
+    fn register(&mut self) -> Option<Intent> {
+        if self.username.value().chars().count() > NAME_WIDTH {
+            self.error = Some(format!(
+                "username is too long - {NAME_WIDTH} characters max"
+            ));
+            return None;
+        }
+
+        self.error = None;
+        Some(Intent::Register)
     }
 
     fn focused_mut(&mut self) -> &mut Input {
