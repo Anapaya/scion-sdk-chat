@@ -17,33 +17,34 @@
 //! what proves `--transport scion` end to end, since nothing below the axum router is exercised by
 //! the TCP tests.
 //!
-//! The client here is the low-level [`Http3Client`] from `scion-quic`.
-//!
-//! @TODO: replace with scion-http3-client.
+//! The client is the real [`ChatClient`] on `--transport scion`, so this covers the transport a
+//! user gets rather than a hand-rolled stand-in for it.
 
-use std::{path::Path, sync::Arc};
+use std::{path::Path, time::Duration};
 
+use chat_client_core::{
+    ChatClient, ClientConfig, SnapToken, TransportKind,
+    config::{PollConfig, ScionConfig},
+};
 use chat_server::{
     cert,
     config::{Config, Transport},
     scion,
 };
-use http_body_util::BodyExt as _;
 use pocketscion::util::{
     dev_auth_token,
-    topologies::{IA132, IA212, UnderlayType, minimal::minimal_topology},
-};
-use scion_stack::{
-    scion_quic::{
-        h3::client::Http3Client, quic::config::QuicConfig, socket::GenericScionUdpSocket,
-    },
-    sciparse::address::ip_socket_addr::ScionSocketIpAddr,
-    stack::ScionStackBuilder,
+    topologies::{IA132, IA212, PsSetup, UnderlayType, minimal::minimal_topology},
 };
 use tokio_util::sync::CancellationToken;
 
 /// A port the server binds in its own AS, so the client can be pointed at it before it starts.
 const SERVER_PORT: u16 = 8443;
+
+/// How long the client keeps asking before the server is declared absent.
+const READY_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// How long to wait between attempts while the endpoint is not yet reading.
+const READY_INTERVAL: Duration = Duration::from_millis(250);
 
 #[tokio::test(flavor = "multi_thread")]
 async fn healthz_answers_over_scion() {
@@ -75,41 +76,32 @@ async fn healthz_answers_over_scion() {
 
     // No signature-algorithm preference: the certificate is ECDSA P-256, which BoringSSL accepts by
     // default. An Ed25519 certificate would need one and still fail — see `cert::generate`.
-    let client = client(&network, server_addr, &server_cert.cert_path).await;
+    let client = ChatClient::new(client_config(
+        &network,
+        &server_addr,
+        &server_cert.cert_path,
+    ))
+    .await
+    .expect("building the chat client");
+
     // The socket is bound before the task starts, but the QUIC endpoint only begins reading from it
     // inside `serve_on`, so a packet sent before that is simply dropped. Nothing reports readiness,
     // so the client asks until it is answered.
     await_ready(&client).await;
 
-    let request = http::Request::builder()
-        .method(http::Method::GET)
-        .uri(format!("https://{}/api/v1/healthz", cert::SERVER_NAME))
-        .body(())
-        .expect("a request");
-
-    // The two bodies have no ordering in HTTP/3, so the crate requires them driven concurrently.
-    // A GET has nothing to send, and closing the write side is what puts the FIN on the wire.
-    let (response, writer) = client.request(request).await.expect("issuing the request");
-    tokio::spawn(async move { writer.finish().await });
-
-    let response = response.await.expect("a response over scion");
-    assert!(
-        response.status().is_success(),
-        "healthz answered {}",
-        response.status()
-    );
-
-    let body = response
-        .into_body()
-        .collect()
+    // Health passing proves the round trip. Reading the server's own description then proves a body
+    // survived it and decoded, which a status alone does not.
+    let info = client
+        .server_info()
         .await
-        .expect("the response body")
-        .to_bytes();
-    let body = String::from_utf8_lossy(&body);
-    assert!(
-        body.contains("\"ok\""),
-        "healthz said something unexpected: {body}"
+        .expect("the server describes itself over scion");
+    assert_eq!(
+        info.max_message_bytes, config.max_message_bytes,
+        "the limits came back from a different server than the test configured",
     );
+    // Not asserted here: `info.isd_as`, which would say the answer came from the other AS in the
+    // server's own words. `server_info` reports `None` whatever the transport. Crossing the link is
+    // covered anyway — the client dials the address bound in `2-ff00:0:212` from `1-ff00:0:132`.
 
     shutdown.cancel();
     server
@@ -118,23 +110,23 @@ async fn healthz_answers_over_scion() {
         .expect("the server should stop cleanly");
 }
 
-/// Waits until the server's endpoint answers a handshake, or fails the test saying it never did.
-async fn await_ready(client: &Http3Client) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+/// Waits until the server answers a health check, or fails the test saying it never did.
+async fn await_ready(client: &ChatClient) {
+    let deadline = tokio::time::Instant::now() + READY_TIMEOUT;
     let mut last = None;
 
-    while std::time::Instant::now() < deadline {
-        match client.connect().await {
+    while tokio::time::Instant::now() < deadline {
+        match client.health().await {
             Ok(()) => return,
             Err(error) => last = Some(error),
         }
-        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        tokio::time::sleep(READY_INTERVAL).await;
     }
 
-    panic!("the server never completed a handshake; last failure: {last:?}");
+    panic!("the server never answered a health check; last failure: {last:?}");
 }
 
-fn server_config(data_dir: &Path, network: &pocketscion::util::topologies::PsSetup) -> Config {
+fn server_config(data_dir: &Path, network: &PsSetup) -> Config {
     let token = data_dir.join("snap.token");
     std::fs::write(&token, dev_auth_token()).expect("writing the dev token");
 
@@ -159,33 +151,30 @@ fn server_config(data_dir: &Path, network: &pocketscion::util::topologies::PsSet
     }
 }
 
-/// An HTTP/3 client in the other AS, trusting only the server's certificate.
-async fn client(
-    network: &pocketscion::util::topologies::PsSetup,
-    server_addr: ScionSocketIpAddr,
+/// A client in the other AS, trusting only the server's certificate.
+///
+/// The URL carries the certificate's own name rather than an address, because that name is the
+/// identity the handshake checks. `target` is what saves the name from needing a TSAR record: the
+/// simulation has no DNS, so the address is given instead of looked up.
+fn client_config(
+    network: &PsSetup,
+    server_addr: &scion_stack::sciparse::address::ip_socket_addr::ScionSocketIpAddr,
     cert_path: &Path,
-) -> Http3Client {
-    let stack = ScionStackBuilder::new()
-        .with_endhost_api(
-            network
+) -> ClientConfig {
+    let server_url = format!("https://{}:{}", cert::SERVER_NAME, server_addr.port())
+        .parse()
+        .expect("a server url");
+
+    ClientConfig {
+        transport: TransportKind::Scion(ScionConfig {
+            endhost_api: network
                 .endhost_api(IA132)
                 .expect("PocketSCION has an endhost API for the client AS"),
-        )
-        .with_auth_token(dev_auth_token())
-        .build()
-        .await
-        .expect("building the client stack");
-    let socket: Arc<dyn GenericScionUdpSocket> =
-        Arc::new(stack.bind(None).await.expect("binding the client socket"));
-
-    let quic = QuicConfig::builder()
-        .ca_certs_file(cert_path.to_str().expect("a UTF-8 path"))
-        .build();
-
-    Http3Client::with_config(
-        server_addr,
-        socket,
-        Some(cert::SERVER_NAME.to_owned()),
-        quic,
-    )
+            snap_token: Some(SnapToken::new(dev_auth_token())),
+            target: Some(server_addr.host().to_string()),
+            cert_path: Some(cert_path.to_owned()),
+        }),
+        server_url,
+        poll: PollConfig::default(),
+    }
 }

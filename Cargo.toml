@@ -24,16 +24,16 @@ chat-server = { path = "crates/chat-server" }
 clap = { version = "4", features = ["derive", "env"] }
 futures = "0.3"
 http = "1"
-http-body-util = "0.1"
 jsonwebtoken = { version = "11", features = ["rust_crypto"] }
 pem = "3"
-pocketscion = "0.6"
+pocketscion = "0.7"
 rand = "0.10"
 rcgen = "0.14"
 reqwest = { version = "0.13", default-features = false }
-scion-h3-axum = "0.6"
-scion-sdk-utils = "0.6"
-scion-stack = "0.6"
+scion-h3-axum = "0.7"
+scion-http3 = "0.7"
+scion-sdk-utils = "0.7"
+scion-stack = "0.7"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10"
