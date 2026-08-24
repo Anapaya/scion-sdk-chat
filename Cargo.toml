@@ -42,6 +42,9 @@ sqlx = { version = "0.9", default-features = false, features = [
 ] }
 tempfile = "3"
 thiserror = "2"
+# local-offset is what turns a server timestamp into the reader's own clock. Already in the tree
+# under ratatui, so this only widens what is compiled.
+time = { version = "0.3", features = ["local-offset"] }
 tokio = { version = "1", features = [
     "macros",
     "net",

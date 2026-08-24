@@ -13,6 +13,7 @@
 // limitations under the License.
 //! How the chat screen is drawn: the sidebar, the message pane, the line being typed.
 
+use chat_client_core::v1::UnixMillis;
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Margin, Rect},
@@ -20,6 +21,7 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{Block, List, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
 };
+use time::{Date, OffsetDateTime, UtcOffset};
 
 use super::{Chat, commands};
 use crate::ui::{self, NAME_WIDTH, field, theme};
@@ -87,17 +89,32 @@ impl Chat {
             Some(room) => format!(" #{} ", room.name),
             None => " no rooms ".to_owned(),
         };
-        let mut lines: Vec<Line<'_>> = self
-            .messages
-            .iter()
-            .map(|message| {
-                Line::from(vec![
-                    Span::from(format!("{:>NAME_WIDTH$} ", message.username))
-                        .fg(self.colour(&message.username)),
-                    Span::from(message.body.as_str()).fg(theme::TEXT),
-                ])
-            })
-            .collect();
+        // Read once for the whole pane rather than per row: every row resolves to the same zone,
+        // and each lookup is a call into the C library.
+        let here = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
+        let mut lines: Vec<Line<'_>> = Vec::with_capacity(self.messages.len() + self.notices.len());
+        let mut day = None;
+
+        for message in &self.messages {
+            let at = local(message.posted_at, here);
+
+            // A timestamp that will not convert carries no day, so it neither opens one of its own
+            // nor cuts the run it landed in.
+            if let Some(date) = at
+                .map(OffsetDateTime::date)
+                .filter(|date| Some(*date) != day)
+            {
+                day = Some(date);
+                lines.push(separator(date));
+            }
+
+            lines.push(Line::from(vec![
+                Span::from(format!("{:>NAME_WIDTH$} ", message.username))
+                    .fg(self.colour(&message.username)),
+                Span::from(message.body.as_str()).fg(theme::TEXT),
+                Span::from(clock(at)).fg(theme::TIMESTAMP),
+            ]));
+        }
         lines.extend(self.notices.iter().cloned());
 
         let block = panel(&title);
@@ -119,6 +136,33 @@ impl Chat {
         draw_scrollbar(frame, area, inner.height, scroll, bottom);
 
         (bottom, inner.height)
+    }
+}
+
+/// A server timestamp on the reader's own clock, or nothing when it cannot be represented.
+fn local(at: UnixMillis, here: UtcOffset) -> Option<OffsetDateTime> {
+    let nanos = i128::from(at.get()) * 1_000_000;
+
+    OffsetDateTime::from_unix_timestamp_nanos(nanos)
+        .ok()
+        .map(|utc| utc.to_offset(here))
+}
+
+/// The day a run of messages was posted on, as a row of its own.
+fn separator(on: Date) -> Line<'static> {
+    Line::from(format!("-- {:02}/{:02} --", on.day(), u8::from(on.month())))
+        .fg(theme::TIMESTAMP)
+        .centered()
+}
+
+/// What time a message was posted, with no seconds and no date.
+///
+/// A chat is read in the present, so the minute is all a row needs; which day it belongs to is
+/// drawn once, by [`separator`], for the whole run.
+fn clock(at: Option<OffsetDateTime>) -> String {
+    match at {
+        Some(at) => format!(" {:02}:{:02}", at.hour(), at.minute()),
+        None => String::new(),
     }
 }
 

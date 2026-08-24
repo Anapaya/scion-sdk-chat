@@ -32,6 +32,12 @@ pub mod theme;
 /// can draw tidily.
 pub const NAME_WIDTH: usize = 10;
 
+/// Which column a message's own text starts in: the name, and the space after it.
+///
+/// Anything the client writes into the pane itself lines up here too, so a notice reads as an aside
+/// to the conversation rather than a row of it.
+pub const BODY_COLUMN: usize = NAME_WIDTH + 1;
+
 /// The box a panel and a field are both drawn in: rounded, named, and filled a shade apart from the
 /// screen behind it.
 ///

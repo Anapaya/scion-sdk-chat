@@ -40,6 +40,10 @@ pub const TEXT: Color = Color::Rgb(0xfe, 0xcd, 0xb2);
 /// Labels beside a key, and anything the eye should skip.
 pub const DIM: Color = Color::Rgb(0xab, 0x8a, 0x79);
 
+/// When a message was posted. Grey rather than of the palette, so it reads as a note on the row
+/// instead of another voice in it.
+pub const TIMESTAMP: Color = Color::Rgb(0x7d, 0x77, 0x7b);
+
 /// The name of a panel.
 pub const TITLE: Color = Color::Rgb(0xd7, 0xbd, 0xe2);
 

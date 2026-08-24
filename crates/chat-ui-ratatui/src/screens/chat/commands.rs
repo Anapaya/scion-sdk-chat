@@ -16,7 +16,7 @@
 use ratatui::{style::Stylize, text::Line};
 
 use super::{Chat, Intent};
-use crate::ui::{NAME_WIDTH, theme};
+use crate::ui::{BODY_COLUMN, NAME_WIDTH, theme};
 
 /// The longest room name this client will create.
 ///
@@ -101,7 +101,7 @@ fn help() -> Vec<Line<'static>> {
     let heading = Line::from(format!("{HELP:>NAME_WIDTH$} commands")).fg(theme::DIM);
     let commands = COMMANDS.map(|(command, does)| {
         Line::from(format!(
-            "{blank:NAME_WIDTH$} {command:COMMAND_WIDTH$}{does}",
+            "{blank:BODY_COLUMN$}{command:COMMAND_WIDTH$}{does}",
             blank = ""
         ))
         .fg(theme::DIM)

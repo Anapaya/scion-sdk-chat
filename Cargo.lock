@@ -395,6 +395,7 @@ dependencies = [
  "crossterm",
  "futures",
  "ratatui",
+ "time",
  "tokio",
  "tui-input",
  "url",
