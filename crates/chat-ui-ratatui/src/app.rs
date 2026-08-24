@@ -140,7 +140,11 @@ impl App {
     }
 
     async fn handle_key(&mut self, key: KeyEvent) {
-        if key.code == KeyCode::Esc {
+        // Raw mode hands Ctrl+C over as a key rather than a signal, so ending the app on it is this
+        // loop's job. Claimed before any screen reads them, neither being a character to type.
+        let quit = key.code == KeyCode::Esc
+            || (key.code == KeyCode::Char('c') && key.modifiers.contains(CONTROL));
+        if quit {
             self.exit = true;
             return;
         }

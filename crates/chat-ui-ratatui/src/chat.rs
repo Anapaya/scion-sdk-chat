@@ -384,17 +384,17 @@ impl Chat {
 /// the two have to be changed together.
 const COMMANDS: [(&str, &str); 8] = [
     (HELP, "list these commands"),
-    ("/room <name>", "create a room and open it"),
+    ("/room <name>", "create a room"),
     ("<Enter>", "send what is typed"),
     ("<Tab>", "next room"),
     ("<Shift+Tab>", "previous room"),
     ("<↑↓>", "scroll a line"),
     ("<PgUp/PgDn>", "scroll a screenful"),
-    ("<Esc>", "quit"),
+    ("<Esc>/<Ctrl+C>", "quit"),
 ];
 
-/// How much room a command is given before what it does. The widest is `/room <name>`.
-const COMMAND_WIDTH: usize = 14;
+/// How much room a command is given before what it does. The widest is `<Esc>/<Ctrl+C>`.
+const COMMAND_WIDTH: usize = 16;
 
 /// The `/help` output: a heading where a sender's name would go, then one command per line, lined
 /// up under the message column rather than the name column.
