@@ -19,7 +19,7 @@
 use std::{io, time::Duration};
 
 use chat_client_core::{
-    ChatClient, ChatError, ClientConfig, RoomFeed, Since, TransportKind, v1::Message,
+    ChatClient, ChatError, ClientConfig, PollConfig, RoomFeed, Since, TransportKind, v1::Message,
 };
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use futures::StreamExt as _;
@@ -29,10 +29,10 @@ use url::Url;
 use crate::{chat::Chat, connection::Connection, sign_in, sign_in::SignIn, theme};
 
 /// How often the sidebar is re-read.
-///
-/// The feed covers the open room's messages. The room list has no feed, so a client that wants it
-/// fresh owns this timer.
 const ROOMS_REFRESH: Duration = Duration::from_secs(2);
+
+/// How often the open room is re-read.
+const MESSAGES_REFRESH: Duration = Duration::from_secs(1);
 
 /// What woke the loop.
 enum Woken {
@@ -191,6 +191,10 @@ impl App {
             let client = ChatClient::new(ClientConfig {
                 transport: TransportKind::Tcp,
                 server_url,
+                poll: PollConfig {
+                    room_interval: MESSAGES_REFRESH,
+                    ..PollConfig::default()
+                },
                 ..ClientConfig::default()
             })
             .await?;
@@ -306,9 +310,12 @@ impl App {
         };
 
         match client.rooms().await {
+            // Answering at all is the sign the server is back. Without this the warning from a
+            // failed tick outlives the failure, in a quiet room for as long as it stays quiet.
             Ok(rooms) => {
                 if let Screen::Chat(screen) = &mut self.screen {
                     screen.show_rooms(rooms);
+                    screen.error = None;
                 }
             }
             Err(error) => self.failed(error),

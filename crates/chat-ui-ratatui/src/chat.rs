@@ -87,7 +87,7 @@ pub struct Chat {
     /// Who is logged in, so their own name is drawn apart from everyone else's.
     me: String,
     input: Input,
-    /// What went wrong last time. Shown until it recovers.
+    /// Why the last call failed, shown until one works.
     pub error: Option<String>,
 }
 
@@ -285,7 +285,6 @@ impl Chat {
 
         if first == HELP {
             self.notices = help();
-            self.error = None;
             // The list is written at the end of the pane, so following the newest is what puts it
             // on screen for a reader who had scrolled up to ask for it.
             self.scroll = None;
@@ -303,17 +302,26 @@ impl Chat {
         // in half rather than created.
         let name = rest.trim();
         if name.is_empty() || name.contains(char::is_whitespace) {
-            self.error = Some(format!("a room name is one word: {CREATE} scion"));
+            self.warn(format!("a room name is one word: {CREATE} scion"));
             return None;
         }
         if name.chars().count() > ROOM_NAME_MAX {
-            self.error = Some(format!(
+            self.warn(format!(
                 "room name is too long - {ROOM_NAME_MAX} characters max"
             ));
             return None;
         }
 
         Some(Intent::Create(name.to_owned()))
+    }
+
+    /// Complains about the line that was typed, in the pane rather than on the error row.
+    ///
+    /// The error row is cleared by the next call that works, which says nothing about a line the
+    /// server was never asked to accept. As a notice it stays until the next line instead.
+    fn warn(&mut self, message: String) {
+        self.notices = vec![Line::from(format!("⚠ {message}")).fg(theme::ERROR)];
+        self.scroll = None;
     }
 
     /// Moves the pane by `rows`, up when negative, and resumes following the newest on reaching the
