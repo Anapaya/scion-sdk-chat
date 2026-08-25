@@ -331,7 +331,7 @@ impl App {
                 if let Screen::Chat(screen) = &mut self.screen {
                     screen.restore(body);
                 }
-                self.failed(error);
+                self.refused(error);
             }
             // Nothing to do: the sidebar reads on its own and picks the room up.
             Answer::RoomCreated(Ok(())) => {}
@@ -340,14 +340,14 @@ impl App {
             // Asked for again by the next room list, which is the only clock this screen has.
             Answer::RoomOpened(Err(error)) => {
                 self.reopen = true;
-                self.failed(error);
+                self.refused(error);
             }
             Answer::Connected(Err(error))
             | Answer::Registered(Err(error))
             | Answer::LoggedIn {
                 result: Err(error), ..
             }
-            | Answer::RoomCreated(Err(error)) => self.failed(error),
+            | Answer::RoomCreated(Err(error)) => self.refused(error),
         }
     }
 
@@ -484,29 +484,56 @@ impl App {
     /// Shows the failure on the screen the user is on, and sends an ended session back to signing
     /// in — the one failure only the user can fix.
     fn failed(&mut self, error: ChatError) {
-        let message = error.to_string();
-
-        // Both mean the session is gone: one because the server refused the token, the other
-        // because the client already forgot it. Retrying either only repeats it.
-        let signed_out = matches!(error, ChatError::SessionExpired | ChatError::NotLoggedIn);
-
-        if signed_out && matches!(self.screen, Screen::Chat(_) | Screen::SignIn(_)) {
-            let mut screen = SignIn::default();
-            screen.error = Some(message);
-            self.screen = Screen::SignIn(screen);
-            self.messages = None;
-            self.rooms = None;
-            self.reopen = false;
-            // Dropped with them, so an answer outliving the session is thrown away.
-            self.background = Background::default();
+        if self.signed_out(&error) {
             return;
         }
 
+        let message = error.to_string();
         match &mut self.screen {
             Screen::Connection(screen) => screen.error = Some(message),
             Screen::SignIn(screen) => screen.error = Some(message),
             Screen::Chat(screen) => screen.error = Some(message),
         }
+    }
+
+    /// Shows why a call the user asked for failed, and leaves it until they ask for something else.
+    ///
+    /// Not the error row on the chat screen: a read that works clears that row every couple of
+    /// seconds, and a read working says nothing about a send that did not. A failed send also puts
+    /// the line back in the composer, and the reason it came back has to outlive the next read.
+    fn refused(&mut self, error: ChatError) {
+        if self.signed_out(&error) {
+            return;
+        }
+
+        let message = error.to_string();
+        match &mut self.screen {
+            Screen::Chat(screen) => screen.warn(message),
+            Screen::Connection(screen) => screen.error = Some(message),
+            Screen::SignIn(screen) => screen.error = Some(message),
+        }
+    }
+
+    /// Sends an ended session back to signing in, and says whether it did.
+    ///
+    /// Both errors mean the session is gone: one because the server refused the token, the other
+    /// because the client already forgot it. Retrying either only repeats it.
+    fn signed_out(&mut self, error: &ChatError) -> bool {
+        let gone = matches!(error, ChatError::SessionExpired | ChatError::NotLoggedIn);
+        if !gone || !matches!(self.screen, Screen::Chat(_) | Screen::SignIn(_)) {
+            return false;
+        }
+
+        let mut screen = SignIn::default();
+        screen.error = Some(error.to_string());
+        self.screen = Screen::SignIn(screen);
+        self.messages = None;
+        self.rooms = None;
+        self.reopen = false;
+        // Dropped with them, so an answer outliving the session is thrown away.
+        self.background = Background::default();
+
+        true
     }
 }
 

@@ -170,11 +170,12 @@ impl Chat {
         None
     }
 
-    /// Complains about the line that was typed, in the pane rather than on the error row.
+    /// Complains in the pane rather than on the error row, about a line that was typed or a call
+    /// it asked for.
     ///
-    /// The error row is cleared by the next call that works, which says nothing about a line the
-    /// server was never asked to accept. As a notice it stays until the next line instead.
-    fn warn(&mut self, message: String) {
+    /// The row is cleared by the next read that works, and a read working says nothing about
+    /// either of those. As a notice it stays until the next line is typed.
+    pub fn warn(&mut self, message: String) {
         self.notices = vec![ui::warning(&message)];
         self.scroll = None;
         self.changed();
