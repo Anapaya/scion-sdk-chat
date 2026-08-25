@@ -20,8 +20,9 @@ use crate::ui::{BODY_COLUMN, NAME_WIDTH, theme};
 
 /// The longest room name this client will create.
 ///
-/// What the sidebar can hold: its width less the two borders, the highlight arrow, the `#`, and the
-/// unread dot leaves eleven columns for the name itself.
+/// `SIDEBAR_WIDTH` holds 18 chars.
+/// REMAINING SPACE = SIDEBAR_WIDTH - 7 (2 borders, 2 highlight arrow, 1 `#`, 2 unread dot) = 11.
+/// 1 short of that, so a full name never sits against the dot.
 const ROOM_NAME_MAX: usize = 10;
 
 /// The word that turns a line into a room rather than a message.
