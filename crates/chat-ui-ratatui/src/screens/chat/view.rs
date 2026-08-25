@@ -29,6 +29,13 @@ use crate::ui::{self, NAME_WIDTH, field, theme};
 /// How wide the room list is. Fixed, because a room name is short and the messages want the rest.
 const SIDEBAR_WIDTH: u16 = 18;
 
+/// The longest room name this client will create, and all the sidebar draws of a longer one.
+///
+/// [`SIDEBAR_WIDTH`] holds 18 chars.
+/// REMAINING SPACE = SIDEBAR_WIDTH - 7 (2 borders, 2 highlight arrow, 1 `#`, 2 unread dot) = 11.
+/// 1 short of that, so a full name never sits against the dot.
+pub(super) const ROOM_NAME_MAX: usize = 10;
+
 impl Chat {
     pub fn draw(&mut self, frame: &mut Frame, area: Rect) {
         let [sidebar, opened] =
@@ -63,13 +70,15 @@ impl Chat {
         let names = self.rooms.iter().map(|room| {
             if self.unread(room) {
                 Line::from(vec![
-                    Span::from(format!("#{}", room.name))
+                    Span::from(format!("#{}", ui::clip(&room.name, ROOM_NAME_MAX)))
                         .fg(theme::UNREAD)
                         .bold(),
                     Span::from(" ●").fg(theme::UNREAD),
                 ])
             } else {
-                Line::from(Span::from(format!("#{}", room.name)).fg(theme::TEXT))
+                Line::from(
+                    Span::from(format!("#{}", ui::clip(&room.name, ROOM_NAME_MAX))).fg(theme::TEXT),
+                )
             }
         });
         let list = List::new(names)

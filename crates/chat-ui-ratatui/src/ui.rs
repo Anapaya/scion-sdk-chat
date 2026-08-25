@@ -13,6 +13,8 @@
 // limitations under the License.
 //! What every screen is drawn from: one field, one box, one palette.
 
+use std::borrow::Cow;
+
 use ratatui::{
     Frame,
     layout::Rect,
@@ -31,6 +33,9 @@ pub mod theme;
 /// out of line with every other row. The server accepts more; this is the limit of what the pane
 /// can draw tidily.
 pub const NAME_WIDTH: usize = 10;
+
+/// What stands at the end of a name too long to draw, in the one column it takes.
+const ELLIPSIS: char = '…';
 
 /// Which column a message's own text starts in: the name, and the space after it.
 ///
@@ -54,6 +59,21 @@ pub fn bordered<'a>(title: impl Into<Line<'a>>, border: Color, fill: Color) -> B
 /// The name of a field, in the colour every screen gives one.
 pub fn label(text: &str) -> Line<'_> {
     Line::from(text.fg(theme::TITLE))
+}
+
+/// `text` in `width` characters or fewer, ending in [`ELLIPSIS`] when something was cut.
+///
+/// A name this client would refuse is still drawn: the server takes longer ones, and another
+/// client may have made one. Padding is left to the caller, which knows the side to pad.
+pub fn clip(text: &str, width: usize) -> Cow<'_, str> {
+    if text.char_indices().nth(width).is_none() {
+        return Cow::Borrowed(text);
+    }
+
+    // One character short, because the mark that something was cut needs the column.
+    let kept: String = text.chars().take(width.saturating_sub(1)).collect();
+
+    Cow::Owned(format!("{kept}{ELLIPSIS}"))
 }
 
 /// A complaint, in the shape every screen makes one: the mark, then what went wrong.

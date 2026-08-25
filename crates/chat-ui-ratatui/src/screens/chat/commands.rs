@@ -15,15 +15,8 @@
 
 use ratatui::{style::Stylize, text::Line};
 
-use super::{Chat, Intent};
+use super::{Chat, Intent, view::ROOM_NAME_MAX};
 use crate::ui::{BODY_COLUMN, NAME_WIDTH, theme};
-
-/// The longest room name this client will create.
-///
-/// `SIDEBAR_WIDTH` holds 18 chars.
-/// REMAINING SPACE = SIDEBAR_WIDTH - 7 (2 borders, 2 highlight arrow, 1 `#`, 2 unread dot) = 11.
-/// 1 short of that, so a full name never sits against the dot.
-const ROOM_NAME_MAX: usize = 10;
 
 /// The word that turns a line into a room rather than a message.
 const CREATE: &str = "/room";
