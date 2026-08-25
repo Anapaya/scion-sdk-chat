@@ -54,9 +54,6 @@ cargo run -p chat-server -- --transport tcp --listen 127.0.0.1:8080 --data-dir .
 cargo run -p chat-ui-ratatui
 ```
 
-Enter connects, then Ctrl+R registers and Enter logs in. Tab moves between fields, ↑↓ switches rooms,
-Esc quits.
-
 The screens draw and read keys; `app.rs` holds every call to the client, so there is one place to
 look for how the SDK is used.
 

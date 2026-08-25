@@ -64,9 +64,7 @@ pub fn warning(message: &str) -> Line<'static> {
     Line::from(format!("⚠ {message}")).fg(theme::ERROR)
 }
 
-/// Draws why the last attempt failed, and nothing at all when none has.
-pub fn draw_error(frame: &mut Frame, area: Rect, error: Option<&str>) {
-    if let Some(message) = error {
-        frame.render_widget(Paragraph::new(warning(message)), area);
-    }
+/// Draws why the last attempt failed. Whether there is one to draw is the caller's to decide.
+pub fn draw_error(frame: &mut Frame, area: Rect, message: &str) {
+    frame.render_widget(Paragraph::new(warning(message)), area);
 }

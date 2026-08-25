@@ -11,14 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! A message poller for one room, behind a stream.
+//! Pollers behind a stream: one for a room's messages, one for the list of rooms.
 //!
-//! The API has no push: new messages are found by asking for what came after the last `seq`. This
-//! wraps that loop so a caller asks for the next batch instead of running a timer and a cursor.
+//! The API has no push, so staying current means asking again on a timer. These wrap that loop so
+//! a caller asks for the next batch instead of owning a timer, a cursor and a retry.
 
 use std::mem;
 
-use chat_core::api::v1::{Message, RoomId, Seq};
+use chat_core::api::v1::{Message, Room, RoomId, Seq};
 use futures::Stream;
 use tokio::time::Instant;
 
@@ -40,7 +40,7 @@ pub enum Since {
 ///
 /// There is no background task and no queue: stop calling [`next`](Self::next) and fetching stops.
 /// Dropping the feed ends it. One consumer each — two views of a room means two feeds.
-pub struct RoomFeed {
+pub struct MessagesFeed {
     client: ChatClient,
     room: RoomId,
     cursor: Seq,
@@ -54,18 +54,22 @@ pub struct RoomFeed {
 }
 
 impl ChatClient {
-    /// Opens a feed on a room, fetching the page it starts from.
+    /// Opens a feed on one room's messages, fetching the page it starts from.
     ///
     /// Fetching here is what turns a room that does not exist into an error, rather than a feed
     /// that never delivers.
-    pub async fn watch_room(&self, room: RoomId, since: Since) -> Result<RoomFeed, ChatError> {
+    pub async fn watch_room_messages(
+        &self,
+        room: RoomId,
+        since: Since,
+    ) -> Result<MessagesFeed, ChatError> {
         let page = self.poll().page_size();
         let (holding, from) = match since {
             Since::Newest => (self.messages_newest(room, page).await?, Seq::START),
             Since::After(seq) => (self.messages_after(room, seq, page).await?, seq),
         };
 
-        Ok(RoomFeed {
+        Ok(MessagesFeed {
             client: self.clone(),
             room,
             cursor: holding.last().map_or(from, |message| message.seq),
@@ -77,7 +81,7 @@ impl ChatClient {
     }
 }
 
-impl RoomFeed {
+impl MessagesFeed {
     /// The room this feed watches.
     pub fn room(&self) -> RoomId {
         self.room
@@ -96,7 +100,7 @@ impl RoomFeed {
         let page = self.client.poll().page_size();
         loop {
             self.due = self.due.or_else(|| {
-                (!self.catching_up).then(|| Instant::now() + self.client.poll().room_interval)
+                (!self.catching_up).then(|| Instant::now() + self.client.poll().messages_interval)
             });
             if let Some(due) = self.due {
                 tokio::time::sleep_until(due).await;
@@ -127,6 +131,75 @@ impl RoomFeed {
     /// Consuming rather than implementing `Stream`: `next` borrows the feed, so a `poll_next` would
     /// hold a future borrowing the struct it lives in.
     pub fn into_stream(self) -> impl Stream<Item = Result<Vec<Message>, ChatError>> {
+        futures::stream::unfold(
+            self,
+            |mut feed| async move { Some((feed.next().await, feed)) },
+        )
+    }
+}
+
+/// The list of rooms, kept current the way [`MessagesFeed`] keeps a room's messages.
+///
+/// There is no background task and no queue: stop calling [`next`](Self::next) and fetching stops.
+pub struct RoomsFeed {
+    client: ChatClient,
+    /// Fetched but not yet handed over.
+    holding: Option<Vec<Room>>,
+    /// A deadline rather than a duration, so a `next` dropped mid-wait resumes it. Otherwise a
+    /// caller whose `select!` holds another timer of the same interval starves the feed: its
+    /// deadlines are fixed, and a wait started afresh always lands later.
+    due: Option<Instant>,
+}
+
+impl ChatClient {
+    /// Opens a feed on the list of rooms, fetching the list it starts from.
+    pub async fn watch_rooms(&self) -> Result<RoomsFeed, ChatError> {
+        let rooms = self.rooms().await?;
+
+        Ok(RoomsFeed {
+            client: self.clone(),
+            holding: Some(rooms),
+            due: None,
+        })
+    }
+}
+
+impl RoomsFeed {
+    /// The list as it now stands.
+    ///
+    /// Every read is handed over, unchanged or not: a list is the whole truth rather than a batch
+    /// of new things, and a caller that hears nothing cannot tell a quiet server from a broken one.
+    ///
+    /// Cancel-safe: the wait is a deadline, so dropping this future loses no elapsed time, and a
+    /// fetch dropped part-way is asked for again at once.
+    pub async fn next(&mut self) -> Result<Vec<Room>, ChatError> {
+        if let Some(rooms) = self.holding.take() {
+            return Ok(rooms);
+        }
+
+        let due = *self
+            .due
+            .get_or_insert_with(|| Instant::now() + self.client.poll().rooms_interval);
+        tokio::time::sleep_until(due).await;
+
+        let fetched = self.client.rooms().await;
+        // Held until the fetch settles, so a drop anywhere above resumes this wait instead of
+        // starting another. A failure pays the interval again rather than being chased.
+        self.due = None;
+
+        fetched
+    }
+
+    /// Brings the next read forward, for a change this client made itself.
+    ///
+    /// A deadline already passed is what makes the next [`next`](Self::next) fetch at once. It
+    /// starts nothing on its own, so it cannot put a second read in flight.
+    pub fn refresh_now(&mut self) {
+        self.due = Some(Instant::now());
+    }
+
+    /// The same feed as a [`Stream`], for an interface whose subscription consumes one.
+    pub fn into_stream(self) -> impl Stream<Item = Result<Vec<Room>, ChatError>> {
         futures::stream::unfold(
             self,
             |mut feed| async move { Some((feed.next().await, feed)) },

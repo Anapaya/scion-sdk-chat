@@ -54,7 +54,9 @@ impl Chat {
             true,
             false,
         );
-        ui::draw_error(frame, error, self.error.as_deref());
+        if let Some(message) = &self.error {
+            ui::draw_error(frame, error, message);
+        }
     }
 
     fn draw_rooms(&mut self, frame: &mut Frame, area: Rect) {

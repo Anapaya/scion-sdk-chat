@@ -91,7 +91,9 @@ impl SignIn {
             .right_aligned(),
             hint,
         );
-        ui::draw_error(frame, error, self.error.as_deref());
+        if let Some(message) = &self.error {
+            ui::draw_error(frame, error, message);
+        }
     }
 
     /// The username and password as typed.

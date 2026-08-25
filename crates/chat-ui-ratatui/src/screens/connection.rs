@@ -71,7 +71,9 @@ impl Connection {
             .right_aligned(),
             hint,
         );
-        ui::draw_error(frame, error, self.error.as_deref());
+        if let Some(message) = &self.error {
+            ui::draw_error(frame, error, message);
+        }
     }
 
     /// Returns the URL to connect to once Enter is pressed, and edits the field otherwise.
