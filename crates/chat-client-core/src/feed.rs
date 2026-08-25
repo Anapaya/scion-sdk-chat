@@ -190,14 +190,6 @@ impl RoomsFeed {
         fetched
     }
 
-    /// Brings the next read forward, for a change this client made itself.
-    ///
-    /// A deadline already passed is what makes the next [`next`](Self::next) fetch at once. It
-    /// starts nothing on its own, so it cannot put a second read in flight.
-    pub fn refresh_now(&mut self) {
-        self.due = Some(Instant::now());
-    }
-
     /// The same feed as a [`Stream`], for an interface whose subscription consumes one.
     pub fn into_stream(self) -> impl Stream<Item = Result<Vec<Room>, ChatError>> {
         futures::stream::unfold(

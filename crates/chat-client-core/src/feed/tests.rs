@@ -484,25 +484,6 @@ async fn lists_wait_out_the_interval() {
     assert_eq!(gaps, [Duration::from_secs(2)], "the gap is the interval");
 }
 
-/// What a room this client created needs: the next read at once rather than after the interval.
-#[tokio::test(start_paused = true)]
-async fn refresh_now_brings_the_next_list_forward() {
-    let mock = listing(&[rooms(&["lobby"]), rooms(&["lobby", "scion"])]);
-    let client = client(&mock, 50).await;
-    let mut feed = client.watch_rooms().await.expect("a feed");
-    let _ = feed.next().await;
-
-    feed.refresh_now();
-    assert_eq!(names(feed.next().await), ["lobby", "scion"]);
-
-    let arrivals = mock.arrivals();
-    let gaps: Vec<_> = arrivals[1..]
-        .windows(2)
-        .map(|pair| pair[1] - pair[0])
-        .collect();
-    assert_eq!(gaps, [Duration::ZERO], "no interval was paid");
-}
-
 #[tokio::test(start_paused = true)]
 async fn a_failed_list_is_returned_and_the_feed_carries_on() {
     let mock = listing(&[rooms(&["lobby"])])
