@@ -154,11 +154,13 @@ impl Chat {
     /// Tab moves rooms because the composer is the only field on this screen, so there is nothing
     /// for it to move between. That leaves the arrows for the messages, which the composer does
     /// not read either, being one line.
-    pub fn handle_key(&mut self, key: KeyEvent) -> Option<Intent> {
+    /// `pending` refuses the keys that reach the server. Scrolling and typing are this screen's
+    /// own and always work.
+    pub fn handle_key(&mut self, key: KeyEvent, pending: bool) -> Option<Intent> {
         match key.code {
-            KeyCode::Enter => return self.submit(),
-            KeyCode::BackTab => return self.open(self.selected().saturating_sub(1)),
-            KeyCode::Tab => return self.open(self.selected() + 1),
+            KeyCode::Enter => return self.submit(pending),
+            KeyCode::BackTab => return self.open(self.selected().saturating_sub(1), pending),
+            KeyCode::Tab => return self.open(self.selected() + 1, pending),
             KeyCode::Up => self.scroll_by(-1),
             KeyCode::Down => self.scroll_by(1),
             KeyCode::PageUp => self.scroll_by(-self.page()),
@@ -202,9 +204,11 @@ impl Chat {
     ///
     /// `ListState::select_next` would count past the end — the list only clamps that while it
     /// draws, and this index is what reaches into `rooms`.
-    fn open(&mut self, index: usize) -> Option<Intent> {
+    fn open(&mut self, index: usize, pending: bool) -> Option<Intent> {
         let index = index.min(self.rooms.len().saturating_sub(1));
-        if index == self.selected() {
+        // Refused before the selection moves: watching the room is a call, and moving with none on
+        // its way would leave the pane cleared and empty.
+        if index == self.selected() || pending {
             return None;
         }
 

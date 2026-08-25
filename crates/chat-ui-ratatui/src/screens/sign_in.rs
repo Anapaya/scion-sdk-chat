@@ -105,15 +105,20 @@ impl SignIn {
         )
     }
 
-    pub fn handle_key(&mut self, key: KeyEvent) -> Option<Intent> {
+    /// `pending` refuses the two keys that reach the server. Moving between the fields and typing
+    /// into them are this screen's own and always work.
+    pub fn handle_key(&mut self, key: KeyEvent, pending: bool) -> Option<Intent> {
         // Registering has no key of its own on the wireframe, and every plain key belongs to a
         // field, so it takes the modifier.
         if key.code == KeyCode::Char('r') && key.modifiers.contains(crate::CONTROL) {
-            return self.register();
+            return if pending { None } else { self.register() };
         }
 
         match key.code {
             KeyCode::Enter => {
+                if pending {
+                    return None;
+                }
                 self.error = None;
                 return Some(Intent::LogIn);
             }

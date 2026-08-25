@@ -77,8 +77,13 @@ impl Connection {
     }
 
     /// Returns the URL to connect to once Enter is pressed, and edits the field otherwise.
-    pub fn handle_key(&mut self, key: KeyEvent) -> Option<String> {
+    ///
+    /// `pending` refuses Enter while a call is out. Typing is this screen's own and always works.
+    pub fn handle_key(&mut self, key: KeyEvent, pending: bool) -> Option<String> {
         if key.code == KeyCode::Enter {
+            if pending {
+                return None;
+            }
             self.error = None;
             return Some(self.url.value().trim().to_owned());
         }

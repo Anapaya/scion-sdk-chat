@@ -47,48 +47,69 @@ impl Chat {
     /// Takes what was typed, leaving the line empty. A blank line does nothing.
     ///
     /// A line starting with [`CREATE`] names a room instead of saying something.
-    pub(super) fn submit(&mut self) -> Option<Intent> {
-        let typed = self.input.value_and_reset();
-        let typed = typed.trim();
+    ///
+    /// The line is read rather than taken until it is clear where it goes: `pending` refuses the
+    /// two that reach the server, and a line refused has to stay where it was typed. `/help` and a
+    /// name this client will not accept are its own, and answer whatever is out.
+    pub(super) fn submit(&mut self, pending: bool) -> Option<Intent> {
+        let typed = self.input.value().trim().to_owned();
 
         if typed.is_empty() {
+            self.input.reset();
             return None;
         }
 
-        let (first, rest) = typed.split_once(char::is_whitespace).unwrap_or((typed, ""));
+        let (first, rest) = typed
+            .split_once(char::is_whitespace)
+            .unwrap_or((typed.as_str(), ""));
 
         if first == HELP {
+            self.input.reset();
             self.notices = help();
-            self.changed();
             // The list is written at the end of the pane, so following the newest is what puts it
             // on screen for a reader who had scrolled up to ask for it.
             self.scroll = None;
+            self.changed();
             return None;
         }
 
-        // Anything else is the reader moving on, and the list has been read.
-        self.notices.clear();
-        self.changed();
-
         if first != CREATE {
-            return Some(Intent::Send(typed.to_owned()));
+            if pending {
+                return None;
+            }
+            self.input.reset();
+            // The reader is moving on, and the list has been read.
+            self.notices.clear();
+            self.changed();
+
+            return Some(Intent::Send(typed));
         }
 
         // The line is split on whitespace to find the command, so a name holding any would be cut
         // in half rather than created.
         let name = rest.trim();
         if name.is_empty() || name.contains(char::is_whitespace) {
+            self.input.reset();
             self.warn(format!("a room name is one word: {CREATE} scion"));
             return None;
         }
         if name.width() > ROOM_NAME_MAX {
+            self.input.reset();
             self.warn(format!(
                 "room name is too long - {ROOM_NAME_MAX} characters max"
             ));
             return None;
         }
+        if pending {
+            return None;
+        }
 
-        Some(Intent::Create(name.to_owned()))
+        let name = name.to_owned();
+        self.input.reset();
+        self.notices.clear();
+        self.changed();
+
+        Some(Intent::Create(name))
     }
 }
 

@@ -56,7 +56,7 @@ impl Pane {
 
 /// The longest room name this client will create, and all the sidebar draws of a longer one.
 ///
-/// [`SIDEBAR_WIDTH`] holds 18 chars.
+/// [`SIDEBAR_WIDTH`] holds 18 columns.
 /// REMAINING SPACE = SIDEBAR_WIDTH - 7 (2 borders, 2 highlight arrow, 1 `#`, 2 unread dot) = 11.
 /// 1 short of that, so a full name never sits against the dot.
 pub(super) const ROOM_NAME_MAX: usize = 10;

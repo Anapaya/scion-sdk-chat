@@ -255,19 +255,19 @@ impl App {
             self.exit = true;
             return;
         }
-        if self.background.pending {
-            return;
-        }
+        // Handed to the screens rather than acted on here: a key that reaches the server has to be
+        // refused before it is consumed, and only the screen knows which of its keys those are.
+        let pending = self.background.pending;
 
         match &mut self.screen {
             Screen::Connection(screen) => {
-                let Some(url) = screen.handle_key(key) else {
+                let Some(url) = screen.handle_key(key, pending) else {
                     return;
                 };
                 self.connect(&url);
             }
             Screen::SignIn(screen) => {
-                let Some(intent) = screen.handle_key(key) else {
+                let Some(intent) = screen.handle_key(key, pending) else {
                     return;
                 };
                 let (username, password) = screen.credentials();
@@ -277,7 +277,7 @@ impl App {
                 }
             }
             Screen::Chat(screen) => {
-                let Some(intent) = screen.handle_key(key) else {
+                let Some(intent) = screen.handle_key(key, pending) else {
                     return;
                 };
                 match intent {
