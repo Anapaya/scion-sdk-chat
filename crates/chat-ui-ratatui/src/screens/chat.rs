@@ -64,6 +64,13 @@ pub struct Chat {
     input: Input,
     /// Why the last call failed, shown until one works.
     pub error: Option<String>,
+    /// The message pane as it was last drawn.
+    pane: Option<view::Pane>,
+    /// Counts the changes to what the pane shows, which is what a kept one is checked against.
+    ///
+    /// The room list is not counted: it is re-read every couple of seconds, and the pane's title
+    /// follows the room rather than its place in the list.
+    revision: u64,
 }
 
 impl Chat {
@@ -83,7 +90,14 @@ impl Chat {
             me,
             input: Input::default(),
             error: None,
+            pane: None,
+            revision: 0,
         }
+    }
+
+    /// Records that what the pane shows has changed, so the next draw builds it again.
+    fn changed(&mut self) {
+        self.revision += 1;
     }
 
     /// The room the sidebar has selected, if the server listed any.
@@ -113,6 +127,7 @@ impl Chat {
             self.last_read.insert(room, seq);
         }
         self.messages.extend(messages);
+        self.changed();
     }
 
     /// Empties the message pane, for a room that is about to be watched.
@@ -121,6 +136,7 @@ impl Chat {
         self.notices.clear();
         self.watched = None;
         self.scroll = None;
+        self.changed();
     }
 
     /// Records which room a feed is now watching.
@@ -161,6 +177,7 @@ impl Chat {
     fn warn(&mut self, message: String) {
         self.notices = vec![ui::warning(&message)];
         self.scroll = None;
+        self.changed();
     }
 
     /// Moves the pane by `rows`, up when negative, and resumes following the newest on reaching the
@@ -192,6 +209,7 @@ impl Chat {
 
         self.open.select(Some(index));
         self.messages.clear();
+        self.changed();
 
         Some(Intent::Open)
     }

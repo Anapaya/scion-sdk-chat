@@ -16,10 +16,14 @@
 use chat_client_core::v1::UnixMillis;
 use ratatui::{
     Frame,
+    buffer::Buffer,
     layout::{Constraint, Layout, Margin, Rect},
     style::{Modifier, Style, Stylize},
     text::{Line, Span, Text},
-    widgets::{Block, List, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
+    widgets::{
+        Block, List, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget,
+        Widget, Wrap,
+    },
 };
 use time::{Date, OffsetDateTime, UtcOffset};
 
@@ -28,6 +32,27 @@ use crate::ui::{self, NAME_WIDTH, field, theme};
 
 /// How wide the room list is. Fixed, because a room name is short and the messages want the rest.
 const SIDEBAR_WIDTH: u16 = 18;
+
+/// The message pane as it was last drawn, kept so that a keystroke changing nothing in it redraws
+/// nothing.
+///
+/// Drawing it costs a wrap of every message, twice — once to count the rows and once to place them.
+/// Typing changes none of what it is built from, and that is most of what the loop wakes for.
+pub(super) struct Pane {
+    area: Rect,
+    scroll: Option<u16>,
+    revision: u64,
+    buffer: Buffer,
+    /// What the draw that filled the buffer measured, which the caller wants back either way.
+    measured: (u16, u16),
+}
+
+impl Pane {
+    /// Whether these cells still stand for what would be drawn now.
+    fn still_stands(&self, area: Rect, scroll: Option<u16>, revision: u64) -> bool {
+        self.area == area && self.scroll == scroll && self.revision == revision
+    }
+}
 
 /// The longest room name this client will create, and all the sidebar draws of a longer one.
 ///
@@ -95,7 +120,15 @@ impl Chat {
     }
 
     /// Draws the messages, and reports the largest offset and how many rows fit.
-    fn draw_messages(&self, frame: &mut Frame, area: Rect) -> (u16, u16) {
+    fn draw_messages(&mut self, frame: &mut Frame, area: Rect) -> (u16, u16) {
+        if let Some(pane) = &self.pane
+            && pane.still_stands(area, self.scroll, self.revision)
+        {
+            frame.buffer_mut().merge(&pane.buffer);
+
+            return pane.measured;
+        }
+
         let title = match self.open_room() {
             Some(room) => format!(" #{} ", room.name),
             None => " no rooms ".to_owned(),
@@ -120,8 +153,11 @@ impl Chat {
             }
 
             lines.push(Line::from(vec![
-                Span::from(format!("{:>NAME_WIDTH$} ", message.username))
-                    .fg(self.colour(&message.username)),
+                Span::from(format!(
+                    "{} ",
+                    ui::right_align(&message.username, NAME_WIDTH)
+                ))
+                .fg(self.colour(&message.username)),
                 Span::from(message.body.as_str()).fg(theme::TEXT),
                 Span::from(clock(at)).fg(theme::TIMESTAMP),
             ]));
@@ -143,10 +179,23 @@ impl Chat {
         // pane has grown a message since they last looked.
         let scroll = self.scroll.unwrap_or(bottom).min(bottom);
 
-        frame.render_widget(messages.scroll((scroll, 0)), area);
-        draw_scrollbar(frame, area, inner.height, scroll, bottom);
+        // Drawn into a buffer of its own so the cells can be kept. Merging them into the frame
+        // costs the pane's own size, whatever the history behind them.
+        let mut buffer = Buffer::empty(area);
+        Widget::render(messages.scroll((scroll, 0)), area, &mut buffer);
+        draw_scrollbar(&mut buffer, area, inner.height, scroll, bottom);
+        frame.buffer_mut().merge(&buffer);
 
-        (bottom, inner.height)
+        let measured = (bottom, inner.height);
+        self.pane = Some(Pane {
+            area,
+            scroll: self.scroll,
+            revision: self.revision,
+            buffer,
+            measured,
+        });
+
+        measured
     }
 }
 
@@ -182,7 +231,7 @@ fn clock(at: Option<OffsetDateTime>) -> String {
 /// `offset` is a count of rows scrolled past and `bottom` the largest it reaches, so `bottom + 1`
 /// is how many positions there are and `visible` is how many of them a thumb covers. Nothing is
 /// drawn for a pane that fits, where a thumb would fill the track and say nothing.
-fn draw_scrollbar(frame: &mut Frame, area: Rect, visible: u16, offset: u16, bottom: u16) {
+fn draw_scrollbar(buffer: &mut Buffer, area: Rect, visible: u16, offset: u16, bottom: u16) {
     if bottom == 0 {
         return;
     }
@@ -191,7 +240,7 @@ fn draw_scrollbar(frame: &mut Frame, area: Rect, visible: u16, offset: u16, bott
         .position(offset as usize)
         .viewport_content_length(visible as usize);
 
-    frame.render_stateful_widget(
+    StatefulWidget::render(
         Scrollbar::new(ScrollbarOrientation::VerticalRight)
             // The arrow heads would land on the rounded corners, so the track is inset past them
             // and drawn without heads instead.
@@ -200,6 +249,7 @@ fn draw_scrollbar(frame: &mut Frame, area: Rect, visible: u16, offset: u16, bott
             .track_style(Style::new().fg(theme::BORDER))
             .thumb_style(Style::new().fg(theme::FOCUS)),
         area.inner(Margin::new(0, 1)),
+        buffer,
         &mut state,
     );
 }

@@ -14,6 +14,7 @@
 //! What a typed line can mean, and the two places the vocabulary is written out.
 
 use ratatui::{style::Stylize, text::Line};
+use unicode_width::UnicodeWidthStr as _;
 
 use super::{Chat, Intent, view::ROOM_NAME_MAX};
 use crate::ui::{BODY_COLUMN, NAME_WIDTH, theme};
@@ -58,6 +59,7 @@ impl Chat {
 
         if first == HELP {
             self.notices = help();
+            self.changed();
             // The list is written at the end of the pane, so following the newest is what puts it
             // on screen for a reader who had scrolled up to ask for it.
             self.scroll = None;
@@ -66,6 +68,7 @@ impl Chat {
 
         // Anything else is the reader moving on, and the list has been read.
         self.notices.clear();
+        self.changed();
 
         if first != CREATE {
             return Some(Intent::Send(typed.to_owned()));
@@ -78,7 +81,7 @@ impl Chat {
             self.warn(format!("a room name is one word: {CREATE} scion"));
             return None;
         }
-        if name.chars().count() > ROOM_NAME_MAX {
+        if name.width() > ROOM_NAME_MAX {
             self.warn(format!(
                 "room name is too long - {ROOM_NAME_MAX} characters max"
             ));

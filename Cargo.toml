@@ -55,6 +55,9 @@ tower = "0.5"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tui-input = "0.15"
+# The one measure that matters for a terminal: how many columns a string takes, not how many
+# characters it holds. ratatui and tui-input both count in these.
+unicode-width = "0.2"
 url = { version = "2", features = ["serde"] }
 utoipa = { version = "5.4", features = ["axum_extras", "yaml"] }
 utoipa-axum = "0.2"

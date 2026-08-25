@@ -22,6 +22,7 @@ use ratatui::{
     text::Line,
     widgets::{Block, BorderType, Paragraph},
 };
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 pub mod field;
 pub mod layout;
@@ -61,19 +62,42 @@ pub fn label(text: &str) -> Line<'_> {
     Line::from(text.fg(theme::TITLE))
 }
 
-/// `text` in `width` characters or fewer, ending in [`ELLIPSIS`] when something was cut.
+/// `text` in `width` columns or fewer, ending in [`ELLIPSIS`] when something was cut.
 ///
-/// A name this client would refuse is still drawn: the server takes longer ones, and another
-/// client may have made one. Padding is left to the caller, which knows the side to pad.
+/// Columns, not characters: one character can take two of them, and a terminal is spent in columns.
+///
+/// A name this client would refuse is still drawn: the server takes longer ones, and another client
+/// may have made one. Padding is left to the caller, which knows the side to pad.
 pub fn clip(text: &str, width: usize) -> Cow<'_, str> {
-    if text.char_indices().nth(width).is_none() {
+    if text.width() <= width {
         return Cow::Borrowed(text);
     }
 
-    // One character short, because the mark that something was cut needs the column.
-    let kept: String = text.chars().take(width.saturating_sub(1)).collect();
+    // A column short, because the mark that something was cut needs one.
+    let room = width.saturating_sub(ELLIPSIS.width().unwrap_or(1));
+    let mut kept = String::new();
+    let mut taken = 0;
 
-    Cow::Owned(format!("{kept}{ELLIPSIS}"))
+    for character in text.chars() {
+        let columns = character.width().unwrap_or(0);
+        if taken + columns > room {
+            break;
+        }
+        kept.push(character);
+        taken += columns;
+    }
+    kept.push(ELLIPSIS);
+
+    Cow::Owned(kept)
+}
+
+/// `text` in exactly `width` columns: cut when it is wider, padded on the left when narrower.
+pub fn right_align(text: &str, width: usize) -> String {
+    let text = clip(text, width);
+    // `format!`'s own padding counts characters, so it is no use here.
+    let blank = " ".repeat(width.saturating_sub(text.width()));
+
+    format!("{blank}{text}")
 }
 
 /// A complaint, in the shape every screen makes one: the mark, then what went wrong.

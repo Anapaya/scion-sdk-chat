@@ -398,6 +398,7 @@ dependencies = [
  "time",
  "tokio",
  "tui-input",
+ "unicode-width",
  "url",
 ]
 

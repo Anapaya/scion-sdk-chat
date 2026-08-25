@@ -21,6 +21,7 @@ use ratatui::{
     text::Line,
 };
 use tui_input::{Input, backend::crossterm::EventHandler as _};
+use unicode_width::UnicodeWidthStr as _;
 
 use crate::ui::{self, NAME_WIDTH, field, layout::form, theme};
 
@@ -127,7 +128,7 @@ impl SignIn {
 
     /// Asks for the account, unless the name is longer than the chat pane gives a name.
     fn register(&mut self) -> Option<Intent> {
-        if self.username.value().chars().count() > NAME_WIDTH {
+        if self.username.value().width() > NAME_WIDTH {
             self.error = Some(format!(
                 "username is too long - {NAME_WIDTH} characters max"
             ));

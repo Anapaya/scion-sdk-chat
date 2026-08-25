@@ -17,7 +17,7 @@ use ratatui::{
     Frame,
     layout::{Position, Rect},
     style::Stylize,
-    text::Line,
+    text::{Line, Span},
     widgets::Paragraph,
 };
 use tui_input::Input;
@@ -44,10 +44,10 @@ pub fn draw(
     let block = ui::bordered(title, border, theme::INPUT);
     let inner = block.inner(area);
 
-    // A mask stands one character per character typed, so the cursor still lands in the right
-    // place.
+    // One mask per column, not per character: the cursor and the scroll are both measured in
+    // columns, and a character wider than one would put them past what is drawn.
     let shown = if mask {
-        MASK.to_string().repeat(input.value().chars().count())
+        MASK.to_string().repeat(Span::from(input.value()).width())
     } else {
         input.value().to_owned()
     };
