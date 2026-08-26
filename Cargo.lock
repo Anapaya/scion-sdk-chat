@@ -827,6 +827,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "chat-dev"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chat-client-core",
+ "chat-server",
+ "clap",
+ "pocketscion",
+ "reqwest",
+ "scion-sdk-utils",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "chat-server"
 version = "0.1.0"
 dependencies = [
@@ -862,6 +883,7 @@ name = "chat-ui-ratatui"
 version = "0.1.0"
 dependencies = [
  "chat-client-core",
+ "clap",
  "crossterm",
  "futures",
  "ratatui",

@@ -37,8 +37,9 @@ use pocketscion::util::{
 };
 use tokio_util::sync::CancellationToken;
 
-/// A port the server binds in its own AS, so the client can be pointed at it before it starts.
-const SERVER_PORT: u16 = 8443;
+/// Whatever port is free, read back from the listener. A fixed one would collide with a `chat-dev`
+/// left running, which serves on 8443 by default.
+const SERVER_PORT: u16 = 0;
 
 /// How long the client keeps asking before the server is declared absent.
 const READY_TIMEOUT: Duration = Duration::from_secs(20);
@@ -132,8 +133,9 @@ fn server_config(data_dir: &Path, network: &PsSetup) -> Config {
 
     Config {
         transport: Transport::Scion,
-        // Only the port is used on SCION: the endhost API decides which AS the socket lands in.
-        listen: format!("0.0.0.0:{SERVER_PORT}")
+        // The endhost API decides which AS the socket lands in, and on SNAP the host address is the
+        // one the tunnel observes rather than the one asked for.
+        listen: format!("127.0.0.1:{SERVER_PORT}")
             .parse()
             .expect("an address"),
         data_dir: data_dir.to_owned(),

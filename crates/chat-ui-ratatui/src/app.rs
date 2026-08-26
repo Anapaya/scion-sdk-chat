@@ -16,10 +16,11 @@
 //! The screens read keys and draw; they never talk to a server. Everything that does is in this
 //! file, so "where does this app use the SDK" has one answer.
 
-use std::{future::Future, io, time::Duration};
+use std::{future::Future, io, path::PathBuf, time::Duration};
 
 use chat_client_core::{
-    ChatClient, ChatError, ClientConfig, MessagesFeed, PollConfig, RoomsFeed, Since, TransportKind,
+    ChatClient, ChatError, ClientConfig, MessagesFeed, PollConfig, RoomsFeed, ScionConfig, Since,
+    SnapToken, TransportKind,
     v1::{Message, Room},
 };
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
@@ -32,7 +33,7 @@ use crate::{
     CONTROL,
     screens::{
         chat::{self, Chat},
-        connection::Connection,
+        connection::{Connection, Settings},
         sign_in::{self, SignIn},
     },
     ui::theme,
@@ -153,10 +154,11 @@ pub struct App {
     exit: bool,
 }
 
-impl Default for App {
-    fn default() -> Self {
+impl App {
+    /// The app on its first screen, showing the form the command line filled in.
+    pub fn new(settings: Settings) -> Self {
         Self {
-            screen: Screen::Connection(Connection::default()),
+            screen: Screen::Connection(Connection::new(settings)),
             client: None,
             messages: None,
             rooms: None,
@@ -165,9 +167,7 @@ impl Default for App {
             exit: false,
         }
     }
-}
 
-impl App {
     /// Draws, then waits for a key, until asked to stop.
     ///
     /// Keys arrive as a stream rather than a blocking read, so that a `select!` can wait on the
@@ -261,10 +261,10 @@ impl App {
 
         match &mut self.screen {
             Screen::Connection(screen) => {
-                let Some(url) = screen.handle_key(key, pending) else {
+                let Some(settings) = screen.handle_key(key, pending) else {
                     return;
                 };
-                self.connect(&url);
+                self.connect(settings);
             }
             Screen::SignIn(screen) => {
                 let Some(intent) = screen.handle_key(key, pending) else {
@@ -356,15 +356,13 @@ impl App {
     /// Building it only parses configuration — nothing is dialled until a call is made — so the
     /// health check is what turns a wrong address into an error on this screen rather than a
     /// surprise on the next one.
-    fn connect(&mut self, url: &str) {
-        let url = url.to_owned();
-
+    fn connect(&mut self, settings: Settings) {
         self.background.ask(async move {
             let built = async {
-                let server_url =
-                    Url::parse(&url).map_err(|error| ChatError::Config(error.to_string()))?;
+                let server_url = Url::parse(&settings.server_url)
+                    .map_err(|error| ChatError::Config(error.to_string()))?;
                 let client = ChatClient::new(ClientConfig {
-                    transport: TransportKind::Tcp,
+                    transport: transport(&server_url, &settings)?,
                     server_url,
                     poll: PollConfig {
                         messages_interval: MESSAGES_REFRESH,
@@ -557,5 +555,131 @@ async fn next_rooms(
     match rooms {
         Some(rooms) => rooms.next().await.unwrap_or(Err(ChatError::NotLoggedIn)),
         None => Err(ChatError::NotLoggedIn),
+    }
+}
+
+/// The transport the URL asks for: `http` plain, `https` over SCION.
+///
+/// The scheme decides rather than a switch of its own, because the two are already one choice — a
+/// SCION server is reached over QUIC and a development server over TCP, and no address is both.
+fn transport(server_url: &Url, settings: &Settings) -> Result<TransportKind, ChatError> {
+    match server_url.scheme() {
+        "http" => Ok(TransportKind::Tcp),
+        "https" => {
+            let endhost_api = blank_as_none(&settings.endhost_api).ok_or_else(|| {
+                ChatError::Config(
+                    "an https URL is served over SCION, which needs an endhost API: it is how the \
+                     client finds the network. A local chat-dev prints one at startup."
+                        .to_owned(),
+                )
+            })?;
+            let endhost_api = Url::parse(&endhost_api).map_err(|error| {
+                ChatError::Config(format!(
+                    "the endhost API \"{endhost_api}\" is not a URL: {error}"
+                ))
+            })?;
+
+            Ok(TransportKind::Scion(ScionConfig {
+                endhost_api,
+                snap_token: blank_as_none(&settings.snap_token).map(SnapToken::new),
+                target: blank_as_none(&settings.target),
+                cert_path: blank_as_none(&settings.cert_path).map(PathBuf::from),
+            }))
+        }
+        other => {
+            Err(ChatError::Config(format!(
+                "\"{other}\" is not a scheme this client knows - http over TCP, https over SCION"
+            )))
+        }
+    }
+}
+
+/// A field left blank, as the absence the client's configuration expects.
+fn blank_as_none(value: &str) -> Option<String> {
+    (!value.is_empty()).then(|| value.to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A form with every SCION field answered, as `chat-dev` answers them.
+    fn settings(server_url: &str) -> Settings {
+        Settings {
+            server_url: server_url.to_owned(),
+            endhost_api: "http://127.0.0.1:41234/".to_owned(),
+            target: "2-ff00:0:212,127.0.0.1".to_owned(),
+            cert_path: "/tmp/dev/cert.pem".to_owned(),
+            snap_token: "a token".to_owned(),
+        }
+    }
+
+    fn kind(server_url: &str, settings: &Settings) -> Result<TransportKind, ChatError> {
+        transport(&Url::parse(server_url).expect("a url"), settings)
+    }
+
+    /// The whole point of the scheme rule: neither transport can be reached by accident.
+    #[test]
+    fn the_scheme_picks_the_transport() {
+        let settings = settings("");
+
+        assert!(matches!(
+            kind("http://localhost:8080", &settings),
+            Ok(TransportKind::Tcp)
+        ));
+        assert!(matches!(
+            kind("https://localhost:8443", &settings),
+            Ok(TransportKind::Scion(_))
+        ));
+        assert!(matches!(
+            kind("ftp://localhost", &settings),
+            Err(ChatError::Config(_))
+        ));
+    }
+
+    #[test]
+    fn the_scion_fields_are_carried_across() {
+        let settings = settings("https://localhost:8443");
+
+        let Ok(TransportKind::Scion(scion)) = kind(&settings.server_url, &settings) else {
+            panic!("an https URL asks for SCION");
+        };
+        assert_eq!(scion.endhost_api.as_str(), settings.endhost_api);
+        assert_eq!(scion.target, Some(settings.target));
+        assert_eq!(scion.cert_path, Some(PathBuf::from(&settings.cert_path)));
+        assert_eq!(
+            scion.snap_token.map(|token| token.as_str().to_owned()),
+            Some(settings.snap_token)
+        );
+    }
+
+    /// The three optional fields are optional. The endhost API is not, and says so.
+    #[test]
+    fn only_the_endhost_api_is_required_for_scion() {
+        let bare = Settings {
+            endhost_api: "http://127.0.0.1:41234/".to_owned(),
+            ..Settings::default()
+        };
+
+        let Ok(TransportKind::Scion(scion)) = kind("https://localhost:8443", &bare) else {
+            panic!("an https URL with an endhost API is enough");
+        };
+        assert_eq!(scion.target, None);
+        assert_eq!(scion.cert_path, None);
+        assert!(scion.snap_token.is_none());
+
+        assert!(matches!(
+            kind("https://localhost:8443", &Settings::default()),
+            Err(ChatError::Config(_))
+        ));
+    }
+
+    /// A blank endhost API is refused on `https` alone: TCP has no use for one.
+    #[test]
+    fn tcp_needs_none_of_it() {
+        assert!(matches!(
+            kind("http://localhost:8080", &Settings::default()),
+            Ok(TransportKind::Tcp)
+        ));
     }
 }

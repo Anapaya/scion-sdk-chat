@@ -4,6 +4,7 @@ resolver = "2"
 members = [
     "crates/chat-client-core",
     "crates/chat-core",
+    "crates/chat-dev",
     "crates/chat-server",
     "crates/chat-ui-ratatui",
 ]
