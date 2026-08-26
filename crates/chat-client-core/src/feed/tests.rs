@@ -53,7 +53,8 @@ async fn client(mock: &MockTransport, page_limit: usize) -> ChatClient {
         Arc::new(mock.clone()),
         Url::parse("http://host:8080").expect("a url"),
         PollConfig {
-            room_interval: Duration::from_secs(2),
+            messages_interval: Duration::from_secs(2),
+            rooms_interval: Duration::from_secs(2),
             page_limit,
         },
     );
@@ -87,12 +88,12 @@ fn seqs(batch: Result<Vec<Message>, ChatError>) -> Vec<u64> {
 }
 
 #[tokio::test(start_paused = true)]
-async fn the_first_batch_is_the_page_watch_room_already_fetched() {
+async fn the_first_batch_is_the_page_watch_room_messages_already_fetched() {
     let mock = scripted(&[page(&[1, 2])]);
     let client = client(&mock, 50).await;
 
     let mut feed = client
-        .watch_room(room(), Since::Newest)
+        .watch_room_messages(room(), Since::Newest)
         .await
         .expect("a feed");
     let fetched = mock.request_count();
@@ -118,7 +119,7 @@ async fn a_missing_room_fails_at_watch_room() {
         .respond(MESSAGES, 404, refused);
     let client = client(&mock, 50).await;
 
-    let Err(error) = client.watch_room(room(), Since::Newest).await else {
+    let Err(error) = client.watch_room_messages(room(), Since::Newest).await else {
         panic!("expected no such room");
     };
 
@@ -140,7 +141,7 @@ async fn an_empty_page_is_waited_through_rather_than_handed_over() {
     let mock = scripted(&[page(&[]), page(&[]), page(&[7])]);
     let client = client(&mock, 50).await;
     let mut feed = client
-        .watch_room(room(), Since::Newest)
+        .watch_room_messages(room(), Since::Newest)
         .await
         .expect("a feed");
 
@@ -158,7 +159,7 @@ async fn fetches_wait_out_the_interval() {
     let mock = scripted(&[page(&[1]), page(&[]), page(&[2])]);
     let client = client(&mock, 50).await;
     let mut feed = client
-        .watch_room(room(), Since::Newest)
+        .watch_room_messages(room(), Since::Newest)
         .await
         .expect("a feed");
     let _ = feed.next().await;
@@ -183,7 +184,7 @@ async fn a_full_page_is_followed_without_waiting() {
     let mock = scripted(&[page(&[1, 2]), page(&[3, 4]), page(&[5])]);
     let client = client(&mock, 2).await;
     let mut feed = client
-        .watch_room(room(), Since::After(Seq::START))
+        .watch_room_messages(room(), Since::After(Seq::START))
         .await
         .expect("a feed");
 
@@ -205,7 +206,7 @@ async fn each_fetch_asks_from_the_newest_seq_delivered() {
     let mock = scripted(&[page(&[1, 2]), page(&[7])]);
     let client = client(&mock, 50).await;
     let mut feed = client
-        .watch_room(room(), Since::Newest)
+        .watch_room_messages(room(), Since::Newest)
         .await
         .expect("a feed");
     let _ = feed.next().await;
@@ -237,7 +238,7 @@ async fn a_failure_is_returned_and_the_feed_carries_on() {
         .respond(MESSAGES, 200, page(&[9]));
     let client = client(&mock, 50).await;
     let mut feed = client
-        .watch_room(room(), Since::Newest)
+        .watch_room_messages(room(), Since::Newest)
         .await
         .expect("a feed");
     let _ = feed.next().await;
@@ -264,7 +265,7 @@ async fn failing_mid_catch_up_still_waits() {
         .fail(MESSAGES, TransportError::Timeout);
     let client = client(&mock, 2).await;
     let mut feed = client
-        .watch_room(room(), Since::After(Seq::START))
+        .watch_room_messages(room(), Since::After(Seq::START))
         .await
         .expect("a feed");
     let _ = feed.next().await;
@@ -298,7 +299,7 @@ async fn a_refused_token_is_returned_as_an_error() {
         .respond(MESSAGES, 401, expired);
     let client = client(&mock, 50).await;
     let mut feed = client
-        .watch_room(room(), Since::Newest)
+        .watch_room_messages(room(), Since::Newest)
         .await
         .expect("a feed");
     let _ = feed.next().await;
@@ -317,7 +318,7 @@ async fn nothing_is_fetched_until_it_is_asked_for() {
     let mock = scripted(&[page(&[1])]);
     let client = client(&mock, 50).await;
     let mut feed = client
-        .watch_room(room(), Since::Newest)
+        .watch_room_messages(room(), Since::Newest)
         .await
         .expect("a feed");
     let _ = feed.next().await;
@@ -335,7 +336,7 @@ async fn a_next_dropped_mid_wait_resumes_rather_than_restarts() {
     let mock = scripted(&[page(&[1]), page(&[2]), page(&[3])]);
     let client = client(&mock, 50).await;
     let mut feed = client
-        .watch_room(room(), Since::Newest)
+        .watch_room_messages(room(), Since::Newest)
         .await
         .expect("a feed");
     let _ = feed.next().await;
@@ -370,7 +371,7 @@ async fn a_feed_reads_as_a_stream() {
         .respond(MESSAGES, 401, expired);
     let client = client(&mock, 50).await;
     let feed = client
-        .watch_room(room(), Since::Newest)
+        .watch_room_messages(room(), Since::Newest)
         .await
         .expect("a feed");
 
@@ -389,7 +390,7 @@ async fn a_page_size_of_zero_still_paces_itself() {
     let mock = scripted(&[page(&[1]), page(&[]), page(&[2])]);
     let client = client(&mock, 0).await;
     let mut feed = client
-        .watch_room(room(), Since::Newest)
+        .watch_room_messages(room(), Since::Newest)
         .await
         .expect("a feed");
     let _ = feed.next().await;
@@ -404,5 +405,102 @@ async fn a_page_size_of_zero_still_paces_itself() {
     assert!(
         gaps.iter().all(|gap| *gap > Duration::ZERO),
         "every fetch waited: {gaps:?}",
+    );
+}
+
+/// The route every room list goes to.
+const ROOMS: &str = "GET /api/v1/rooms";
+
+/// A list holding `names`, as the server would send it.
+fn rooms(names: &[&str]) -> String {
+    let rooms: Vec<String> = names
+        .iter()
+        .enumerate()
+        .map(|(index, name)| format!(r#"{{"id":{},"name":"{name}","latest_seq":0}}"#, index + 1))
+        .collect();
+
+    format!(r#"{{"rooms":[{}]}}"#, rooms.join(","))
+}
+
+/// A mock that answers a login, then the lists given, the last standing for every fetch after.
+fn listing(lists: &[String]) -> MockTransport {
+    let mut mock = MockTransport::new().respond(
+        "POST /api/v1/login",
+        200,
+        r#"{"token":"a.b.c","expires_at":1893456000000}"#,
+    );
+
+    for body in lists {
+        mock = mock.respond(ROOMS, 200, body.clone());
+    }
+
+    mock
+}
+
+/// The names a list carried.
+fn names(list: Result<Vec<Room>, ChatError>) -> Vec<String> {
+    list.expect("a list")
+        .iter()
+        .map(|room| room.name.clone())
+        .collect()
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_first_list_is_the_one_watch_rooms_already_fetched() {
+    let mock = listing(&[rooms(&["lobby"])]);
+    let client = client(&mock, 50).await;
+    let mut feed = client.watch_rooms().await.expect("a feed");
+
+    assert_eq!(names(feed.next().await), ["lobby"]);
+    assert_eq!(mock.arrivals().len(), 2, "the login and one list");
+}
+
+/// A list is the whole truth, so an unchanged one is still delivered: a caller that hears nothing
+/// cannot tell a quiet server from a broken one.
+#[tokio::test(start_paused = true)]
+async fn an_unchanged_list_is_still_handed_over() {
+    let mock = listing(&[rooms(&["lobby"]), rooms(&["lobby"])]);
+    let client = client(&mock, 50).await;
+    let mut feed = client.watch_rooms().await.expect("a feed");
+    let _ = feed.next().await;
+
+    assert_eq!(names(feed.next().await), ["lobby"]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn lists_wait_out_the_interval() {
+    let mock = listing(&[rooms(&["lobby"]), rooms(&["lobby", "scion"])]);
+    let client = client(&mock, 50).await;
+    let mut feed = client.watch_rooms().await.expect("a feed");
+    let _ = feed.next().await;
+
+    let _ = feed.next().await;
+
+    let arrivals = mock.arrivals();
+    let gaps: Vec<_> = arrivals[1..]
+        .windows(2)
+        .map(|pair| pair[1] - pair[0])
+        .collect();
+    assert_eq!(gaps, [Duration::from_secs(2)], "the gap is the interval");
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_failed_list_is_returned_and_the_feed_carries_on() {
+    let mock = listing(&[rooms(&["lobby"])])
+        .fail(ROOMS, TransportError::Timeout)
+        .respond(ROOMS, 200, rooms(&["lobby", "scion"]));
+    let client = client(&mock, 50).await;
+    let mut feed = client.watch_rooms().await.expect("a feed");
+    let _ = feed.next().await;
+
+    let failed = feed.next().await;
+    assert!(
+        matches!(failed, Err(ChatError::Transport(TransportError::Timeout))),
+        "expected the timeout to reach the caller, got {failed:?}",
+    );
+    assert_eq!(
+        names(feed.next().await),
+        ["lobby", "scion"],
+        "and it recovers"
     );
 }

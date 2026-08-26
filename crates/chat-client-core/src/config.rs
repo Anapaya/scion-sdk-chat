@@ -109,9 +109,16 @@ impl Default for ClientConfig {
 /// How a watched room is kept up to date.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PollConfig {
-    /// How long to wait between fetches. Two seconds sits under the SDK's 25-second idle
-    /// connection timeout, so steady polling rides one warm connection.
-    pub room_interval: Duration,
+    /// How long to wait between reads of the open room's messages.
+    ///
+    /// Both intervals sit well under the SDK's idle connection timeout, so steady polling rides
+    /// one warm connection rather than paying for a handshake each time.
+    pub messages_interval: Duration,
+    /// How long to wait between reads of the room list.
+    ///
+    /// Slower than the messages by default: a room appearing a second late is nobody's problem,
+    /// while a message arriving late is what a chat is judged on.
+    pub rooms_interval: Duration,
     /// How many messages to ask for at a time.
     pub page_limit: usize,
 }
@@ -129,7 +136,8 @@ impl PollConfig {
 impl Default for PollConfig {
     fn default() -> Self {
         Self {
-            room_interval: Duration::from_secs(2),
+            messages_interval: Duration::from_secs(2),
+            rooms_interval: Duration::from_secs(2),
             page_limit: 50,
         }
     }
@@ -144,7 +152,8 @@ mod tests {
     fn the_poll_defaults_match_the_design() {
         let poll = PollConfig::default();
 
-        assert_eq!(poll.room_interval, Duration::from_secs(2));
+        assert_eq!(poll.messages_interval, Duration::from_secs(2));
+        assert_eq!(poll.rooms_interval, Duration::from_secs(2));
         assert_eq!(poll.page_limit, 50);
     }
 
@@ -160,7 +169,8 @@ mod tests {
             }),
             server_url: Url::parse("http://127.0.0.1:8080").expect("a url"),
             poll: PollConfig {
-                room_interval: Duration::from_millis(500),
+                messages_interval: Duration::from_millis(500),
+                rooms_interval: Duration::from_secs(5),
                 page_limit: 10,
             },
         };

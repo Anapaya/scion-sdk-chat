@@ -5,6 +5,7 @@ members = [
     "crates/chat-client-core",
     "crates/chat-core",
     "crates/chat-server",
+    "crates/chat-ui-ratatui",
 ]
 
 [workspace.package]
@@ -19,15 +20,20 @@ argon2 = "0.5"
 async-trait = "0.1"
 axum = "0.8"
 bytes = "1"
+chat-client-core = { path = "crates/chat-client-core" }
 chat-core = { path = "crates/chat-core" }
 chat-server = { path = "crates/chat-server" }
 clap = { version = "4", features = ["derive", "env"] }
+crossterm = { version = "0.29", features = ["event-stream"] }
 futures = "0.3"
 http = "1"
 jsonwebtoken = { version = "11", features = ["rust_crypto"] }
 pem = "3"
 pocketscion = "0.7"
 rand = "0.10"
+# unstable-rendered-line-info is Paragraph::line_count, which is how the message pane
+# finds the newest row once a long message has wrapped onto several.
+ratatui = { version = "0.30", features = ["unstable-rendered-line-info"] }
 rcgen = "0.14"
 reqwest = { version = "0.13", default-features = false }
 scion-h3-axum = "0.7"
@@ -44,6 +50,9 @@ sqlx = { version = "0.9", default-features = false, features = [
 ] }
 tempfile = "3"
 thiserror = "2"
+# local-offset is what turns a server timestamp into the reader's own clock. Already in the tree
+# under ratatui, so this only widens what is compiled.
+time = { version = "0.3", features = ["local-offset"] }
 tokio = { version = "1", features = [
     "macros",
     "net",
@@ -54,6 +63,10 @@ tokio-util = "0.7"
 tower = "0.5"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tui-input = "0.15"
+# The one measure that matters for a terminal: how many columns a string takes, not how many
+# characters it holds. ratatui and tui-input both count in these.
+unicode-width = "0.2"
 url = { version = "2", features = ["serde"] }
 utoipa = { version = "5.4", features = ["axum_extras", "yaml"] }
 utoipa-axum = "0.2"

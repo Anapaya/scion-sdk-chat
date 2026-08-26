@@ -297,7 +297,8 @@ async fn a_feed_delivers_what_is_posted_while_it_is_open() {
     let (base, _dir) = server().await;
     let client = ChatClient::new(ClientConfig {
         poll: PollConfig {
-            room_interval: Duration::ZERO,
+            messages_interval: Duration::ZERO,
+            rooms_interval: Duration::ZERO,
             page_limit: 50,
         },
         ..config(&base)
@@ -320,7 +321,7 @@ async fn a_feed_delivers_what_is_posted_while_it_is_open() {
         .expect("a message");
 
     let mut feed = client
-        .watch_room(room.id, Since::Newest)
+        .watch_room_messages(room.id, Since::Newest)
         .await
         .expect("a feed");
 
@@ -365,7 +366,10 @@ async fn watching_a_room_that_does_not_exist_fails_at_once() {
         .await
         .expect("a login");
 
-    let Err(error) = client.watch_room(RoomId::new(999), Since::Newest).await else {
+    let Err(error) = client
+        .watch_room_messages(RoomId::new(999), Since::Newest)
+        .await
+    else {
         panic!("expected no such room");
     };
 
