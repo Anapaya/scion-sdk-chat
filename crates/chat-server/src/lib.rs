@@ -22,7 +22,9 @@ use crate::{
 
 pub mod api;
 pub mod auth;
+pub mod cert;
 pub mod config;
+pub mod scion;
 pub mod store;
 
 /// Anything that stops the server from starting.
@@ -42,9 +44,21 @@ pub enum RunError {
         /// What the operating system reported.
         source: std::io::Error,
     },
-    /// The transport asked for is not implemented yet.
+    /// The certificate could not be read or generated.
+    #[error(transparent)]
+    Cert(#[from] cert::CertError),
+    /// A flag was missing or could not be used.
     #[error("{0}")]
-    Unsupported(&'static str),
+    Config(String),
+    /// The SCION stack, the socket, or the QUIC configuration refused.
+    #[error("{action}: {detail}")]
+    Scion {
+        /// What was being attempted.
+        action: &'static str,
+        /// What the SDK reported. Its error types are not all `std::error::Error`, so the text is
+        /// what survives the crossing.
+        detail: String,
+    },
 }
 
 /// Opens the store, prepares the auth material, and serves the API until the process is asked to
@@ -55,11 +69,7 @@ pub async fn run(config: Config) -> Result<(), RunError> {
 
     match config.transport {
         Transport::Tcp => serve_tcp(&config, router).await,
-        Transport::Scion => {
-            Err(RunError::Unsupported(
-                "--transport scion is not implemented yet; use --transport tcp",
-            ))
-        }
+        Transport::Scion => scion::serve(&config, router).await,
     }
 }
 

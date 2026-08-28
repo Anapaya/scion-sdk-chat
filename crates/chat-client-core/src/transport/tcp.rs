@@ -33,6 +33,10 @@ pub struct TcpTransport {
 impl TcpTransport {
     /// Builds the client.
     pub fn new() -> Result<Self, ChatError> {
+        // No TLS here, but `scion-stack` pulls reqwest in with `rustls-no-provider` and cargo
+        // unifies features, so reqwest refuses to build a client until a provider is installed.
+        scion_sdk_utils::rustls::select_ring_crypto_provider();
+
         let client = reqwest::Client::builder()
             .timeout(REQUEST_TIMEOUT)
             .redirect(Policy::none())
