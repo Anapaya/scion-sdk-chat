@@ -15,6 +15,8 @@ chat-core = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
 reqwest = { workspace = true }
+scion-http3 = { workspace = true }
+scion-sdk-utils = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -22,7 +24,6 @@ tokio = { workspace = true, features = ["time"] }
 url = { workspace = true }
 
 [dev-dependencies]
-async-trait = { workspace = true }
 axum = { workspace = true }
 chat-server = { workspace = true }
 clap = { workspace = true }

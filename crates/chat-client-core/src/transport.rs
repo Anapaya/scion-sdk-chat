@@ -19,6 +19,7 @@ use bytes::Bytes;
 use crate::error::TransportError;
 
 pub mod mock;
+pub mod scion;
 pub mod tcp;
 
 /// The largest reply any transport reads, so a broken or hostile server cannot exhaust memory.

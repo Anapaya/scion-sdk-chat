@@ -30,7 +30,7 @@ use url::Url;
 use crate::{
     config::{ClientConfig, PollConfig, TransportKind},
     error::{ChatError, refusal},
-    transport::{Transport, tcp::TcpTransport},
+    transport::{Transport, scion::ScionTransport, tcp::TcpTransport},
 };
 
 #[cfg(test)]
@@ -79,12 +79,10 @@ impl ChatClient {
     /// Async because it runs inside the caller's runtime: it never creates one, never keeps a
     /// handle to one, and never spawns anything.
     pub async fn new(config: ClientConfig) -> Result<Self, ChatError> {
-        let transport: Arc<dyn Transport> = match config.transport {
+        let transport: Arc<dyn Transport> = match &config.transport {
             TransportKind::Tcp => Arc::new(TcpTransport::new()?),
-            TransportKind::Scion => {
-                return Err(ChatError::Config(
-                    "the scion transport is not implemented yet; use the tcp transport".to_owned(),
-                ));
+            TransportKind::Scion(scion) => {
+                Arc::new(ScionTransport::new(scion, &config.server_url)?)
             }
         };
 
