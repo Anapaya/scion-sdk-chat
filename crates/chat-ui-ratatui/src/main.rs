@@ -33,8 +33,7 @@ pub const CONTROL: KeyModifiers = KeyModifiers::CONTROL;
 /// The app provides the runtime. The client never makes one, and never spawns anything of its own.
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    // Before the terminal is taken: `--help` and a misspelt flag both exit here, and doing that
-    // after would leave the terminal in raw mode with nothing left to restore it.
+    // Before the terminal is taken: `--help` exits here, and after would leave it in raw mode.
     let settings = config::Config::parse().settings();
 
     let mut terminal = ratatui::init();

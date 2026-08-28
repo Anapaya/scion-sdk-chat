@@ -24,8 +24,7 @@ use clap::Parser as _;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Standard output carries the description and nothing else, so a reader can pipe it into a
-    // parser. Everything the logs have to say goes the other way.
+    // Standard output carries the description and nothing else, so it can be piped into a parser.
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
         .with_env_filter(
@@ -45,8 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {}
-        // Whoever started this process closing their end is the other way to say stop, and the one
-        // a harness has. Watched only when it is not a terminal, or it would eat what is typed.
+        // How a harness says stop. Not watched on a terminal, where it would eat what is typed.
         () = stdin_closed(), if !std::io::stdin().is_terminal() => {}
     }
 
@@ -71,8 +69,7 @@ fn summarise(network: &chat_dev::DevNetwork) {
                 network.target
             );
             let _ = writeln!(out, "  reach it with\n");
-            // The token is fetched rather than printed, so this can be pasted into as many
-            // terminals as you like. Each client needs a `pssid` of its own.
+            // Fetched rather than printed, so the same paste works in any number of terminals.
             let _ = writeln!(
                 out,
                 "    cargo run -p chat-ui-ratatui -- \\\n      \

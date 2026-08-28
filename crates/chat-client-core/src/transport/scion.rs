@@ -39,8 +39,7 @@ impl ScionTransport {
     ///
     /// `server_url` is read for its host, which is the name a `target` answers for.
     pub fn new(config: &ScionConfig, server_url: &Url) -> Result<Self, ChatError> {
-        // Reaching the endhost API goes through rustls, which installs no default provider while
-        // both backends are in the build. Idempotent, and the TCP transport does the same.
+        // Idempotent. Both backends are in the build, so rustls installs no default of its own.
         scion_sdk_utils::rustls::select_ring_crypto_provider();
 
         let mut settings = Config::new(config.endhost_api.clone());

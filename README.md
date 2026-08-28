@@ -157,9 +157,9 @@ Three screens over `chat-client-core`: connect, sign in, chat. The screens draw 
 ## chat-dev
 
 Two autonomous systems joined by one link: the server in `2-ff00:0:212`, a client in
-`1-ff00:0:132`. PocketSCION is a library rather than a daemon, so the network lives for exactly as
-long as this process does. The underlay is SNAP and is not a choice — over SNAP an endpoint is
-addressed at the address its tunnel observed, which is what a client behind a translation needs.
+`1-ff00:0:132`. The network lives for exactly as long as this process does. The underlay is SNAP and
+is not a choice — over SNAP an endpoint is addressed at the address its tunnel observed, which is
+what a client behind a translation needs.
 
 Almost nothing about the network can be written down in advance: the endhost APIs take whatever
 ports are free, the token is minted per run, and the certificate is generated. So the network

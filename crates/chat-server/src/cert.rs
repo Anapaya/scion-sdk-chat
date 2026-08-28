@@ -16,9 +16,8 @@
 //! Generated once and kept. Clients pin this certificate, so a new one on every start would lock
 //! out everyone already holding the old fingerprint.
 //!
-//! A private deployment has no public reachability, so there is no ACME challenge to answer and no
-//! public authority that could issue for it. Pinning one self-signed certificate is the mechanism
-//! that works the same way on every client platform.
+//! Self-signed because a private deployment has no public reachability: there is no ACME challenge
+//! to answer, and no public authority that could issue for it.
 
 use std::{
     fs, io,
@@ -99,13 +98,9 @@ fn generate(data_dir: &Path, cert_path: &Path, key_path: &Path) -> Result<(), Ce
         }
     })?;
 
-    // ECDSA P-256, and not the Ed25519 our projects default to, because Ed25519 does not complete a
-    // handshake through this stack. A client can be told to accept Ed25519 signatures with
-    // `QuicConfig::verify_algorithm_prefs`, but the server side has no matching knob: squiche wraps
-    // only BoringSSL's `SSL_CTX_set_verify_algorithm_prefs`, never the signing preferences, and
-    // BoringSSL will not sign with Ed25519 by default. Measured, not assumed — with an Ed25519 pair
-    // the handshake fails whether the client's preference list replaces the defaults or adds to
-    // them, and the same test passes on P-256.
+    // ECDSA P-256, not the Ed25519 our projects default to: squiche exposes no server-side signing
+    // preference, and BoringSSL will not sign with Ed25519 by default, so the handshake never
+    // completes.
     //
     // @TODO: replace with Ed25519 once squiche exposes the signing preferences.
     let key = KeyPair::generate()?;
@@ -130,8 +125,7 @@ fn fingerprint(cert_path: &Path) -> Result<String, CertError> {
         }
     })?;
 
-    // Over the DER, not the PEM, so that it matches what every other tool reports for this
-    // certificate.
+    // Over the DER, not the PEM, to match what every other tool reports.
     Ok(Sha256::digest(block.contents())
         .iter()
         .map(|byte| format!("{byte:02x}"))
@@ -151,8 +145,7 @@ fn write(path: &Path, contents: &[u8], mode: u32) -> Result<(), CertError> {
     {
         use std::{io::Write as _, os::unix::fs::OpenOptionsExt as _};
 
-        // The key is written unreadable to anyone else, and the mode is set as the file is created
-        // rather than afterwards, so it is never briefly world-readable.
+        // Set as the file is created, so the key is never briefly world-readable.
         fs::OpenOptions::new()
             .write(true)
             .create(true)
@@ -200,8 +193,7 @@ mod tests {
         );
     }
 
-    /// Not Ed25519: see the note in `generate`. This fails the day someone changes it back without
-    /// checking whether the stack can sign with it yet.
+    /// Not Ed25519. See [`generate`].
     #[test]
     fn the_key_is_not_ed25519() {
         let dir = tempfile::tempdir().expect("a temp dir");

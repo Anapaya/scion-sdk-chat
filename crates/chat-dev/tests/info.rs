@@ -11,10 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! What a client does with this network, done here: read the description, then use it.
+//! What a client does with this network: read the description, then use it.
 //!
-//! The description is fetched the way any client fetches it — over plain TCP, without SCION — and
-//! everything after that is over SCION. A client that cannot connect can still be told why.
+//! The description is fetched over plain TCP, as any client fetches it. Everything after that is
+//! over SCION.
 
 use std::{path::PathBuf, time::Duration};
 
@@ -26,8 +26,7 @@ use chat_dev::{Config, DevNetwork, DevSetup, Server};
 /// How long the server is given to start reading from its socket.
 const READY_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// A network on ports nothing else is using, so a run does not collide with a `chat-dev` someone
-/// left up.
+/// A network on ports nothing else is using, so a run cannot collide with a running `chat-dev`.
 fn ephemeral() -> Config {
     Config {
         control_port: 0,
@@ -112,9 +111,7 @@ async fn the_description_is_enough_to_reach_the_server() {
     serving.await.expect("serving should not panic");
 }
 
-/// Two clients must not share a token: the SNAP control plane keeps one tunnel identity per
-/// `pssid`, so the second to register evicts the first, which then talks to a gateway that has
-/// forgotten its keys.
+/// Two clients must not share a token. See [`DevNetwork::auth_token`].
 #[tokio::test(flavor = "multi_thread")]
 async fn every_reader_is_given_a_token_of_its_own() {
     let setup = DevSetup::start(&Config {
@@ -145,10 +142,8 @@ async fn every_reader_is_given_a_token_of_its_own() {
     serving.await.expect("serving should not panic");
 }
 
-/// Two people in the room at once, which is what the network is for.
-///
-/// The pair is the point. One client proves the transport; two prove they do not evict each other,
-/// and a single shared token would have the first one's tunnel stop carrying anything.
+/// Two people in the room at once. One client proves the transport; two prove they do not evict
+/// each other.
 #[tokio::test(flavor = "multi_thread")]
 async fn two_clients_hold_a_conversation_across_the_link() {
     let setup = DevSetup::start(&ephemeral()).await.expect("a network");
@@ -172,9 +167,8 @@ async fn two_clients_hold_a_conversation_across_the_link() {
     ada.send(room.id, "from the first").await.expect("sent");
     grace.send(room.id, "from the second").await.expect("sent");
 
-    // Read back by both. Reading it as the other one proves the message crossed the link, and
-    // reading it as the first proves its tunnel still carries anything — which is exactly what a
-    // shared token takes away.
+    // Read as the other one, the message crossed the link. Read as the first, its tunnel still
+    // carries traffic.
     let expected = [
         ("ada".to_owned(), "from the first".to_owned()),
         ("grace".to_owned(), "from the second".to_owned()),
@@ -195,8 +189,8 @@ async fn two_clients_hold_a_conversation_across_the_link() {
     serving.await.expect("serving should not panic");
 }
 
-/// Refused before anything is started, because the failure underneath says only "error
-/// establishing SNAP tunnel" and arrives a whole topology later.
+/// Refused before anything starts: the failure underneath arrives a whole topology later and says
+/// only "error establishing SNAP tunnel".
 #[tokio::test(flavor = "multi_thread")]
 async fn a_wildcard_bind_is_refused_with_something_to_act_on() {
     let started = DevSetup::start(&Config {

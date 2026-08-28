@@ -24,11 +24,7 @@ use serde::{Deserialize, Serialize};
 /// Where the chat server is, for a client that wants to reach it.
 ///
 /// Printed as one line of JSON on standard output at startup, and served at `GET /info`. Both,
-/// because a harness that started this process can read the line and one that did not cannot —
-/// an emulator or a container has neither the terminal nor the filesystem.
-///
-/// `Deserialize` as well as `Serialize` so a test can read it back into this type, which is what
-/// keeps the field names from drifting away from the clients that parse them.
+/// because an emulator or a container has neither this terminal nor this filesystem.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DevNetwork {
     /// Where this description is served, for anything that cannot read standard output.
@@ -45,15 +41,10 @@ pub struct DevNetwork {
     pub client_isd_as: String,
     /// A token for the endhost API and the SNAP control plane, minted for whoever read this.
     ///
-    /// One per client, never shared. A token carries a `pssid`, and the SNAP control plane keeps
-    /// one tunnel identity per `pssid`: a second client registering the same one evicts the first,
-    /// whose packets then reach a gateway that no longer holds its keys. Two clients sharing a
-    /// token do not fail to start — the one that started first stops working.
+    /// One per client, never shared. The control plane keeps one tunnel per `pssid`, so a second
+    /// client on the same token evicts the first, which then stops working without an error.
     pub auth_token: String,
-    /// The server's own token, on disk, for `chat-server --auth-token-file`.
-    ///
-    /// Deliberately not the token above: the server is a client of the network too, and needs a
-    /// `pssid` of its own for the same reason.
+    /// The server's own token, on disk, for `chat-server --auth-token-file`. Not the one above.
     pub auth_token_file: String,
     /// Where the chat server is, as a URL. The host is the name its certificate is issued for.
     pub base_url: String,

@@ -11,15 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! The connection form, answered before the terminal is even taken.
+//! The connection form, answered before the terminal is taken.
 //!
-//! Every flag is one field of it. Nothing here is required: what is not given is left for the first
-//! screen to ask for, which is why a launch with no arguments still works.
+//! Every flag is one field of it, and none is required: what is not given is left for the first
+//! screen to ask for.
 //!
-//! The variables are `CHAT_CLIENT_*` rather than `CHAT_*` on purpose. `chat-server` already reads
-//! `CHAT_ENDHOST_API`, and the two must never take the same value: the server sits in one AS and
-//! this client attaches to another, so one exported variable would quietly point the client at the
-//! wrong endhost API.
+//! The variables are `CHAT_CLIENT_*` rather than `CHAT_*` because `chat-server` already reads
+//! `CHAT_ENDHOST_API`. The server sits in one AS and this client attaches to another, so a shared
+//! variable would point the client at the wrong endhost API.
 
 use clap::Parser;
 
@@ -56,8 +55,7 @@ pub struct Config {
 }
 
 impl Config {
-    /// The form as the first screen will show it: what was given, and this client's own defaults
-    /// for the rest.
+    /// The form as the first screen shows it: what was given, and the defaults for the rest.
     pub fn settings(self) -> Settings {
         let blank = Settings::default();
 

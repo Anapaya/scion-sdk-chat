@@ -559,9 +559,6 @@ async fn next_rooms(
 }
 
 /// The transport the URL asks for: `http` plain, `https` over SCION.
-///
-/// The scheme decides rather than a switch of its own, because the two are already one choice — a
-/// SCION server is reached over QUIC and a development server over TCP, and no address is both.
 fn transport(server_url: &Url, settings: &Settings) -> Result<TransportKind, ChatError> {
     match server_url.scheme() {
         "http" => Ok(TransportKind::Tcp),

@@ -18,8 +18,7 @@
 //! is an ordinary [`axum::Router`], which is the point — the transport is all that changes.
 //!
 //! Types come from `scion_stack`'s re-exports rather than from `sciparse` and `scion-quic`
-//! directly, so there is one version of each in the build and no chance of handing a
-//! `sciparse::Url` to something expecting another one.
+//! directly, so there is one version of each in the build.
 
 use std::{fs, sync::Arc};
 
@@ -38,10 +37,8 @@ use crate::{RunError, cert, config::Config};
 
 /// A bound socket, and the stack that socket belongs to.
 ///
-/// The stack is carried rather than dropped once the socket exists. It owns the background tasks
-/// that keep paths fresh and the SNAP token renewed, and the SDK's rule is one stack for as long as
-/// the process wants SCION connectivity — dropping it early leaves a socket that works until the
-/// first path expires and then quietly stops.
+/// The stack owns the background tasks that keep paths fresh and the SNAP token renewed. Dropping
+/// it early leaves a socket that works until the first path expires and then quietly stops.
 pub struct Listener {
     /// Never read. Held so that its background tasks outlive binding.
     _stack: ScionStack,
@@ -62,8 +59,7 @@ pub async fn serve(config: &Config, router: Router) -> Result<(), RunError> {
 
 /// Serves on an already-bound [`Listener`], stopping when `shutdown` is cancelled.
 ///
-/// Separate from [`serve`] because only the caller of [`bind`] can learn the address the socket
-/// landed on, which a test needs before it can send anything.
+/// Separate from [`serve`] so a caller can read [`Listener::addr`] before serving consumes it.
 pub async fn serve_on(
     listener: Listener,
     config: &Config,
@@ -73,8 +69,7 @@ pub async fn serve_on(
     let addr = listener.addr();
 
     let cert = cert::load_or_create(&config.data_dir)?;
-    // The one line an operator has to pass on: clients pin this, and nothing else identifies the
-    // server.
+    // The one line an operator has to pass on. Nothing else identifies the server.
     tracing::info!(
         fingerprint = %cert.fingerprint,
         cert = %cert.cert_path.display(),
@@ -103,16 +98,14 @@ pub async fn serve_on(
 
 /// Builds the stack and opens the socket the server listens on.
 pub async fn bind(config: &Config) -> Result<Listener, RunError> {
-    // Before anything that speaks TLS, which endhost API discovery below is the first to do. rustls
-    // refuses to build a configuration until a provider is installed, and the SDK installs none on
-    // an application's behalf.
+    // Before endhost API discovery below, which is the first thing here to speak TLS. The SDK
+    // installs no provider on an application's behalf.
     scion_sdk_utils::rustls::select_ring_crypto_provider();
 
     let stack = build_stack(config).await?;
 
     // The endhost API decides which AS the host is in, so `--listen` contributes only its IP and
-    // port. Binding explicitly rather than letting the stack choose is what makes the port
-    // predictable, which is what lets a client be configured before the server starts.
+    // port. Binding explicitly is what makes the port predictable.
     let isd_asn = *stack.local_ases().first().ok_or_else(|| {
         RunError::Scion {
             action: "reading the local AS",
@@ -138,7 +131,7 @@ async fn build_stack(config: &Config) -> Result<ScionStack, RunError> {
     let endhost_api = config.endhost_api.as_deref().ok_or_else(|| {
         RunError::Config(
             "--endhost-api is required by --transport scion: it is how the server finds the \
-             network. A local PocketSCION topology prints one at startup."
+             network. `cargo run -p chat-dev -- --no-server` prints the whole command line."
                 .to_owned(),
         )
     })?;

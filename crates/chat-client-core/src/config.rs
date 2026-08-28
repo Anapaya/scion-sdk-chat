@@ -24,9 +24,8 @@ const DEV_SERVER_URL: &str = "http://localhost:8080";
 
 /// Which transport to build, and what that transport needs.
 ///
-/// The settings live in the variant that reads them, so a transport cannot be asked for without
-/// them: there is no way to write down SCION with no endhost API, which is the one setting it
-/// cannot be given a default for.
+/// The settings live in the variant that reads them, so SCION cannot be asked for without an
+/// endhost API.
 ///
 /// A mock is absent because it is never built from configuration — a test hands one in ready-made.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -36,8 +35,7 @@ pub enum TransportKind {
     Scion(ScionConfig),
     /// Plain HTTP over TCP, against the server's development mode.
     ///
-    /// The default because it is the only one that needs nothing else to work. SCION is the
-    /// transport this app is for, but no default can name it without inventing an endhost API.
+    /// The default because it is the only one that needs nothing else to work.
     #[default]
     Tcp,
 }
@@ -45,8 +43,7 @@ pub enum TransportKind {
 /// What the SCION transport needs, and what no other transport reads.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScionConfig {
-    /// The endhost API to reach the SCION network through. Required: it is how the client finds
-    /// SCION at all, and there is no address worth guessing.
+    /// The endhost API to reach the SCION network through. Required: nothing else finds SCION.
     pub endhost_api: Url,
     /// A token, needed only on the SNAP underlay.
     pub snap_token: Option<SnapToken>,
@@ -215,8 +212,7 @@ mod tests {
         assert_eq!(json, r#""s3cret""#);
     }
 
-    /// The names a persisted config uses, which a settings file is written in. A transport that
-    /// carries settings writes them under its own name; one that carries none is the name alone.
+    /// The names a settings file is written in.
     #[test]
     fn the_transport_is_named_in_snake_case_on_the_wire() {
         let tcp = serde_json::to_string(&TransportKind::Tcp).expect("serialize");

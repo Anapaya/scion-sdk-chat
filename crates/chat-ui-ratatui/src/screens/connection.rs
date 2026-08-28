@@ -27,10 +27,9 @@ use crate::ui::{self, field, layout::form, theme};
 /// The address the server listens on in development mode, so the common case is one keypress.
 const DEV_SERVER_URL: &str = "http://localhost:8080";
 
-/// Everything the client needs to reach a server.
+/// Everything the client needs to reach a server, as typed.
 ///
-/// Also what the command line fills in, so a launch can arrive with the whole form answered. Kept
-/// as typed rather than parsed: this screen is where a bad value has somewhere to be reported.
+/// Unparsed, because this screen is where a bad value has somewhere to be reported.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Settings {
     /// Where the server is. The scheme picks the transport — `http` plain, `https` over SCION.
@@ -69,8 +68,7 @@ enum Focus {
 }
 
 impl Focus {
-    /// Wraps, unlike the sign-in screen's pair: five fields is far enough to walk that stopping at
-    /// the end is a nuisance rather than a guard rail.
+    /// The field after this one. Wraps.
     fn next(self) -> Self {
         match self {
             Self::ServerUrl => Self::EndhostApi,
@@ -81,6 +79,7 @@ impl Focus {
         }
     }
 
+    /// The field before this one. Wraps.
     fn previous(self) -> Self {
         match self {
             Self::ServerUrl => Self::SnapToken,
@@ -144,7 +143,6 @@ impl Connection {
         .areas(form(area));
 
         frame.render_widget(Line::from("Connect".fg(theme::TITLE).bold()), title);
-        // The one rule that decides what the four fields below are for.
         frame.render_widget(
             Line::from("http for TCP  ·  https for SCION".fg(theme::DIM)),
             schemes,
@@ -165,9 +163,8 @@ impl Connection {
                 Focus::EndhostApi,
                 false,
             ),
-            // Named apart from the URL because the two are easy to confuse: the URL carries the
-            // name the certificate is issued for, and this carries the address that
-            // name is not resolved to.
+            // The URL carries the name the certificate is issued for; this carries the address
+            // that name is not resolved to.
             (
                 target,
                 " Target - the server's SCION address ",
@@ -237,8 +234,7 @@ impl Connection {
         None
     }
 
-    /// Every field as typed, trimmed. A field left blank stays blank — the app reads that as the
-    /// absence the client's configuration expects.
+    /// Every field as typed, trimmed. A blank one stays blank, which the app reads as an absence.
     fn settings(&self) -> Settings {
         Settings {
             server_url: self.server_url.value().trim().to_owned(),

@@ -14,8 +14,7 @@
 //! A SCION network on this machine, with the chat server in it.
 //!
 //! Two autonomous systems joined by one link: the server in `2-ff00:0:212`, a client in
-//! `1-ff00:0:132`. PocketSCION is a library rather than a daemon, so the network lives for exactly
-//! as long as this process does.
+//! `1-ff00:0:132`. The network lives for exactly as long as this process does.
 //!
 //! Nothing here belongs in a deployment. The simulated network is a dependency of this crate alone,
 //! so the server binary cannot carry one.
@@ -51,9 +50,8 @@ pub use crate::{
 
 /// What carries traffic between the two ASes.
 ///
-/// SNAP rather than UDP, and not a choice a caller makes: over SNAP an endpoint is addressed at the
-/// address its tunnel observed, and over UDP at the one it believes it has, which nothing behind a
-/// translation can reach. An emulator is behind one.
+/// SNAP addresses an endpoint at the address its tunnel observed. UDP addresses it at the one it
+/// believes it has, which nothing behind a translation can reach.
 const UNDERLAY: UnderlayType = UnderlayType::Snap;
 
 /// Why a network could not be started.
@@ -108,11 +106,9 @@ pub struct DevSetup {
 impl DevSetup {
     /// Starts the network, and the server unless the caller asked for it to be left out.
     ///
-    /// The control listener is bound first, before anything slow: a second copy of this process
-    /// then fails in milliseconds rather than after a whole topology has started.
+    /// Binds the control listener before the topology, so a second copy of this process fails in
+    /// milliseconds rather than after a whole network has started.
     pub async fn start(config: &Config) -> Result<Self, DevError> {
-        // First, before anything is bound: the tunnel fails on a wildcard several layers down, and
-        // says only "error establishing SNAP tunnel".
         if config.bind_ip.is_unspecified() {
             return Err(DevError::WildcardBind(config.bind_ip));
         }
@@ -128,14 +124,11 @@ impl DevSetup {
             })?;
         let control_url = format!("http://{}", local_addr(&control));
 
-        // The two-path topology installs one; this one does not.
         scion_sdk_utils::rustls::select_ring_crypto_provider();
 
         let io = IoConfig::new();
         io.set_bind_ip(config.bind_ip);
         if let Some(ip) = config.advertise_ip {
-            // The AS a client attaches to, and not the one the server sits in: this process is a
-            // client of its own topology too, and goes on using the addresses it bound.
             io.set_advertised_ip(IA132, ip);
         }
         let network = minimal_topology_with_io_config(UNDERLAY, io).await;
@@ -144,8 +137,7 @@ impl DevSetup {
         let auth_token_file = data_dir.join("snap.token");
         write(&auth_token_file, dev_auth_token())?;
 
-        // Made here rather than left to the server, so the certificate is described even when the
-        // server is somebody else's process.
+        // Made here so the description carries it even when the server is somebody else's process.
         let certificate = cert::load_or_create(&data_dir)?;
         let ca_pem = read(&certificate.cert_path)?;
 
@@ -160,11 +152,8 @@ impl DevSetup {
             Some(start_server(&data_dir, listen, &server_api, &auth_token_file, &shutdown).await?)
         };
 
-        // What the server ended up at, or what one started separately will end up at. The address a
-        // server reports on SNAP is the one its tunnel observed, which on this topology is the
-        // address it was told to bind — so the reader who is about to start one is given the same
-        // answer as the one who did not have to. Only a port of 0 cannot be answered in advance,
-        // and only `--no-server` can ask.
+        // Under `--no-server` the address is predicted: on this topology a tunnel observes the
+        // address it was told to bind.
         let (target, port) =
             served.unwrap_or_else(|| (format!("{},{}", IA212, listen.ip()), listen.port()));
 
@@ -189,8 +178,6 @@ impl DevSetup {
                 ca_path: certificate.cert_path.display().to_string(),
                 ca_fingerprint: certificate.fingerprint,
                 data_dir: data_dir.display().to_string(),
-                // The reported port rather than the asked-for one, so pasting these reproduces the
-                // server the rest of this description points at.
                 chat_server_args: info::chat_server_args(
                     &SocketAddr::new(listen.ip(), port).to_string(),
                     &data_dir,
@@ -284,6 +271,8 @@ async fn start_server(
 }
 
 /// Where to write, and the directory to hold onto when it is a temporary one.
+///
+/// A temporary one unless a directory is named, so a run starts with no accounts.
 fn data_dir(config: &Config) -> Result<(PathBuf, Option<TempDir>), DevError> {
     match &config.data_dir {
         Some(named) => {
@@ -297,8 +286,6 @@ fn data_dir(config: &Config) -> Result<(PathBuf, Option<TempDir>), DevError> {
 
             Ok((named.clone(), None))
         }
-        // A run starts with no accounts unless a directory is named, so nothing is inherited from
-        // the last one.
         None => {
             let made = TempDir::new().map_err(|source| {
                 DevError::Io {
