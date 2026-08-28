@@ -24,7 +24,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use rcgen::{CertificateParams, KeyPair};
+use rcgen::{CertificateParams, KeyPair, PKCS_ED25519};
 use sha2::{Digest as _, Sha256};
 
 /// The name the certificate is issued for.
@@ -98,16 +98,33 @@ fn generate(data_dir: &Path, cert_path: &Path, key_path: &Path) -> Result<(), Ce
         }
     })?;
 
-    // ECDSA P-256, not the Ed25519 our projects default to: squiche exposes no server-side signing
-    // preference, and BoringSSL will not sign with Ed25519 by default, so the handshake never
-    // completes.
-    //
-    // @TODO: replace with Ed25519 once squiche exposes the signing preferences.
-    let key = KeyPair::generate()?;
+    let key_pem = ed25519_pkcs8_v1(rand::random());
+    let key = KeyPair::from_pkcs8_pem_and_sign_algo(&key_pem, &PKCS_ED25519)?;
     let cert = CertificateParams::new(vec![SERVER_NAME.to_owned()])?.self_signed(&key)?;
 
     write(cert_path, cert.pem().as_bytes(), 0o644)?;
-    write(key_path, key.serialize_pem().as_bytes(), 0o600)
+    // The PEM built above rather than `key.serialize_pem()`, so the file keeps the v1 encoding.
+    write(key_path, key_pem.as_bytes(), 0o600)
+}
+
+/// An Ed25519 private key as PKCS#8 **v1** PEM, which is the version BoringSSL will sign with.
+///
+/// `rcgen::KeyPair::generate_for(&PKCS_ED25519)` cannot be used: it delegates to ring, which emits
+/// v2 — the same key plus its public half — and squiche then fails the handshake. The structure is
+/// fixed at 48 bytes, so it is written out rather than reached for a DER encoder (RFC 8410 §7).
+fn ed25519_pkcs8_v1(seed: [u8; 32]) -> String {
+    const PREFIX: [u8; 16] = [
+        0x30, 0x2e, // SEQUENCE, 46 bytes
+        0x02, 0x01, 0x00, // INTEGER 0, the version that omits the public key
+        0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, // AlgorithmIdentifier, Ed25519
+        0x04, 0x22, 0x04, 0x20, // OCTET STRING wrapping the 32-byte seed
+    ];
+
+    let mut der = Vec::with_capacity(PREFIX.len() + seed.len());
+    der.extend_from_slice(&PREFIX);
+    der.extend_from_slice(&seed);
+
+    pem::encode(&pem::Pem::new("PRIVATE KEY", der))
 }
 
 fn fingerprint(cert_path: &Path) -> Result<String, CertError> {
@@ -193,22 +210,23 @@ mod tests {
         );
     }
 
-    /// Not Ed25519. See [`generate`].
+    /// Ed25519, and version 1. A v2 key holds the public half as well, and squiche will not sign
+    /// with one. See [`ed25519_pkcs8_v1`].
     #[test]
-    fn the_key_is_not_ed25519() {
+    fn the_key_is_ed25519_in_the_version_boringssl_signs_with() {
         let dir = tempfile::tempdir().expect("a temp dir");
         let cert = load_or_create(dir.path()).expect("a certificate");
 
         let key = fs::read_to_string(&cert.key_path).expect("reading the key");
-        let parsed = pem::parse(&key).expect("the key is PEM");
-        // The Ed25519 algorithm identifier, 1.3.101.112, as it appears in a PKCS#8 key.
-        assert!(
-            !parsed
-                .contents()
-                .windows(3)
-                .any(|w| w == [0x2b, 0x65, 0x70]),
-            "an Ed25519 key cannot complete a handshake through squiche; see generate()"
+        let der = pem::parse(&key).expect("the key is PEM").into_contents();
+
+        assert_eq!(der.len(), 48, "a v1 Ed25519 key is 48 bytes; v2 is 83");
+        assert_eq!(
+            &der[5..12],
+            &[0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70],
+            "Ed25519"
         );
+        assert_eq!(der[4], 0, "version 0 is PKCS#8 v1");
     }
 
     #[test]

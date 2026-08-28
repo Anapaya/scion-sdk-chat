@@ -18,8 +18,10 @@ use std::{str::FromStr as _, sync::Arc};
 use async_trait::async_trait;
 use bytes::Bytes;
 use scion_http3::{
-    Client, Config, Error, Request, scion_quic::quic::config::QuicConfig,
-    scion_stack::resolver::txt::ScionTxtDnsResolver, sciparse::address::ip_addr::ScionIpAddr,
+    Client, Config, Error, Request,
+    scion_quic::{quic::config::QuicConfig, reexport::squiche},
+    scion_stack::resolver::txt::ScionTxtDnsResolver,
+    sciparse::address::ip_addr::ScionIpAddr,
 };
 use url::Url;
 
@@ -48,14 +50,23 @@ impl ScionTransport {
             settings = settings.with_auth_token(token.as_str());
         }
 
+        // Ed25519 is not in BoringSSL's defaults, and the server signs with it. Added to the
+        // defaults rather than replacing them, so every other algorithm still verifies.
+        let mut quic = QuicConfig::builder().verify_algorithm_prefs(
+            std::iter::once(squiche::SIGN_ED25519)
+                .chain(squiche::DEFAULT_VERIFY_ALGORITHM_PREFS.iter().copied())
+                .collect(),
+        );
+
         // A pinned certificate replaces the system roots; the server signs its own.
         if let Some(path) = &config.cert_path {
             let path = path.to_str().ok_or_else(|| {
                 ChatError::Config(format!("the certificate path is not utf-8: {path:?}"))
             })?;
 
-            settings = settings.with_quic_config(QuicConfig::builder().ca_certs_file(path).build());
+            quic = quic.ca_certs_file(path);
         }
+        settings = settings.with_quic_config(quic.build());
 
         if let Some(target) = &config.target {
             settings = settings.with_resolver(Arc::new(resolver(server_url, target)?));
