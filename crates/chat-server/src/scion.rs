@@ -28,18 +28,17 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{RunError, cert, config::Config};
 
-/// A socket bound on a [`ScionStack`].
-///
-/// The stack it was bound on must outlive it. That stack owns the background tasks which keep the
-/// paths fresh and the SNAP token renewed, so a socket whose stack is dropped keeps working until
-/// the first path expires and then quietly stops.
+/// A socket bound on a [`ScionStack`], and the stack it belongs to.
 pub struct ScionListener {
+    /// Never read. Held so the socket cannot outlive the tasks that keep its paths fresh and its
+    /// SNAP token renewed.
+    _stack: ScionStack,
     socket: Arc<dyn GenericScionUdpSocket>,
 }
 
 impl ScionListener {
-    /// Opens the socket the server listens on.
-    pub async fn bind(stack: &ScionStack, config: &Config) -> Result<Self, RunError> {
+    /// Opens the socket the server listens on, taking ownership of the stack it is bound to.
+    pub async fn bind(stack: ScionStack, config: &Config) -> Result<Self, RunError> {
         // The endhost API decides which AS the host is in, so `--listen` contributes only its IP
         // and port. Binding explicitly is what makes the port predictable.
         let isd_asn = *stack.local_ases().first().ok_or_else(|| {
@@ -58,6 +57,7 @@ impl ScionListener {
         })?;
 
         Ok(Self {
+            _stack: stack,
             socket: Arc::new(socket),
         })
     }
@@ -75,7 +75,7 @@ pub async fn serve(
     shutdown: CancellationToken,
 ) -> Result<(), RunError> {
     let stack = build_stack(config).await?;
-    let listener = ScionListener::bind(&stack, config).await?;
+    let listener = ScionListener::bind(stack, config).await?;
 
     serve_on(listener, config, router, shutdown).await
 }
@@ -116,8 +116,6 @@ pub async fn serve_on(
 }
 
 /// Builds the stack that reaches the SCION network.
-///
-/// The stack must outlive every [`ScionListener`] bound on it.
 pub async fn build_stack(config: &Config) -> Result<ScionStack, RunError> {
     // Before endhost API discovery below, which is the first thing here to speak TLS. The SDK
     // installs no provider on an application's behalf.
