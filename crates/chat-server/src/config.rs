@@ -34,8 +34,7 @@ pub struct Config {
     #[arg(long, env = "CHAT_TRANSPORT", value_enum, default_value = "scion")]
     pub transport: Transport,
 
-    /// Address to bind. Under `--transport scion` the IP must name one interface: an unspecified
-    /// address binds, and then leaves every packet without a source host to reply to.
+    /// Address to bind. Under `--transport scion` the IP must name one interface.
     #[arg(long, env = "CHAT_LISTEN", default_value = "127.0.0.1:8443")]
     pub listen: SocketAddr,
 
