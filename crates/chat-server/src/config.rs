@@ -34,8 +34,9 @@ pub struct Config {
     #[arg(long, env = "CHAT_TRANSPORT", value_enum, default_value = "scion")]
     pub transport: Transport,
 
-    /// Address to bind.
-    #[arg(long, env = "CHAT_LISTEN", default_value = "0.0.0.0:8443")]
+    /// Address to bind. Under `--transport scion` the IP must name one interface: an unspecified
+    /// address binds, and then leaves every packet without a source host to reply to.
+    #[arg(long, env = "CHAT_LISTEN", default_value = "127.0.0.1:8443")]
     pub listen: SocketAddr,
 
     /// Where to keep `chat.db` and `jwt.secret`. Created if absent.
@@ -104,7 +105,7 @@ mod tests {
         let config = Config::parse_from(["chat-server", "--data-dir", "/srv/chat"]);
 
         assert_eq!(config.transport, Transport::Scion);
-        assert_eq!(config.listen.to_string(), "0.0.0.0:8443");
+        assert_eq!(config.listen.to_string(), "127.0.0.1:8443");
         assert_eq!(config.max_accounts, 500);
         assert_eq!(config.max_rooms, 100);
         assert_eq!(config.max_message_bytes, 4096);

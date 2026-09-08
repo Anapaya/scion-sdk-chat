@@ -13,6 +13,8 @@
 // limitations under the License.
 //! The chat server runtime, exposed as a library so that tests can embed the server in-process.
 
+use tokio_util::sync::CancellationToken;
+
 use crate::{
     api::AppState,
     auth::Tokens,
@@ -61,15 +63,14 @@ pub enum RunError {
     },
 }
 
-/// Opens the store, prepares the auth material, and serves the API until the process is asked to
-/// stop.
-pub async fn run(config: Config) -> Result<(), RunError> {
+/// Opens the store, prepares the auth material, and serves the API until `shutdown` is cancelled.
+pub async fn run(config: Config, shutdown: CancellationToken) -> Result<(), RunError> {
     let state = state(&config).await?;
     let router = api::router(state);
 
     match config.transport {
-        Transport::Tcp => serve_tcp(&config, router).await,
-        Transport::Scion => scion::serve(&config, router).await,
+        Transport::Tcp => serve_tcp(&config, router, shutdown).await,
+        Transport::Scion => scion::serve(&config, router, shutdown).await,
     }
 }
 
@@ -88,7 +89,11 @@ pub async fn state(config: &Config) -> Result<AppState, RunError> {
 }
 
 /// Serves over plain TCP. Development only: no TLS, so nothing on the wire is protected.
-async fn serve_tcp(config: &Config, router: axum::Router) -> Result<(), RunError> {
+async fn serve_tcp(
+    config: &Config,
+    router: axum::Router,
+    shutdown: CancellationToken,
+) -> Result<(), RunError> {
     let addr = config.listen;
     let fail = |source| RunError::Serve { addr, source };
 
@@ -96,10 +101,7 @@ async fn serve_tcp(config: &Config, router: axum::Router) -> Result<(), RunError
     tracing::info!(%addr, data_dir = %config.data_dir.display(), "serving over tcp");
 
     axum::serve(listener, router)
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
-            tracing::info!("shutting down");
-        })
+        .with_graceful_shutdown(async move { shutdown.cancelled().await })
         .await
         .map_err(fail)
 }

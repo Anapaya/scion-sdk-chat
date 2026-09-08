@@ -12,13 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //! Serving the API over HTTP/3 on SCION.
-//!
-//! The network is reached through an endhost API rather than configured here: it reports which
-//! underlays are available and the stack opens a socket on one of them. Everything above this file
-//! is an ordinary [`axum::Router`], which is the point — the transport is all that changes.
-//!
-//! Types come from `scion_stack`'s re-exports rather than from `sciparse` and `scion-quic`
-//! directly, so there is one version of each in the build.
 
 use std::{fs, sync::Arc};
 
@@ -35,40 +28,68 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{RunError, cert, config::Config};
 
-/// A bound socket, and the stack that socket belongs to.
+/// A socket bound on a [`ScionStack`].
 ///
-/// The stack owns the background tasks that keep paths fresh and the SNAP token renewed. Dropping
-/// it early leaves a socket that works until the first path expires and then quietly stops.
-pub struct Listener {
-    /// Never read. Held so that its background tasks outlive binding.
-    _stack: ScionStack,
+/// The stack it was bound on must outlive it. That stack owns the background tasks which keep the
+/// paths fresh and the SNAP token renewed, so a socket whose stack is dropped keeps working until
+/// the first path expires and then quietly stops.
+pub struct ScionListener {
     socket: Arc<dyn GenericScionUdpSocket>,
 }
 
-impl Listener {
+impl ScionListener {
+    /// Opens the socket the server listens on.
+    pub async fn bind(stack: &ScionStack, config: &Config) -> Result<Self, RunError> {
+        // The endhost API decides which AS the host is in, so `--listen` contributes only its IP
+        // and port. Binding explicitly is what makes the port predictable.
+        let isd_asn = *stack.local_ases().first().ok_or_else(|| {
+            RunError::Scion {
+                action: "reading the local AS",
+                detail: "the endhost API reported no AS for this host".to_owned(),
+            }
+        })?;
+        let bind_addr = ScionSocketIpAddr::new(isd_asn, config.listen.ip(), config.listen.port());
+
+        let socket = stack.bind(Some(bind_addr)).await.map_err(|source| {
+            RunError::Scion {
+                action: "binding a SCION socket",
+                detail: source.to_string(),
+            }
+        })?;
+
+        Ok(Self {
+            socket: Arc::new(socket),
+        })
+    }
+
     /// Where clients should send, once they know a path to this AS.
     pub fn addr(&self) -> ScionSocketIpAddr {
         self.socket.local_addr()
     }
 }
 
-/// Serves the API over HTTP/3-over-SCION until the process is asked to stop.
-pub async fn serve(config: &Config, router: Router) -> Result<(), RunError> {
-    serve_on(bind(config).await?, config, router, on_ctrl_c()).await
+/// Serves the API over HTTP/3-over-SCION, stopping when `shutdown` is cancelled.
+pub async fn serve(
+    config: &Config,
+    router: Router,
+    shutdown: CancellationToken,
+) -> Result<(), RunError> {
+    let stack = build_stack(config).await?;
+    let listener = ScionListener::bind(&stack, config).await?;
+
+    serve_on(listener, config, router, shutdown).await
 }
 
-/// Serves on an already-bound [`Listener`], stopping when `shutdown` is cancelled.
-///
-/// Separate from [`serve`] so a caller can read [`Listener::addr`] before serving consumes it.
+/// Serves on an already-bound [`ScionListener`], stopping when `shutdown` is cancelled.
 pub async fn serve_on(
-    listener: Listener,
+    listener: ScionListener,
     config: &Config,
     router: Router,
     shutdown: CancellationToken,
 ) -> Result<(), RunError> {
     let addr = listener.addr();
 
-    let cert = cert::load_or_create(&config.data_dir)?;
+    let cert = cert::ServerCert::load_or_create(&config.data_dir)?;
     // The one line an operator has to pass on. Nothing else identifies the server.
     tracing::info!(
         fingerprint = %cert.fingerprint,
@@ -92,42 +113,16 @@ pub async fn serve_on(
             detail: source.to_string(),
         }
     })
-    // `listener` is dropped here, taking the stack with it — after serving has stopped, never
-    // while it is running.
 }
 
-/// Builds the stack and opens the socket the server listens on.
-pub async fn bind(config: &Config) -> Result<Listener, RunError> {
+/// Builds the stack that reaches the SCION network.
+///
+/// The stack must outlive every [`ScionListener`] bound on it.
+pub async fn build_stack(config: &Config) -> Result<ScionStack, RunError> {
     // Before endhost API discovery below, which is the first thing here to speak TLS. The SDK
     // installs no provider on an application's behalf.
     scion_sdk_utils::rustls::select_ring_crypto_provider();
 
-    let stack = build_stack(config).await?;
-
-    // The endhost API decides which AS the host is in, so `--listen` contributes only its IP and
-    // port. Binding explicitly is what makes the port predictable.
-    let isd_asn = *stack.local_ases().first().ok_or_else(|| {
-        RunError::Scion {
-            action: "reading the local AS",
-            detail: "the endhost API reported no AS for this host".to_owned(),
-        }
-    })?;
-    let bind_addr = ScionSocketIpAddr::new(isd_asn, config.listen.ip(), config.listen.port());
-
-    let socket = stack.bind(Some(bind_addr)).await.map_err(|source| {
-        RunError::Scion {
-            action: "binding a SCION socket",
-            detail: source.to_string(),
-        }
-    })?;
-
-    Ok(Listener {
-        _stack: stack,
-        socket: Arc::new(socket),
-    })
-}
-
-async fn build_stack(config: &Config) -> Result<ScionStack, RunError> {
     let endhost_api = config.endhost_api.as_deref().ok_or_else(|| {
         RunError::Config(
             "--endhost-api is required by --transport scion: it is how the server finds the \
@@ -184,27 +179,10 @@ fn quic_config(cert: &cert::ServerCert) -> Result<squiche::Config, RunError> {
         .to_quiche_config()
         .map_err(failed("building the QUIC configuration"))?;
 
-    // Files rather than the bytes already in hand: squiche loads certificates through BoringSSL,
-    // which reads them from disk and offers no in-memory equivalent.
     quic.load_cert_chain_from_pem_file(&path(&cert.cert_path)?)
         .map_err(failed("loading the certificate"))?;
     quic.load_priv_key_from_pem_file(&path(&cert.key_path)?)
         .map_err(failed("loading the private key"))?;
 
     Ok(quic)
-}
-
-/// A token that is cancelled when the process is interrupted.
-fn on_ctrl_c() -> CancellationToken {
-    let shutdown = CancellationToken::new();
-    tokio::spawn({
-        let shutdown = shutdown.clone();
-        async move {
-            let _ = tokio::signal::ctrl_c().await;
-            tracing::info!("shutting down");
-            shutdown.cancel();
-        }
-    });
-
-    shutdown
 }

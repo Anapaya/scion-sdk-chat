@@ -11,13 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! The server's TLS identity: a self-signed certificate in the data directory.
-//!
-//! Generated once and kept. Clients pin this certificate, so a new one on every start would lock
-//! out everyone already holding the old fingerprint.
-//!
-//! Self-signed because a private deployment has no public reachability: there is no ACME challenge
-//! to answer, and no public authority that could issue for it.
+//! The server's TLS identity: a self-signed certificate.
 
 use std::{
     fs, io,
@@ -28,9 +22,6 @@ use rcgen::{CertificateParams, KeyPair, PKCS_ED25519};
 use sha2::{Digest as _, Sha256};
 
 /// The name the certificate is issued for.
-///
-/// Clients reach the server at `https://localhost:<port>` and say where to send the packets
-/// separately, so the URL's host is what has to match here, not anything routable.
 pub const SERVER_NAME: &str = "localhost";
 
 /// Anything that stops the certificate from being ready.
@@ -62,31 +53,31 @@ pub enum CertError {
 /// A certificate ready to serve with, and what to tell clients to pin.
 #[derive(Debug, Clone)]
 pub struct ServerCert {
-    /// The certificate, as a file because that is the only way squiche will load one.
+    /// The certificate file.
     pub cert_path: PathBuf,
-    /// The private key, likewise.
+    /// The private key file.
     pub key_path: PathBuf,
-    /// SHA-256 over the DER, lower-case hex — the same digest `openssl x509 -fingerprint` prints.
+    /// SHA-256 over the certificate DER, as lower-case hex.
     pub fingerprint: String,
 }
 
-/// Reads the certificate in `data_dir`, generating one the first time.
-///
-/// A half-written pair, one file without the other, is replaced rather than repaired: there is
-/// nothing to serve with either half alone.
-pub fn load_or_create(data_dir: &Path) -> Result<ServerCert, CertError> {
-    let cert_path = data_dir.join("cert.pem");
-    let key_path = data_dir.join("cert.key");
+impl ServerCert {
+    /// Reads the certificate in `data_dir`, generating one the first time.
+    pub fn load_or_create(data_dir: &Path) -> Result<ServerCert, CertError> {
+        let cert_path = data_dir.join("cert.pem");
+        let key_path = data_dir.join("cert.key");
 
-    if !cert_path.is_file() || !key_path.is_file() {
-        generate(data_dir, &cert_path, &key_path)?;
+        // Neither half can serve alone, so there is nothing to repair.
+        if !cert_path.is_file() || !key_path.is_file() {
+            generate(data_dir, &cert_path, &key_path)?;
+        }
+
+        Ok(ServerCert {
+            fingerprint: fingerprint(&cert_path)?,
+            cert_path,
+            key_path,
+        })
     }
-
-    Ok(ServerCert {
-        fingerprint: fingerprint(&cert_path)?,
-        cert_path,
-        key_path,
-    })
 }
 
 fn generate(data_dir: &Path, cert_path: &Path, key_path: &Path) -> Result<(), CertError> {
@@ -107,12 +98,16 @@ fn generate(data_dir: &Path, cert_path: &Path, key_path: &Path) -> Result<(), Ce
     write(key_path, key_pem.as_bytes(), 0o600)
 }
 
-/// An Ed25519 private key as PKCS#8 **v1** PEM, which is the version BoringSSL will sign with.
+/// An Ed25519 private key as PKCS#8 v1 PEM.
 ///
-/// `rcgen::KeyPair::generate_for(&PKCS_ED25519)` cannot be used: it delegates to ring, which emits
-/// v2 — the same key plus its public half — and squiche then fails the handshake. The structure is
-/// fixed at 48 bytes, so it is written out rather than reached for a DER encoder (RFC 8410 §7).
+/// A client that verifies a certificate signed with this key must include
+/// `squiche::SIGN_ED25519` in `QuicConfig::verify_algorithm_prefs`. That list replaces the default
+/// one, which holds no Ed25519 entry, so a client that must also accept ECDSA and RSA has to
+/// concatenate `squiche::DEFAULT_VERIFY_ALGORITHM_PREFS`.
 fn ed25519_pkcs8_v1(seed: [u8; 32]) -> String {
+    // Not `rcgen::KeyPair::generate_for(&PKCS_ED25519)`: it delegates to ring, which emits v2 —
+    // the same key plus its public half — and squiche then fails the handshake. A v1 key is fixed
+    // at 48 bytes (RFC 8410 §7), so it is written out here rather than given to a DER encoder.
     const PREFIX: [u8; 16] = [
         0x30, 0x2e, // SEQUENCE, 46 bytes
         0x02, 0x01, 0x00, // INTEGER 0, the version that omits the public key
@@ -187,8 +182,8 @@ mod tests {
     fn the_certificate_is_generated_once_and_then_reused() {
         let dir = tempfile::tempdir().expect("a temp dir");
 
-        let first = load_or_create(dir.path()).expect("a certificate");
-        let again = load_or_create(dir.path()).expect("the same certificate");
+        let first = ServerCert::load_or_create(dir.path()).expect("a certificate");
+        let again = ServerCert::load_or_create(dir.path()).expect("the same certificate");
 
         assert_eq!(
             first.fingerprint, again.fingerprint,
@@ -200,9 +195,9 @@ mod tests {
     fn a_missing_key_replaces_the_pair() {
         let dir = tempfile::tempdir().expect("a temp dir");
 
-        let first = load_or_create(dir.path()).expect("a certificate");
+        let first = ServerCert::load_or_create(dir.path()).expect("a certificate");
         fs::remove_file(&first.key_path).expect("removing the key");
-        let replaced = load_or_create(dir.path()).expect("a new certificate");
+        let replaced = ServerCert::load_or_create(dir.path()).expect("a new certificate");
 
         assert_ne!(
             first.fingerprint, replaced.fingerprint,
@@ -215,7 +210,7 @@ mod tests {
     #[test]
     fn the_key_is_ed25519_in_the_version_boringssl_signs_with() {
         let dir = tempfile::tempdir().expect("a temp dir");
-        let cert = load_or_create(dir.path()).expect("a certificate");
+        let cert = ServerCert::load_or_create(dir.path()).expect("a certificate");
 
         let key = fs::read_to_string(&cert.key_path).expect("reading the key");
         let der = pem::parse(&key).expect("the key is PEM").into_contents();
@@ -232,7 +227,7 @@ mod tests {
     #[test]
     fn the_fingerprint_is_a_sha256_hex_digest() {
         let dir = tempfile::tempdir().expect("a temp dir");
-        let cert = load_or_create(dir.path()).expect("a certificate");
+        let cert = ServerCert::load_or_create(dir.path()).expect("a certificate");
 
         assert_eq!(cert.fingerprint.len(), 64);
         assert!(cert.fingerprint.chars().all(|c| c.is_ascii_hexdigit()));
