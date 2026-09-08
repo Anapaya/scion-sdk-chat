@@ -30,7 +30,6 @@ use crate::{RunError, cert, config::Config};
 
 /// A socket bound on a [`ScionStack`], and the stack it belongs to.
 pub struct ScionListener {
-    // Dropping the stack stops the tasks that keep the socket's paths fresh.
     _stack: ScionStack,
     socket: Arc<dyn GenericScionUdpSocket>,
 }
