@@ -22,12 +22,7 @@ use url::Url;
 /// address. A mock never dials it: it matches on method and path.
 const DEV_SERVER_URL: &str = "http://localhost:8080";
 
-/// Which transport to build, and what that transport needs.
-///
-/// The settings live in the variant that reads them, so SCION cannot be asked for without an
-/// endhost API.
-///
-/// A mock is absent because it is never built from configuration — a test hands one in ready-made.
+/// Which transport to build
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TransportKind {
@@ -41,7 +36,7 @@ pub enum TransportKind {
 /// SCION transport configuration.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScionConfig {
-    /// The endhost API to reach the SCION network through. Required: nothing else finds SCION.
+    /// The endhost API to reach the SCION network through.
     pub endhost_api: Url,
     /// A token, needed only on the SNAP underlay.
     pub snap_token: Option<SnapToken>,
@@ -75,6 +70,15 @@ impl SnapToken {
 impl fmt::Debug for SnapToken {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("SnapToken(<redacted>)")
+    }
+}
+
+impl std::str::FromStr for SnapToken {
+    type Err = std::convert::Infallible;
+
+    /// Any string is a token here. The server decides whether it is a good one.
+    fn from_str(token: &str) -> Result<Self, Self::Err> {
+        Ok(Self::new(token))
     }
 }
 

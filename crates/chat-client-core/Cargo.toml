@@ -27,8 +27,6 @@ url = { workspace = true }
 axum = { workspace = true }
 chat-server = { workspace = true }
 clap = { workspace = true }
-# The simulated network the SCION transport is tested across. A dev-dependency only: nothing this
-# crate ships may carry a network of its own.
 pocketscion = { workspace = true }
 tempfile = { workspace = true }
 # test-util is what lets a test pause the clock and assert the gaps between fetches.

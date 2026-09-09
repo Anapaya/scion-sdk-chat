@@ -13,13 +13,13 @@
 // limitations under the License.
 //! Plain HTTP over TCP. Development only: no TLS, so nothing on the wire is protected.
 
-use std::{error::Error as _, time::Duration};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
 use reqwest::redirect::Policy;
 
-use super::{MAX_BODY_BYTES, Transport};
+use super::{MAX_BODY_BYTES, Transport, describe};
 use crate::error::{ChatError, TransportError};
 
 /// How long a request may take before it is abandoned.
@@ -113,21 +113,6 @@ fn failure(error: reqwest::Error) -> TransportError {
     } else {
         TransportError::Connect(detail)
     }
-}
-
-/// The failure and its causes, outermost first. The outermost alone names the request, not what
-/// went wrong with it.
-fn describe(error: &reqwest::Error) -> String {
-    let mut described = error.to_string();
-    let mut cause = error.source();
-
-    while let Some(layer) = cause {
-        described.push_str(": ");
-        described.push_str(&layer.to_string());
-        cause = layer.source();
-    }
-
-    described
 }
 
 #[cfg(test)]

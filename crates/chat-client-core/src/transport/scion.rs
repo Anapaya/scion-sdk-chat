@@ -25,7 +25,7 @@ use scion_http3::{
 };
 use url::Url;
 
-use super::{MAX_BODY_BYTES, Transport};
+use super::{MAX_BODY_BYTES, Transport, describe};
 use crate::{
     config::ScionConfig,
     error::{ChatError, TransportError},
@@ -95,7 +95,7 @@ impl Transport for ScionTransport {
 
         let outgoing = outgoing
             .build()
-            .map_err(|error| TransportError::Protocol(error.to_string()))?;
+            .map_err(|error| TransportError::Protocol(describe(&error)))?;
         let reply = self.client.request(outgoing).await.map_err(failure)?;
 
         let status = reply.status();
@@ -111,7 +111,7 @@ impl Transport for ScionTransport {
 
         response
             .body(body)
-            .map_err(|error| TransportError::Protocol(error.to_string()))
+            .map_err(|error| TransportError::Protocol(describe(&error)))
     }
 }
 
@@ -131,7 +131,7 @@ fn resolver(server_url: &Url, target: &str) -> Result<ScionTxtDnsResolver, ChatE
 
 /// Sorts an HTTP/3 failure into the taxonomy every transport reports.
 fn failure(error: Error) -> TransportError {
-    let detail = error.to_string();
+    let detail = describe(&error);
 
     match error {
         Error::Resolution { .. } => TransportError::Resolution(detail),

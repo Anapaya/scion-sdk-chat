@@ -11,14 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! [`ScionTransport`] against the real server, across a real SCION network.
+//! `ScionTransport` end to end: `chat-server` reached over a simulated SCION network.
 //!
-//! The same shape as `tcp.rs`, one layer further down: there the transport is the only thing
-//! between the client and the server, and here there is a network under it as well. A simulated
-//! one, but the client cannot tell — it dials an endhost API, a tunnel is established, and the
-//! request crosses from one AS to another.
-//!
-//! The topology is `pocketscion`'s own, so nothing about it is written here.
+//! Two ASes: the server in one, the client in the other.
 
 use std::{net::SocketAddr, path::Path, time::Duration};
 
@@ -39,10 +34,7 @@ use tokio_util::sync::CancellationToken;
 /// without anything being wrong.
 const READY_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// A network, a server in it, and what a client needs to reach that server.
-///
-/// The network and the directory are held rather than used: dropping either takes the server with
-/// it, and a test that let them go would be testing a server that had already stopped.
+/// A network, a server in it, and a client that can reach the server.
 struct Fixture {
     client: ChatClient,
     _network: PsSetup,
@@ -86,8 +78,7 @@ async fn fixture() -> Fixture {
         transport: TransportKind::Scion(ScionConfig {
             endhost_api: client_api.to_string().parse().expect("an endhost api"),
             snap_token: Some(SnapToken::new(dev_auth_token())),
-            // This topology has no TSAR records, so the address is given rather than resolved.
-            // Already `<isd-as>,<host>`: the tunnel reports where it was observed, not just the IP.
+            // This topology has no TSAR records.
             target: Some(host),
             cert_path: Some(certificate.cert_path.clone()),
         }),
@@ -118,8 +109,6 @@ async fn serve(
 ) -> (String, u16) {
     let config = chat_server::config::Config {
         transport: Transport::Scion,
-        // Port 0: the address is read back below rather than fixed, so a second test running
-        // beside this one cannot collide with it.
         listen: SocketAddr::from(([127, 0, 0, 1], 0)),
         data_dir: data_dir.to_owned(),
         max_accounts: 500,
