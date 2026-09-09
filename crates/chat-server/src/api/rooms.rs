@@ -50,6 +50,7 @@ impl RoomName {
 #[utoipa::path(
     get,
     path = "/rooms",
+    operation_id = "list_rooms",
     responses(
         (status = 200, description = "Every room on the server", body = RoomsResponse),
         (status = 401, description = "No usable bearer token", body = ErrorResponse),

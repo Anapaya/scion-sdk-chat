@@ -87,7 +87,7 @@ paths:
       tags:
       - rooms
       summary: List every room.
-      operationId: list
+      operationId: list_rooms
       responses:
         '200':
           description: Every room on the server
@@ -158,7 +158,7 @@ paths:
       tags:
       - messages
       summary: Read a page of a room's messages, oldest first.
-      operationId: list
+      operationId: list_messages
       parameters:
       - name: id
         in: path

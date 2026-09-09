@@ -60,6 +60,7 @@ impl Page {
 #[utoipa::path(
     get,
     path = "/rooms/{id}/messages",
+    operation_id = "list_messages",
     params(("id" = u64, Path, description = "The room to read"), Page),
     responses(
         (status = 200, description = "A page of messages, oldest first", body = MessagesResponse),

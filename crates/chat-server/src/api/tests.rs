@@ -161,6 +161,31 @@ fn the_committed_openapi_document_describes_the_router() {
     );
 }
 
+/// An `operationId` names one operation, and a document that repeats one is invalid. utoipa derives
+/// them from the handler's function name, so two modules that both have a `list` collide, and a
+/// client generator refuses the whole document rather than reading past it.
+#[test]
+fn every_operation_is_named_once() {
+    let json = super::openapi().to_json().expect("a document");
+    let document: Value = serde_json::from_str(&json).expect("the document parses");
+
+    let mut named: Vec<&str> = document["paths"]
+        .as_object()
+        .expect("the document has paths")
+        .values()
+        .flat_map(|path| path.as_object().expect("a path item").values())
+        .filter_map(|operation| operation.get("operationId")?.as_str())
+        .collect();
+    named.sort_unstable();
+
+    let mut repeated = named.clone();
+    repeated.dedup();
+    assert_eq!(
+        named, repeated,
+        "an operationId is used twice; give the handler an explicit `operation_id`",
+    );
+}
+
 #[tokio::test]
 async fn the_document_is_served_where_it_is_advertised() {
     let (app, _dir) = app(&[]).await;
