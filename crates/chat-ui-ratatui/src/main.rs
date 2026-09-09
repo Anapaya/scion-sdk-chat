@@ -13,8 +13,8 @@
 // limitations under the License.
 //! A terminal chat client: connect, sign in, chat.
 //!
-//! Three screens over `chat-client-core`, over plain TCP or over SCION — the URL on the first
-//! screen decides which. The screens draw and read keys; [`app`] holds every call to the client.
+//! Three screens over `chat-client-core`, over plain TCP or over SCION — `--transport` decides
+//! which. The screens draw and read keys; [`app`] holds every call to the client.
 
 mod app;
 mod screens;

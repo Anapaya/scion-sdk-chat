@@ -45,11 +45,12 @@ The typed API, the session, and the underlying transport:
 - `MockTransport` answers from a script instead of a network, which is how a test produces what a
   real server cannot produce on demand
 
-**The URL scheme picks the transport**: `http` is plain, `https` goes over SCION. A SCION client
-also needs an endhost API, which is how it reaches the network at all; the rest is optional.
-
-`tests/scion.rs` stands a two-AS network up and holds a conversation across it, so the transport is
-exercised without anything outside this workspace.
+**`--transport` picks the transport**, and the URL's scheme is checked against it rather than
+read as the choice. Each transport is served under exactly one scheme — `scion` under `https`,
+because over SCION only HTTP/3 exists and it is always TLS; `tcp` under `http`, because this
+server has no TLS to offer there. A URL under the other one is refused before anything is
+dialled. SCION also needs an endhost API, which is how it reaches the network at all; the rest
+is optional.
 
 ## chat-ui-ratatui guide
 
@@ -58,15 +59,16 @@ Three screens over `chat-client-core` — connect, sign in, chat. Against a serv
 
 ```sh
 cargo run -p chat-server -- --transport tcp --listen 127.0.0.1:8080 --data-dir ./data
-cargo run -p chat-ui-ratatui
+cargo run -p chat-ui-ratatui -- --transport tcp
 ```
 
 Every field of the connect screen also has a flag, so a launch can arrive with the form answered:
 
 | flag | environment | what it is |
 | --- | --- | --- |
-| `--server-url` | `CHAT_CLIENT_SERVER_URL` | where the server is, and which transport to use |
-| `--endhost-api` | `CHAT_CLIENT_ENDHOST_API` | how the client finds SCION. Required by `https` |
+| `--transport` | `CHAT_CLIENT_TRANSPORT` | `scion` or `tcp`. Defaults to `scion` |
+| `--server-url` | `CHAT_CLIENT_SERVER_URL` | where the server is |
+| `--endhost-api` | `CHAT_CLIENT_ENDHOST_API` | how the client finds SCION. Required by `--transport scion` |
 | `--target` | `CHAT_CLIENT_TARGET` | the server's SCION address, for a host with no TSAR record |
 | `--cert-path` | `CHAT_CLIENT_CERT_PATH` | a certificate to trust instead of the system roots |
 | `--snap-token` | `CHAT_CLIENT_SNAP_TOKEN` | the token the SNAP underlay asks for |

@@ -27,6 +27,24 @@ use crate::ui::{self, theme};
 /// What a masked field shows instead of what was typed.
 const MASK: char = '•';
 
+/// How a field is drawn, beyond the value in it.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum State {
+    /// The keys are going here.
+    Focused,
+    /// On screen, and Tab reaches it.
+    Idle,
+    /// On screen, holding its value, but nothing this screen is doing can use it.
+    Disabled,
+}
+
+impl State {
+    /// For a screen whose fields are only ever focused or not.
+    pub fn focused(yes: bool) -> Self {
+        if yes { Self::Focused } else { Self::Idle }
+    }
+}
+
 /// Draws a bordered field, and on the focused one puts the terminal's own cursor where the next
 /// character will land.
 ///
@@ -37,10 +55,20 @@ pub fn draw(
     area: Rect,
     title: Line<'_>,
     input: &Input,
-    focused: bool,
+    state: State,
     mask: bool,
 ) {
-    let border = if focused { theme::FOCUS } else { theme::BORDER };
+    let focused = state == State::Focused;
+    let border = match state {
+        State::Focused => theme::FOCUS,
+        State::Idle => theme::BORDER,
+        State::Disabled => theme::SELECTION,
+    };
+    let text = if state == State::Disabled {
+        theme::SELECTION
+    } else {
+        theme::TEXT
+    };
     let block = ui::bordered(title, border, theme::INPUT);
     let inner = block.inner(area);
 
@@ -55,7 +83,7 @@ pub fn draw(
 
     frame.render_widget(
         Paragraph::new(shown)
-            .fg(theme::TEXT)
+            .fg(text)
             .scroll((0, scroll as u16))
             .block(block),
         area,
@@ -65,4 +93,31 @@ pub fn draw(
         let cursor = input.visual_cursor().saturating_sub(scroll);
         frame.set_cursor_position(Position::new(inner.x + cursor as u16, inner.y));
     }
+}
+
+/// Draws a bordered choice, one option per column, with the chosen one lit.
+///
+/// The same box as [`draw`] so the two sit in a form together, but nothing is typed into it and no
+/// cursor is placed: the options are all there is, and one of them is always chosen.
+pub fn choice(
+    frame: &mut Frame,
+    area: Rect,
+    title: Line<'_>,
+    options: &[(&str, bool)],
+    focused: bool,
+) {
+    let border = if focused { theme::FOCUS } else { theme::BORDER };
+    let block = ui::bordered(title, border, theme::INPUT);
+
+    let mut spans = Vec::with_capacity(options.len() * 2);
+    for (label, chosen) in options {
+        spans.push(Span::from(" "));
+        spans.push(if *chosen {
+            Span::from(format!("[{label}]")).fg(theme::HIGHLIGHT).bold()
+        } else {
+            Span::from(format!(" {label} ")).fg(theme::DIM)
+        });
+    }
+
+    frame.render_widget(Paragraph::new(Line::from(spans)).block(block), area);
 }

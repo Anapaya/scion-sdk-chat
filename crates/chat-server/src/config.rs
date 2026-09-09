@@ -17,7 +17,7 @@ use std::{net::SocketAddr, path::PathBuf, time::Duration};
 
 use clap::{Parser, ValueEnum};
 
-/// How the API is served.
+/// A transport the API can be served over.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum Transport {
     /// HTTP/3 over SCION.
@@ -30,7 +30,7 @@ pub enum Transport {
 #[derive(Debug, Clone, Parser)]
 #[command(version, about = "A chat server over HTTP/3-over-SCION")]
 pub struct Config {
-    /// How to serve the API.
+    /// The transport the API is served over.
     #[arg(long, env = "CHAT_TRANSPORT", value_enum)]
     pub transport: Transport,
 
