@@ -29,8 +29,6 @@ futures = "0.3"
 http = "1"
 jsonwebtoken = { version = "11", features = ["rust_crypto"] }
 pem = "3"
-# The simulated network the SCION transport is tested across, and a dev-dependency wherever it
-# appears: nothing shipped may carry a network of its own.
 pocketscion = "0.7"
 rand = "0.10"
 # unstable-rendered-line-info is Paragraph::line_count, which is how the message pane

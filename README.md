@@ -40,7 +40,7 @@ CHAT_UPDATE_OPENAPI=1 cargo test -p chat-server
 
 The typed API, the session, and the underlying transport:
 
-- `ScionTransport` carries HTTP/3 over SCION, which is what the server serves by default
+- `ScionTransport` carries HTTP/3 over SCION, against the server's `--transport scion` mode
 - `TcpTransport` speaks plain HTTP to the server's `--transport tcp` mode
 - `MockTransport` answers from a script instead of a network, which is how a test produces what a
   real server cannot produce on demand
