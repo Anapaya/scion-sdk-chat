@@ -34,13 +34,11 @@ pub enum TransportKind {
     /// HTTP/3 over SCION.
     Scion(ScionConfig),
     /// Plain HTTP over TCP, against the server's development mode.
-    ///
-    /// The default because it is the only one that needs nothing else to work.
     #[default]
     Tcp,
 }
 
-/// What the SCION transport needs, and what no other transport reads.
+/// SCION transport configuration.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScionConfig {
     /// The endhost API to reach the SCION network through. Required: nothing else finds SCION.
@@ -85,7 +83,7 @@ impl fmt::Debug for SnapToken {
 /// Plain data with no SDK types in it, so a settings screen can persist the whole value.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientConfig {
-    /// Which transport to talk over, and what it needs.
+    /// Which transport to talk over.
     pub transport: TransportKind,
     /// Where the chat server is, as the base every request is joined onto.
     pub server_url: Url,

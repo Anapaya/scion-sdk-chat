@@ -33,7 +33,7 @@ use crate::{
     CONTROL,
     screens::{
         chat::{self, Chat},
-        connection::{Connection, Settings},
+        connection::{Connection, ConnectionForm},
         sign_in::{self, SignIn},
     },
     ui::theme,
@@ -156,9 +156,9 @@ pub struct App {
 
 impl App {
     /// The app on its first screen, showing the form the command line filled in.
-    pub fn new(settings: Settings) -> Self {
+    pub fn new(form: ConnectionForm) -> Self {
         Self {
-            screen: Screen::Connection(Connection::new(settings)),
+            screen: Screen::Connection(Connection::new(form)),
             client: None,
             messages: None,
             rooms: None,
@@ -261,10 +261,10 @@ impl App {
 
         match &mut self.screen {
             Screen::Connection(screen) => {
-                let Some(settings) = screen.handle_key(key, pending) else {
+                let Some(form) = screen.handle_key(key, pending) else {
                     return;
                 };
-                self.connect(settings);
+                self.connect(form);
             }
             Screen::SignIn(screen) => {
                 let Some(intent) = screen.handle_key(key, pending) else {
@@ -356,13 +356,13 @@ impl App {
     /// Building it only parses configuration — nothing is dialled until a call is made — so the
     /// health check is what turns a wrong address into an error on this screen rather than a
     /// surprise on the next one.
-    fn connect(&mut self, settings: Settings) {
+    fn connect(&mut self, form: ConnectionForm) {
         self.background.ask(async move {
             let built = async {
-                let server_url = Url::parse(&settings.server_url)
+                let server_url = Url::parse(&form.server_url)
                     .map_err(|error| ChatError::Config(error.to_string()))?;
                 let client = ChatClient::new(ClientConfig {
-                    transport: transport(&server_url, &settings)?,
+                    transport: transport(&server_url, &form)?,
                     server_url,
                     poll: PollConfig {
                         messages_interval: MESSAGES_REFRESH,
@@ -559,11 +559,11 @@ async fn next_rooms(
 }
 
 /// The transport the URL asks for: `http` plain, `https` over SCION.
-fn transport(server_url: &Url, settings: &Settings) -> Result<TransportKind, ChatError> {
+fn transport(server_url: &Url, form: &ConnectionForm) -> Result<TransportKind, ChatError> {
     match server_url.scheme() {
         "http" => Ok(TransportKind::Tcp),
         "https" => {
-            let endhost_api = blank_as_none(&settings.endhost_api).ok_or_else(|| {
+            let endhost_api = blank_as_none(&form.endhost_api).ok_or_else(|| {
                 ChatError::Config(
                     "an https URL is served over SCION, which needs an endhost API: it is how the \
                      client finds the network. A local chat-dev prints one at startup."
@@ -578,9 +578,9 @@ fn transport(server_url: &Url, settings: &Settings) -> Result<TransportKind, Cha
 
             Ok(TransportKind::Scion(ScionConfig {
                 endhost_api,
-                snap_token: blank_as_none(&settings.snap_token).map(SnapToken::new),
-                target: blank_as_none(&settings.target),
-                cert_path: blank_as_none(&settings.cert_path).map(PathBuf::from),
+                snap_token: blank_as_none(&form.snap_token).map(SnapToken::new),
+                target: blank_as_none(&form.target),
+                cert_path: blank_as_none(&form.cert_path).map(PathBuf::from),
             }))
         }
         other => {
@@ -601,8 +601,8 @@ mod tests {
     use super::*;
 
     /// A form with every SCION field answered, as `chat-dev` answers them.
-    fn settings(server_url: &str) -> Settings {
-        Settings {
+    fn answered(server_url: &str) -> ConnectionForm {
+        ConnectionForm {
             server_url: server_url.to_owned(),
             endhost_api: "http://127.0.0.1:41234/".to_owned(),
             target: "2-ff00:0:212,127.0.0.1".to_owned(),
@@ -611,51 +611,51 @@ mod tests {
         }
     }
 
-    fn kind(server_url: &str, settings: &Settings) -> Result<TransportKind, ChatError> {
-        transport(&Url::parse(server_url).expect("a url"), settings)
+    fn kind(server_url: &str, form: &ConnectionForm) -> Result<TransportKind, ChatError> {
+        transport(&Url::parse(server_url).expect("a url"), form)
     }
 
     /// The whole point of the scheme rule: neither transport can be reached by accident.
     #[test]
     fn the_scheme_picks_the_transport() {
-        let settings = settings("");
+        let form = answered("");
 
         assert!(matches!(
-            kind("http://localhost:8080", &settings),
+            kind("http://localhost:8080", &form),
             Ok(TransportKind::Tcp)
         ));
         assert!(matches!(
-            kind("https://localhost:8443", &settings),
+            kind("https://localhost:8443", &form),
             Ok(TransportKind::Scion(_))
         ));
         assert!(matches!(
-            kind("ftp://localhost", &settings),
+            kind("ftp://localhost", &form),
             Err(ChatError::Config(_))
         ));
     }
 
     #[test]
     fn the_scion_fields_are_carried_across() {
-        let settings = settings("https://localhost:8443");
+        let form = answered("https://localhost:8443");
 
-        let Ok(TransportKind::Scion(scion)) = kind(&settings.server_url, &settings) else {
+        let Ok(TransportKind::Scion(scion)) = kind(&form.server_url, &form) else {
             panic!("an https URL asks for SCION");
         };
-        assert_eq!(scion.endhost_api.as_str(), settings.endhost_api);
-        assert_eq!(scion.target, Some(settings.target));
-        assert_eq!(scion.cert_path, Some(PathBuf::from(&settings.cert_path)));
+        assert_eq!(scion.endhost_api.as_str(), form.endhost_api);
+        assert_eq!(scion.target, Some(form.target));
+        assert_eq!(scion.cert_path, Some(PathBuf::from(&form.cert_path)));
         assert_eq!(
             scion.snap_token.map(|token| token.as_str().to_owned()),
-            Some(settings.snap_token)
+            Some(form.snap_token)
         );
     }
 
     /// The three optional fields are optional. The endhost API is not, and says so.
     #[test]
     fn only_the_endhost_api_is_required_for_scion() {
-        let bare = Settings {
+        let bare = ConnectionForm {
             endhost_api: "http://127.0.0.1:41234/".to_owned(),
-            ..Settings::default()
+            ..ConnectionForm::default()
         };
 
         let Ok(TransportKind::Scion(scion)) = kind("https://localhost:8443", &bare) else {
@@ -666,7 +666,7 @@ mod tests {
         assert!(scion.snap_token.is_none());
 
         assert!(matches!(
-            kind("https://localhost:8443", &Settings::default()),
+            kind("https://localhost:8443", &ConnectionForm::default()),
             Err(ChatError::Config(_))
         ));
     }
@@ -675,7 +675,7 @@ mod tests {
     #[test]
     fn tcp_needs_none_of_it() {
         assert!(matches!(
-            kind("http://localhost:8080", &Settings::default()),
+            kind("http://localhost:8080", &ConnectionForm::default()),
             Ok(TransportKind::Tcp)
         ));
     }

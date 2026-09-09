@@ -17,7 +17,6 @@
 //! screen decides which. The screens draw and read keys; [`app`] holds every call to the client.
 
 mod app;
-mod config;
 mod screens;
 mod ui;
 
@@ -34,10 +33,10 @@ pub const CONTROL: KeyModifiers = KeyModifiers::CONTROL;
 #[tokio::main]
 async fn main() -> io::Result<()> {
     // Before the terminal is taken: `--help` exits here, and after would leave it in raw mode.
-    let settings = config::Config::parse().settings();
+    let form = screens::connection::ConnectionForm::parse();
 
     let mut terminal = ratatui::init();
-    let result = app::App::new(settings).run(&mut terminal).await;
+    let result = app::App::new(form).run(&mut terminal).await;
     ratatui::restore();
 
     result
