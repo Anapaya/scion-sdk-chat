@@ -40,19 +40,40 @@ CHAT_UPDATE_OPENAPI=1 cargo test -p chat-server
 
 The typed API, the session, and the underlying transport:
 
+- `ScionTransport` carries HTTP/3 over SCION, which is what the server serves by default
 - `TcpTransport` speaks plain HTTP to the server's `--transport tcp` mode
 - `MockTransport` answers from a script instead of a network, which is how a test produces what a
   real server cannot produce on demand
 
+**The URL scheme picks the transport**: `http` is plain, `https` goes over SCION. A SCION client
+also needs an endhost API, which is how it reaches the network at all; the rest is optional.
+
+`tests/scion.rs` stands a two-AS network up and holds a conversation across it, so the transport is
+exercised without anything outside this workspace.
+
 ## chat-ui-ratatui guide
 
-Three screens over `chat-client-core` — connect, sign in, chat — against a server in
+Three screens over `chat-client-core` — connect, sign in, chat. Against a server in
 `--transport tcp` mode:
 
 ```sh
 cargo run -p chat-server -- --transport tcp --listen 127.0.0.1:8080 --data-dir ./data
 cargo run -p chat-ui-ratatui
 ```
+
+Every field of the connect screen also has a flag, so a launch can arrive with the form answered:
+
+| flag | environment | what it is |
+| --- | --- | --- |
+| `--server-url` | `CHAT_CLIENT_SERVER_URL` | where the server is, and which transport to use |
+| `--endhost-api` | `CHAT_CLIENT_ENDHOST_API` | how the client finds SCION. Required by `https` |
+| `--target` | `CHAT_CLIENT_TARGET` | the server's SCION address, for a host with no TSAR record |
+| `--cert-path` | `CHAT_CLIENT_CERT_PATH` | a certificate to trust instead of the system roots |
+| `--snap-token` | `CHAT_CLIENT_SNAP_TOKEN` | the token the SNAP underlay asks for |
+
+The client reads `CHAT_CLIENT_*` and the server reads `CHAT_*`. They must not be merged: the server
+sits in one AS and the client attaches to another, so a shared `CHAT_ENDHOST_API` would point the
+client at the wrong endhost API.
 
 The screens draw and read keys; `app.rs` holds every call to the client, so there is one place to
 look for how the SDK is used.

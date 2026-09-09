@@ -39,7 +39,7 @@ pub mod transport;
 
 pub use chat_core::api::v1;
 pub use client::{ChatClient, SessionInfo};
-pub use config::{ClientConfig, PollConfig, SnapToken, TransportKind};
+pub use config::{ClientConfig, PollConfig, ScionConfig, SnapToken, TransportKind};
 pub use error::{ChatError, TransportError};
 pub use feed::{MessagesFeed, RoomsFeed, Since};
 pub use transport::{Transport, mock::MockTransport, tcp::TcpTransport};
