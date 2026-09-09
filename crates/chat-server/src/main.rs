@@ -14,6 +14,7 @@
 //! Command-line entry point around the runtime defined in [`chat_server`].
 
 use clap::Parser as _;
+use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -22,11 +23,43 @@ async fn main() -> std::process::ExitCode {
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .init();
 
-    match chat_server::run(chat_server::config::Config::parse()).await {
+    let shutdown = CancellationToken::new();
+    tokio::spawn(cancel_on_signal(shutdown.clone()));
+
+    match chat_server::run(chat_server::config::Config::parse(), shutdown).await {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
             tracing::error!(%error, "the server stopped");
             std::process::ExitCode::FAILURE
         }
     }
+}
+
+/// Cancels `shutdown` on the first signal that asks the process to stop.
+async fn cancel_on_signal(shutdown: CancellationToken) {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+
+        // SIGTERM as well as SIGINT: a container is stopped with SIGTERM, and without it the
+        // server would be killed rather than shut down.
+        let Ok(mut interrupt) = signal(SignalKind::interrupt()) else {
+            return;
+        };
+        let Ok(mut terminate) = signal(SignalKind::terminate()) else {
+            return;
+        };
+
+        tokio::select! {
+            _ = interrupt.recv() => {},
+            _ = terminate.recv() => {},
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+    }
+
+    tracing::info!("shutting down");
+    shutdown.cancel();
 }
