@@ -4,6 +4,7 @@ resolver = "2"
 members = [
     "crates/chat-client-core",
     "crates/chat-core",
+    "crates/chat-dev",
     "crates/chat-server",
     "crates/chat-ui-ratatui",
 ]
@@ -23,6 +24,8 @@ bytes = "1"
 chat-client-core = { path = "crates/chat-client-core" }
 chat-core = { path = "crates/chat-core" }
 chat-server = { path = "crates/chat-server" }
+# The clock a pocketscion topology is started with.
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 clap = { version = "4", features = ["derive", "env"] }
 crossterm = { version = "0.29", features = ["event-stream"] }
 futures = "0.3"
