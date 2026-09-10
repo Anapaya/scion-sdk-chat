@@ -29,13 +29,15 @@ futures = "0.3"
 http = "1"
 jsonwebtoken = { version = "11", features = ["rust_crypto"] }
 pem = "3"
+pocketscion = "0.7"
 rand = "0.10"
-rcgen = "0.14"
 # unstable-rendered-line-info is Paragraph::line_count, which is how the message pane
 # finds the newest row once a long message has wrapped onto several.
 ratatui = { version = "0.30", features = ["unstable-rendered-line-info"] }
+rcgen = "0.14"
 reqwest = { version = "0.13", default-features = false }
 scion-h3-axum = "0.7"
+scion-http3 = "0.7"
 scion-sdk-utils = "0.7"
 scion-stack = "0.7"
 serde = { version = "1.0", features = ["derive"] }

@@ -83,7 +83,7 @@ impl Chat {
             composer,
             commands::instructions(),
             &self.input,
-            true,
+            field::State::Focused,
             false,
         );
         if let Some(message) = &self.error {

@@ -17,7 +17,7 @@ use std::{net::SocketAddr, path::PathBuf, time::Duration};
 
 use clap::{Parser, ValueEnum};
 
-/// How the API is served.
+/// A transport the API can be served over.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum Transport {
     /// HTTP/3 over SCION.
@@ -30,8 +30,8 @@ pub enum Transport {
 #[derive(Debug, Clone, Parser)]
 #[command(version, about = "A chat server over HTTP/3-over-SCION")]
 pub struct Config {
-    /// How to serve the API.
-    #[arg(long, env = "CHAT_TRANSPORT", value_enum, default_value = "scion")]
+    /// The transport the API is served over.
+    #[arg(long, env = "CHAT_TRANSPORT", value_enum)]
     pub transport: Transport,
 
     /// Address to bind. Under `--transport scion` the IP must name one interface.
@@ -101,9 +101,8 @@ mod tests {
     /// The defaults are the ones the design fixes.
     #[test]
     fn the_defaults_match_the_design() {
-        let config = Config::parse_from(["chat-server", "--data-dir", "/srv/chat"]);
+        let config = Config::parse_from(minimal());
 
-        assert_eq!(config.transport, Transport::Scion);
         assert_eq!(config.listen.to_string(), "127.0.0.1:8443");
         assert_eq!(config.max_accounts, 500);
         assert_eq!(config.max_rooms, 100);
@@ -113,7 +112,7 @@ mod tests {
 
     #[test]
     fn the_data_dir_places_every_file_the_server_owns() {
-        let config = Config::parse_from(["chat-server", "--data-dir", "/srv/chat"]);
+        let config = Config::parse_from(minimal());
 
         assert_eq!(config.database(), PathBuf::from("/srv/chat/chat.db"));
         assert_eq!(config.jwt_secret(), PathBuf::from("/srv/chat/jwt.secret"));
@@ -123,6 +122,8 @@ mod tests {
     fn the_token_lifetime_is_expressed_in_days_and_used_in_seconds() {
         let config = Config::parse_from([
             "chat-server",
+            "--transport",
+            "scion",
             "--data-dir",
             "/srv/chat",
             "--token-expiry-days",
@@ -132,10 +133,26 @@ mod tests {
         assert_eq!(config.token_validity(), Duration::from_secs(2 * 86_400));
     }
 
+    /// The two required flags, and nothing else.
+    fn minimal() -> [&'static str; 5] {
+        [
+            "chat-server",
+            "--transport",
+            "scion",
+            "--data-dir",
+            "/srv/chat",
+        ]
+    }
+
     /// There is no default: the server never picks a directory to write into.
     #[test]
     fn the_data_directory_must_be_named() {
-        assert!(Config::try_parse_from(["chat-server"]).is_err());
+        assert!(Config::try_parse_from(["chat-server", "--transport", "scion"]).is_err());
+    }
+
+    #[test]
+    fn the_transport_must_be_named() {
+        assert!(Config::try_parse_from(["chat-server", "--data-dir", "/srv/chat"]).is_err());
     }
 
     #[test]

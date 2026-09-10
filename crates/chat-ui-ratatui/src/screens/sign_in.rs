@@ -69,7 +69,7 @@ impl SignIn {
             username,
             ui::label(" Username "),
             &self.username,
-            self.focus == Focus::Username,
+            field::State::focused(self.focus == Focus::Username),
             false,
         );
         field::draw(
@@ -77,7 +77,7 @@ impl SignIn {
             password,
             ui::label(" Password "),
             &self.password,
-            self.focus == Focus::Password,
+            field::State::focused(self.focus == Focus::Password),
             true,
         );
         frame.render_widget(

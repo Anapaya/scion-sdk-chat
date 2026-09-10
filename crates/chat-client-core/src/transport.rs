@@ -19,10 +19,25 @@ use bytes::Bytes;
 use crate::error::TransportError;
 
 pub mod mock;
+pub mod scion;
 pub mod tcp;
 
 /// The largest reply any transport reads, so a broken or hostile server cannot exhaust memory.
 pub const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
+
+/// The failure and its causes, outermost first.
+pub(crate) fn describe(error: &dyn std::error::Error) -> String {
+    let mut described = error.to_string();
+    let mut cause = error.source();
+
+    while let Some(layer) = cause {
+        described.push_str(": ");
+        described.push_str(&layer.to_string());
+        cause = layer.source();
+    }
+
+    described
+}
 
 /// Puts a request on the wire and brings the reply back.
 ///
