@@ -45,12 +45,9 @@ The typed API, the session, and the underlying transport:
 - `MockTransport` answers from a script instead of a network, which is how a test produces what a
   real server cannot produce on demand
 
-**`--transport` picks the transport**, and the URL's scheme is checked against it rather than
-read as the choice. Each transport is served under exactly one scheme — `scion` under `https`,
-because over SCION only HTTP/3 exists and it is always TLS; `tcp` under `http`, because this
-server has no TLS to offer there. A URL under the other one is refused before anything is
-dialled. SCION also needs an endhost API, which is how it reaches the network at all; the rest
-is optional.
+**`--transport` picks the transport.** Each transport is served under exactly one scheme —
+`scion` under `https`, `tcp` under `http` — and the URL is checked against the choice. SCION also needs an endhost API, which is how it reaches the network at all; the rest is optional.
+
 
 ## chat-ui-ratatui guide
 

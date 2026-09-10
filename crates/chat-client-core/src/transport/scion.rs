@@ -50,8 +50,8 @@ impl ScionTransport {
             settings = settings.with_auth_token(token.as_str());
         }
 
-        // Ed25519 is not in BoringSSL's defaults, and the server signs with it. Added to the
-        // defaults rather than replacing them, so every other algorithm still verifies.
+        // The server signs with Ed25519, so it is added to BoringSSL's defaults. Every other
+        // algorithm keeps verifying.
         let mut quic = QuicConfig::builder().verify_algorithm_prefs(
             std::iter::once(squiche::SIGN_ED25519)
                 .chain(squiche::DEFAULT_VERIFY_ALGORITHM_PREFS.iter().copied())
@@ -100,7 +100,7 @@ impl Transport for ScionTransport {
 
         let status = reply.status();
         let headers = reply.headers().clone();
-        // The cap is enforced by the collector rather than by trusting a `content-length`.
+        // The collector enforces the cap.
         let (body, _trailers) = reply.bytes(Some(MAX_BODY_BYTES)).await.map_err(failure)?;
 
         let mut response = http::Response::builder().status(status);

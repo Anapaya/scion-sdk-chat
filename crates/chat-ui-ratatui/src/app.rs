@@ -560,8 +560,7 @@ async fn next_rooms(
 
 /// The transport that was chosen, once the URL is checked against it.
 ///
-/// The scheme does not choose: it is checked. Each transport is served under exactly one, so a URL
-/// under the other one names something the chosen transport cannot reach.
+/// Each transport is served under exactly one scheme, so the URL is checked against the choice.
 fn transport(server_url: &Url, form: &ConnectionForm) -> Result<TransportKind, ChatError> {
     let wanted = form.transport.scheme();
     if server_url.scheme() != wanted {
@@ -623,8 +622,7 @@ mod tests {
         transport(&Url::parse(&form.server_url).expect("a url"), form)
     }
 
-    /// The flag decides. Each transport is served under one scheme, and the other is refused
-    /// rather than quietly reaching for the transport that would have suited it.
+    /// The flag decides. Each transport is served under one scheme, and the other is refused.
     #[test]
     fn the_flag_picks_the_transport_and_the_scheme_is_checked() {
         assert!(matches!(
