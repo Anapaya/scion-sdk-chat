@@ -70,8 +70,7 @@ pub enum DevError {
     /// `--bind-ip` was a wildcard, which no SNAP tunnel can be dialled at.
     #[error(
         "--bind-ip cannot be a wildcard: the SNAP tunnel is dialled at this address, and \
-         {0} names no host. Give this machine's own address, or keep 127.0.0.1 and use \
-         --advertise-ip for a client that reaches it another way."
+         {0} names no host. Give this machine's own address, or keep 127.0.0.1."
     )]
     WildcardBind(IpAddr),
     /// The certificate could not be read or written.
@@ -156,11 +155,8 @@ impl DevSetup {
 
         let io = IoConfig::new();
         io.set_bind_ip(config.bind_ip);
-        if let Some(ip) = config.advertise_ip {
-            io.set_advertised_ip(topology::LOCAL, ip);
-        }
         // Per AS, which is the whole reason the emulator has one to itself: this rewrite reaches
-        // the emulator's description and leaves every local client's alone.
+        // the emulator's description, and every local client keeps the bound address.
         io.set_advertised_ip(topology::EMULATOR, config.emulator_ip);
         let network = topology::start(io).await;
 

@@ -248,9 +248,6 @@ Every client then uses that one address, this machine included, so the name `loc
 given up in exchange. The address is a real one on a real network, so it changes when DHCP moves
 you and disappears when you work offline.
 
-`--advertise-ip` publishes a different address from the one bound, for a client that reaches this
-host another way. It applies to the AS a local client attaches to.
-
 ### From an Android emulator
 
 Nothing to pass:

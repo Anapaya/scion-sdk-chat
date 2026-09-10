@@ -38,15 +38,6 @@ pub struct Config {
     #[arg(long, env = "CHAT_DEV_BIND_IP", default_value = "127.0.0.1")]
     pub bind_ip: IpAddr,
 
-    /// The address to tell clients this network is at, when it differs from where it listens.
-    ///
-    /// For a client that reaches this host by another route, on a machine of its own. An Android
-    /// emulator needs no such thing: it has an AS to itself, published at
-    /// [`emulator_ip`](Self::emulator_ip). Applies to the AS a local client attaches to, not the
-    /// one the server sits in.
-    #[arg(long, env = "CHAT_DEV_ADVERTISE_IP")]
-    pub advertise_ip: Option<IpAddr>,
-
     /// The address an Android emulator reaches this host at.
     ///
     /// Published to the emulator's AS alone, which is what lets one network serve both an emulator
@@ -95,7 +86,6 @@ mod tests {
         assert_eq!(config.control_port, 8099);
         assert_eq!(config.bind_ip, IpAddr::from([127, 0, 0, 1]));
         assert_eq!(config.server_port, 8443);
-        assert_eq!(config.advertise_ip, None);
         assert_eq!(config.data_dir, None);
         assert!(!config.no_server);
     }

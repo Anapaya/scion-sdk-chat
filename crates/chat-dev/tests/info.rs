@@ -31,7 +31,6 @@ fn ephemeral() -> Config {
     Config {
         control_port: 0,
         bind_ip: "127.0.0.1".parse().expect("an address"),
-        advertise_ip: None,
         emulator_ip: "10.0.2.2".parse().expect("an address"),
         server_port: 0,
         data_dir: None,
@@ -326,7 +325,6 @@ async fn a_wildcard_bind_is_refused_with_something_to_act_on() {
     };
     let said = error.to_string();
     assert!(said.contains("--bind-ip"), "{said}");
-    assert!(said.contains("--advertise-ip"), "{said}");
 }
 
 /// Everything but the server, for a reader who is about to start one themselves.
