@@ -40,13 +40,17 @@ cargo run -p chat-dev
 ```
 
 This one command starts the SCION network, the chat server, and a control API that describes both.
-The network chooses its ports at startup, it makes a SNAP token for each run, and it generates a
-certificate. It therefore describes itself at `GET /info`. Ctrl+C stops all of it.
+Ctrl+C stops all of it.
 
 ### 2. Connect a terminal client
 
-The description holds every value the client needs. Read it into the environment, then start the
-client:
+`chat-dev` serves its description on a fixed port, 8099. The values in it change with each run:
+
+- the endhost API takes a free port
+- the SNAP token is new for each run
+- the certificate goes in a new directory
+
+Read them into the environment, then start the client:
 
 ```sh
 eval "$(curl -s http://127.0.0.1:8099/info | jq -r '
@@ -60,27 +64,8 @@ eval "$(curl -s http://127.0.0.1:8099/info | jq -r '
 cargo run -p chat-ui-ratatui -- --transport scion
 ```
 
-`chat-dev` also prints this command on standard error at startup, with the values filled in.
-
-### 3. Add a second user
-
-Do step 2 again in a third terminal. The two clients share rooms, and their messages cross from
-`1-ff00:0:132` to `2-ff00:0:212`.
-
-Run the `eval` again in each terminal. Each read of `/info` makes a new token, and each client needs
-its own. The control plane keeps one tunnel for each subscriber, so a second client on the same
-token removes the tunnel of the first. The first client then stops without an error, and the server
-logs `wireguard error on incoming packet`.
-
-### Without SCION
-
-`--transport tcp` serves the API as plain HTTP. There is no TLS and no SCION, and it needs no
-`chat-dev`. Use it to work on the UI:
-
-```sh
-cargo run -p chat-server -- --transport tcp --listen 127.0.0.1:8080 --data-dir ./data
-cargo run -p chat-ui-ratatui -- --transport tcp
-```
+For a second user, run the same two commands in a third terminal. Each read of `/info` makes a new
+token, and each client needs its own.
 
 ## Run it from another machine
 
