@@ -18,7 +18,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use rcgen::{CertificateParams, KeyPair, PKCS_ED25519};
+use rcgen::{CertificateParams, KeyPair, PKCS_ECDSA_P256_SHA256};
 use sha2::{Digest as _, Sha256};
 
 /// The name the certificate is issued for.
@@ -89,37 +89,13 @@ fn generate(data_dir: &Path, cert_path: &Path, key_path: &Path) -> Result<(), Ce
         }
     })?;
 
-    let key_pem = ed25519_pkcs8_v1(rand::random());
-    let key = KeyPair::from_pkcs8_pem_and_sign_algo(&key_pem, &PKCS_ED25519)?;
+    // P-256 verifies under every client's default algorithm preferences, which is all the Android
+    // SDK accepts.
+    let key = KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256)?;
     let cert = CertificateParams::new(vec![SERVER_NAME.to_owned()])?.self_signed(&key)?;
 
     write(cert_path, cert.pem().as_bytes(), 0o644)?;
-    // The PEM built above rather than `key.serialize_pem()`, so the file keeps the v1 encoding.
-    write(key_path, key_pem.as_bytes(), 0o600)
-}
-
-/// An Ed25519 private key as PKCS#8 v1 PEM.
-///
-/// A client that verifies a certificate signed with this key must include
-/// `squiche::SIGN_ED25519` in `QuicConfig::verify_algorithm_prefs`. That list replaces the default
-/// one, which holds no Ed25519 entry, so a client that must also accept ECDSA and RSA has to
-/// concatenate `squiche::DEFAULT_VERIFY_ALGORITHM_PREFS`.
-fn ed25519_pkcs8_v1(seed: [u8; 32]) -> String {
-    // Not `rcgen::KeyPair::generate_for(&PKCS_ED25519)`: it delegates to ring, which emits v2 —
-    // the same key plus its public half — and squiche then fails the handshake. A v1 key is fixed
-    // at 48 bytes (RFC 8410 §7), so it is written out here rather than given to a DER encoder.
-    const PREFIX: [u8; 16] = [
-        0x30, 0x2e, // SEQUENCE, 46 bytes
-        0x02, 0x01, 0x00, // INTEGER 0, the version that omits the public key
-        0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, // AlgorithmIdentifier, Ed25519
-        0x04, 0x22, 0x04, 0x20, // OCTET STRING wrapping the 32-byte seed
-    ];
-
-    let mut der = Vec::with_capacity(PREFIX.len() + seed.len());
-    der.extend_from_slice(&PREFIX);
-    der.extend_from_slice(&seed);
-
-    pem::encode(&pem::Pem::new("PRIVATE KEY", der))
+    write(key_path, key.serialize_pem().as_bytes(), 0o600)
 }
 
 fn fingerprint(cert_path: &Path) -> Result<String, CertError> {
@@ -205,23 +181,28 @@ mod tests {
         );
     }
 
-    /// Ed25519, and version 1. A v2 key holds the public half as well, and squiche will not sign
-    /// with one. See [`ed25519_pkcs8_v1`].
+    /// A key any client verifies with its default algorithm preferences.
     #[test]
-    fn the_key_is_ed25519_in_the_version_boringssl_signs_with() {
+    fn the_key_is_ecdsa_p256() {
         let dir = tempfile::tempdir().expect("a temp dir");
         let cert = ServerCert::load_or_create(dir.path()).expect("a certificate");
 
         let key = fs::read_to_string(&cert.key_path).expect("reading the key");
         let der = pem::parse(&key).expect("the key is PEM").into_contents();
 
-        assert_eq!(der.len(), 48, "a v1 Ed25519 key is 48 bytes; v2 is 83");
-        assert_eq!(
-            &der[5..12],
-            &[0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70],
-            "Ed25519"
+        // The OIDs in the PKCS#8 AlgorithmIdentifier: id-ecPublicKey, then prime256v1.
+        const EC_PUBLIC_KEY: [u8; 9] = [0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01];
+        const PRIME256V1: [u8; 10] = [0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07];
+
+        assert!(
+            der.windows(EC_PUBLIC_KEY.len())
+                .any(|at| at == EC_PUBLIC_KEY),
+            "id-ecPublicKey"
         );
-        assert_eq!(der[4], 0, "version 0 is PKCS#8 v1");
+        assert!(
+            der.windows(PRIME256V1.len()).any(|at| at == PRIME256V1),
+            "prime256v1"
+        );
     }
 
     #[test]
