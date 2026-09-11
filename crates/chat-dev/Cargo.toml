@@ -6,15 +6,13 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 publish = false
-description = "A SCION network on this machine, with the chat server in it"
+description = "A chat server attached to a PocketSCION instance for testing purposes"
 
 [dependencies]
 axum = { workspace = true }
 chat-server = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
-# The simulated network. A normal dependency here and nowhere else: the server must not carry one
-# into a real deployment.
 pocketscion = { workspace = true }
 scion-sdk-utils = { workspace = true }
 serde = { workspace = true }

@@ -17,8 +17,7 @@
 //! emulator on this machine. See [`topology`] for the reason the emulator needs its own. The
 //! network runs for as long as this process runs.
 //!
-//! This crate is for development only. It is the one crate that depends on `pocketscion`, so the
-//! chat server binary holds no simulated network.
+//! This crate is for development only.
 
 pub mod config;
 pub mod info;

@@ -8,7 +8,8 @@ terminal UI, and a development helper that runs them on a SCION network.
   | chat-ui-ratatui  | --> | chat-client-core  | --> |             |
   | terminal UI      |     | transports        |     |  chat-core  |
   +------------------+     +-------------------+     |  API types  |
-                                                     |             |
+                                                  
+                                                    |             |
   +------------------+     +-------------------+     |             |
   | chat-dev         | --> | chat-server       | --> |             |
   | network + server |     | the API           |     +-------------+
