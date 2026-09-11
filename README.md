@@ -245,23 +245,6 @@ Every client then uses that one address, this machine included, so you give up t
 `localhost`. The address belongs to a real network, so it changes when DHCP moves you, and it
 disappears when you work offline.
 
-### From an Android emulator
-
-Run `chat-dev` with no flags:
-
-```sh
-cargo run -p chat-dev
-```
-
-An emulator reaches the loopback address of the host at `10.0.2.2`, and the network publishes
-`2-ff00:0:222` at that address. A client in the emulator asks the same `GET /info`, arrives at
-`10.0.2.2`, and gets the emulator's description. A terminal client on this machine asks at
-`127.0.0.1` and gets its own description. Both join the same rooms. `--emulator-ip` moves the
-emulator's address.
-
-The AS is ready and the network serves it. A later change adds the Android client that attaches to
-it.
-
 ## Development
 
 The pinned toolchain in `rust-toolchain.toml` is picked up automatically by rustup. CI runs the
