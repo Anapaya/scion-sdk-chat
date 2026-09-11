@@ -13,9 +13,9 @@
 // limitations under the License.
 //! A SCION network on this machine, with the chat server in it.
 //!
-//! Three autonomous systems: one for the server, one for clients on this machine, and one for
-//! clients on an Android emulator. See [`topology`] for the reason each kind of client gets an AS.
-//! The network runs for as long as this process runs.
+//! Three autonomous systems: one for the server, one for every client, and one for an Android
+//! emulator on this machine. See [`topology`] for the reason the emulator needs its own. The
+//! network runs for as long as this process runs.
 //!
 //! This crate is for development only. It is the one crate that depends on `pocketscion`, so the
 //! chat server binary holds no simulated network.
@@ -101,8 +101,8 @@ pub struct DevSetup {
 /// description.
 #[derive(Debug, Clone)]
 struct Profiles {
-    /// For a client on this machine.
-    local: DevNetwork,
+    /// For every client that reaches the bound address.
+    default: DevNetwork,
     /// For a client on an Android emulator.
     emulator: DevNetwork,
     /// The address the emulator's description gives. A request to this address gets that
@@ -125,7 +125,7 @@ impl Profiles {
 
         match asked_at {
             Some(ip) if ip == self.emulator_ip => &self.emulator,
-            _ => &self.local,
+            _ => &self.default,
         }
     }
 }
@@ -156,7 +156,7 @@ impl DevSetup {
         let io = IoConfig::new();
         io.set_bind_ip(config.bind_ip);
         // The network publishes one address for each AS, so this reaches the emulator's
-        // description only. A client on this machine keeps the bound address.
+        // description only. Every other client gets the bound address.
         io.set_advertised_ip(topology::EMULATOR, config.emulator_ip);
         let network = topology::start(io).await;
 
@@ -168,7 +168,7 @@ impl DevSetup {
         let certificate = cert::ServerCert::load_or_create(&data_dir)?;
         let ca_pem = read(&certificate.cert_path)?;
 
-        let client_api = endhost_api(network.endhost_api(topology::LOCAL), topology::LOCAL)?;
+        let client_api = endhost_api(network.endhost_api(topology::DEFAULT), topology::DEFAULT)?;
         let emulator_api =
             endhost_api(network.endhost_api(topology::EMULATOR), topology::EMULATOR)?;
         let server_api = endhost_api(network.endhost_api(topology::SERVER), topology::SERVER)?;
@@ -190,7 +190,7 @@ impl DevSetup {
             )
         });
 
-        let local = DevNetwork {
+        let default = DevNetwork {
             control_url,
             underlay: "snap".to_owned(),
             server: if config.no_server {
@@ -200,7 +200,7 @@ impl DevSetup {
             },
             endhost_api_url: client_api,
             server_endhost_api_url: server_api.clone(),
-            client_isd_as: topology::LOCAL.to_string(),
+            client_isd_as: topology::DEFAULT.to_string(),
             auth_token: dev_auth_token(),
             auth_token_file: auth_token_file.display().to_string(),
             base_url: format!("https://{}:{port}", cert::SERVER_NAME),
@@ -227,13 +227,13 @@ impl DevSetup {
             ),
             endhost_api_url: emulator_api,
             client_isd_as: topology::EMULATOR.to_string(),
-            ..local.clone()
+            ..default.clone()
         };
 
         Ok(Self {
             control,
             profiles: Profiles {
-                local,
+                default,
                 emulator,
                 emulator_ip: config.emulator_ip,
             },
@@ -243,9 +243,9 @@ impl DevSetup {
         })
     }
 
-    /// What a client on this machine needs to reach the server.
+    /// What a client that reaches the bound address needs. This is the default description.
     pub fn network(&self) -> &DevNetwork {
-        &self.profiles.local
+        &self.profiles.default
     }
 
     /// What a client on an Android emulator needs. `GET /info` answers with this description when

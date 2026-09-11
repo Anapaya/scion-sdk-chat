@@ -89,22 +89,30 @@ at the address its tunnel observed, which is what a client behind a translation 
 The network holds three autonomous systems. The server sits in the middle one.
 
 ```text
-  1-ff00:0:132  (clients on this machine, at 127.0.0.1)
+  1-ff00:0:132  (every client, at the bound address)
         |  iface 1 to 3
   2-ff00:0:212  (the chat server)
         |  iface 4 to 2
-  2-ff00:0:222  (clients on an Android emulator, at 10.0.2.2)
+  2-ff00:0:222  (an Android emulator on this machine, at 10.0.2.2)
 ```
 
 | AS | who attaches to it | published at |
 | --- | --- | --- |
-| `1-ff00:0:132` | clients on this machine | `127.0.0.1` |
-| `2-ff00:0:212` | the chat server | `127.0.0.1` |
-| `2-ff00:0:222` | a client on an Android emulator | `10.0.2.2` |
+| `1-ff00:0:132` | every client, and the default | the bound address |
+| `2-ff00:0:212` | the chat server | the bound address |
+| `2-ff00:0:222` | an Android emulator on this machine | `10.0.2.2` |
 
-The network publishes one address for each AS. An emulator reaches this host at `10.0.2.2`, and a
-client on this machine reaches it at `127.0.0.1`. One AS holds one address, so each kind of client
-needs its own AS.
+`1-ff00:0:132` is the default AS. It publishes the address that `--bind-ip` binds, and every client
+that can reach that address uses it. A terminal client on this machine uses it. A client on another
+machine uses it, after you give `--bind-ip` an address that machine reaches.
+
+An Android emulator on this machine is the one client that cannot use the default. The emulator
+reaches the host at `10.0.2.2`, and inside the emulator `127.0.0.1` means the emulator itself. The
+network publishes one address for each AS, and one AS holds one address, so the emulator gets
+`2-ff00:0:222` as a fallback.
+
+`--bind-ip` makes the fallback unnecessary. With a LAN address bound, the emulator reaches that
+address like any other client, and it uses the default AS.
 
 Two files build this:
 
@@ -172,7 +180,7 @@ Each endhost API belongs to one AS. A client uses `endhost_api_url`, and a chat 
 client that reads a different filesystem.
 
 `GET /info` answers with the description that matches the address the client asked at. A request to
-`127.0.0.1` gets the local AS, and a request to `10.0.2.2` gets the emulator's AS. Both describe
+`10.0.2.2` gets the emulator's AS. Every other request gets the default AS. Both descriptions name
 the same server, the same certificate and the same SCION address.
 
 Standard error carries the logs and the same description in the form a person reads. Ctrl+C stops

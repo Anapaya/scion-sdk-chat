@@ -200,27 +200,27 @@ async fn two_clients_hold_a_conversation_across_the_link() {
     serving.await.expect("serving should not panic");
 }
 
-/// A client in the emulator's AS and a client in the local AS share one room at the same time.
+/// A client in the emulator's AS and a client in the default AS share one room at the same time.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_client_in_the_emulator_as_shares_a_room_with_a_local_one() {
     let setup = DevSetup::start(&emulator_on_loopback())
         .await
         .expect("a network");
-    let local = setup.network().clone();
+    let default = setup.network().clone();
     let emulator = setup.emulator_network().clone();
     let stop = setup.stopper();
     let serving = tokio::spawn(setup.serve());
 
     assert_ne!(
-        local.client_isd_as, emulator.client_isd_as,
+        default.client_isd_as, emulator.client_isd_as,
         "the two clients attach to different ASes",
     );
     assert_ne!(
-        local.endhost_api_url, emulator.endhost_api_url,
+        default.endhost_api_url, emulator.endhost_api_url,
         "each AS has an endhost API of its own",
     );
 
-    let here = client(&local).await;
+    let here = client(&default).await;
     let there = client(&emulator).await;
     await_ready(&here).await;
 
@@ -271,8 +271,8 @@ async fn only_the_emulator_is_told_the_emulator_address() {
     let stop = setup.stopper();
     let serving = tokio::spawn(setup.serve());
 
-    // A local client asks. The Host header carries the address it wrote in its URL.
-    let local = describe(&control_url).await;
+    // A terminal client asks. The Host header carries the address it wrote in its URL.
+    let default = describe(&control_url).await;
     // The emulator asks. It reaches the same socket, and it wrote a different URL.
     let emulator: DevNetwork = reqwest::Client::new()
         .get(format!("{control_url}/info"))
@@ -285,9 +285,9 @@ async fn only_the_emulator_is_told_the_emulator_address() {
         .expect("a description");
 
     assert!(
-        local.endhost_api_url.contains("127.0.0.1"),
-        "a local client keeps loopback: {}",
-        local.endhost_api_url,
+        default.endhost_api_url.contains("127.0.0.1"),
+        "a client at the bound address keeps loopback: {}",
+        default.endhost_api_url,
     );
     assert!(
         emulator.endhost_api_url.contains("10.0.2.2"),
@@ -296,11 +296,11 @@ async fn only_the_emulator_is_told_the_emulator_address() {
     );
 
     // One network, two ways in. Each field that names the server holds the same value.
-    assert_eq!(local.target, emulator.target);
-    assert_eq!(local.base_url, emulator.base_url);
-    assert_eq!(local.ca_fingerprint, emulator.ca_fingerprint);
+    assert_eq!(default.target, emulator.target);
+    assert_eq!(default.base_url, emulator.base_url);
+    assert_eq!(default.ca_fingerprint, emulator.ca_fingerprint);
     assert_eq!(
-        local.server_endhost_api_url,
+        default.server_endhost_api_url,
         emulator.server_endhost_api_url
     );
 

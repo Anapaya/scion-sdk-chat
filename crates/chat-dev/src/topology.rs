@@ -11,25 +11,28 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! Three autonomous systems: one for the server, and one for each kind of client.
+//! Three autonomous systems: one for the server, one for every client, and one for an Android
+//! emulator.
 //!
-//! The network publishes one address for each AS. A client on this machine reaches the host at
-//! `127.0.0.1`. A client on an Android emulator reaches the host at `10.0.2.2`. One AS holds one
-//! address, so each kind of client needs its own AS.
+//! The network publishes one address for each AS. [`DEFAULT`] publishes the bound address, which
+//! every client can reach. An Android emulator on this machine is the one client that cannot: it
+//! reaches the host at `10.0.2.2`, and `127.0.0.1` means the emulator itself. [`EMULATOR`] holds
+//! that address, so the emulator has an AS to fall back to.
 //!
 //! ```text
-//!   1-ff00:0:132  (clients on this machine)
+//!   1-ff00:0:132  (every client, at the bound address)
 //!         |
 //!   2-ff00:0:212  (the chat server)
 //!         |
-//!   2-ff00:0:222  (clients on an Android emulator)
+//!   2-ff00:0:222  (an Android emulator on this machine, at 10.0.2.2)
 //! ```
 
 use std::collections::BTreeMap;
 
 use chrono::Utc;
-/// The three autonomous systems, named for the client that attaches to each one.
-pub use pocketscion::util::topologies::{IA132 as LOCAL, IA212 as SERVER, IA222 as EMULATOR};
+/// The three autonomous systems. [`DEFAULT`] serves every client that reaches the bound
+/// address.
+pub use pocketscion::util::topologies::{IA132 as DEFAULT, IA212 as SERVER, IA222 as EMULATOR};
 use pocketscion::{
     io_config::IoConfig,
     network::scion::topology::{ScionAs, ScionLink, ScionLinkType, ScionTopologyBuilder},
@@ -44,12 +47,12 @@ pub async fn start(io_config: IoConfig) -> PsSetup {
     state.set_topology(definition().build().expect("a well-formed topology"));
 
     let endhost_apis = BTreeMap::from([
-        (LOCAL, state.add_endhost_api(vec![LOCAL])),
+        (DEFAULT, state.add_endhost_api(vec![DEFAULT])),
         (SERVER, state.add_endhost_api(vec![SERVER])),
         (EMULATOR, state.add_endhost_api(vec![EMULATOR])),
     ]);
 
-    for isd_as in [LOCAL, SERVER, EMULATOR] {
+    for isd_as in [DEFAULT, SERVER, EMULATOR] {
         state.add_snap(isd_as).expect("a SNAP endpoint");
     }
 
@@ -72,14 +75,14 @@ fn definition() -> ScionTopologyBuilder {
     topology
         .add_as(ScionAs::new_core(SERVER))
         .expect("the server's AS")
-        .add_as(ScionAs::new_core(LOCAL))
-        .expect("the local AS")
+        .add_as(ScionAs::new_core(DEFAULT))
+        .expect("the default AS")
         .add_as(ScionAs::new_core(EMULATOR))
         .expect("the emulator's AS")
         .add_link(
-            ScionLink::new(LOCAL, 1, ScionLinkType::Core, SERVER, 3).expect("a well-formed link"),
+            ScionLink::new(DEFAULT, 1, ScionLinkType::Core, SERVER, 3).expect("a well-formed link"),
         )
-        .expect("the local link")
+        .expect("the default link")
         .add_link(
             ScionLink::new(EMULATOR, 2, ScionLinkType::Core, SERVER, 4)
                 .expect("a well-formed link"),
@@ -97,7 +100,7 @@ mod tests {
     fn both_client_ases_are_linked_to_the_server() {
         let topology = definition().build().expect("a well-formed topology");
 
-        for (isd_as, interface) in [(LOCAL, 1), (EMULATOR, 2)] {
+        for (isd_as, interface) in [(DEFAULT, 1), (EMULATOR, 2)] {
             let link = topology
                 .scion_link(&isd_as, interface)
                 .unwrap_or_else(|| panic!("{isd_as} has a link on interface {interface}"));
