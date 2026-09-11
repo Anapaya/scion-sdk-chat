@@ -11,26 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! Three autonomous systems: the server, and one for each kind of client.
+//! Three autonomous systems: one for the server, and one for each kind of client.
 //!
-//! `pocketscion` ships a two-AS topology, which is one short. An advertised IP is set per AS, so
-//! two clients that reach this host by different routes need an AS each: a client on this machine
-//! is told `127.0.0.1`, and one on an Android emulator is told `10.0.2.2`. With both in the same
-//! AS, whichever address is published is wrong for one of them.
+//! The network publishes one address for each AS. A client on this machine reaches the host at
+//! `127.0.0.1`. A client on an Android emulator reaches the host at `10.0.2.2`. One AS holds one
+//! address, so each kind of client needs its own AS.
 //!
 //! ```text
-//!   1-ff00:0:132 ──┐                       clients on this machine
-//!                  ├── 2-ff00:0:212        the chat server
-//!   2-ff00:0:222 ──┘                       clients on an Android emulator
+//!   1-ff00:0:132  (clients on this machine)
+//!         |
+//!   2-ff00:0:212  (the chat server)
+//!         |
+//!   2-ff00:0:222  (clients on an Android emulator)
 //! ```
 
 use std::collections::BTreeMap;
 
 use chrono::Utc;
-/// The AS a client on this machine attaches to, the AS the server sits in, and the AS a client
-/// on an Android emulator attaches to.
-///
-/// Renamed on the way in: the rest of this crate reasons about which client an AS belongs to.
+/// The three autonomous systems, named for the client that attaches to each one.
 pub use pocketscion::util::topologies::{IA132 as LOCAL, IA212 as SERVER, IA222 as EMULATOR};
 use pocketscion::{
     io_config::IoConfig,
@@ -40,10 +38,7 @@ use pocketscion::{
     util::topologies::PsSetup,
 };
 
-/// Starts the network described by this module's diagram.
-///
-/// Every AS gets a SNAP endpoint and an endhost API, the server's included: each one reaches the
-/// underlay through its own.
+/// Starts the network. Each AS gets an endhost API and a SNAP endpoint.
 pub async fn start(io_config: IoConfig) -> PsSetup {
     let mut state = PocketScionState::new(Utc::now());
     state.set_topology(definition().build().expect("a well-formed topology"));
@@ -71,9 +66,7 @@ pub async fn start(io_config: IoConfig) -> PsSetup {
     }
 }
 
-/// The ASes and the links between them, without a runtime.
-///
-/// A star: each client AS is linked to the server's, and to nothing else.
+/// The three ASes, and one link from each client AS to the server's AS.
 fn definition() -> ScionTopologyBuilder {
     let mut topology = ScionTopologyBuilder::new();
     topology
@@ -99,7 +92,7 @@ fn definition() -> ScionTopologyBuilder {
 mod tests {
     use super::*;
 
-    /// A link from each client AS to the server is the whole point of the third AS.
+    /// Each client AS must reach the server's AS.
     #[test]
     fn both_client_ases_are_linked_to_the_server() {
         let topology = definition().build().expect("a well-formed topology");

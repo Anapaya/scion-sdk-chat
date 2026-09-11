@@ -11,10 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! What a client does with this network: read the description, then use it.
+//! What a client does with this network. It reads the description, then it uses it.
 //!
-//! The description is fetched over plain TCP, as any client fetches it. Everything after that is
-//! over SCION.
+//! Each test reads the description over plain TCP, as a client reads it. Every call after that
+//! goes over SCION.
 
 use std::{path::PathBuf, time::Duration};
 
@@ -23,10 +23,10 @@ use chat_client_core::{
 };
 use chat_dev::{Config, DevNetwork, DevSetup, Server};
 
-/// How long the server is given to start reading from its socket.
+/// How long a test waits for the server to read from its socket.
 const READY_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// A network on ports nothing else is using, so a run cannot collide with a running `chat-dev`.
+/// A network on free ports, so a test and a running `chat-dev` keep out of each other's way.
 fn ephemeral() -> Config {
     Config {
         control_port: 0,
@@ -38,11 +38,10 @@ fn ephemeral() -> Config {
     }
 }
 
-/// The emulator's AS published where this machine can reach it.
+/// The emulator's AS, published at an address this machine can reach.
 ///
-/// `10.0.2.2` exists inside an emulator and nowhere else, so a test that has to *use* the
-/// emulator's description cannot be told the real address. Only the rewrite is stood down; the AS,
-/// its SNAP endpoint and its path to the server are the ones an emulator gets.
+/// `10.0.2.2` exists only inside an emulator, so a test that uses the emulator's description needs
+/// a different address. The AS, its SNAP endpoint and its path to the server stay the same.
 fn emulator_on_loopback() -> Config {
     Config {
         emulator_ip: "127.0.0.1".parse().expect("an address"),
@@ -50,7 +49,7 @@ fn emulator_on_loopback() -> Config {
     }
 }
 
-/// The description, as any client reads it: over plain TCP, without SCION.
+/// Reads the description over plain TCP, as a client reads it.
 async fn describe(control_url: &str) -> DevNetwork {
     reqwest::get(format!("{control_url}/info"))
         .await
@@ -60,7 +59,7 @@ async fn describe(control_url: &str) -> DevNetwork {
         .expect("a description")
 }
 
-/// Builds the client a description describes.
+/// Builds the client that a description describes.
 async fn client(network: &DevNetwork) -> ChatClient {
     ChatClient::new(ClientConfig {
         transport: TransportKind::Scion(ScionConfig {
@@ -76,7 +75,7 @@ async fn client(network: &DevNetwork) -> ChatClient {
     .expect("a client")
 }
 
-/// The socket is bound before the endpoint reads from it, so the first attempts can be dropped.
+/// Waits for the server. The socket binds before the endpoint reads, so early calls can fail.
 async fn await_ready(client: &ChatClient) {
     let deadline = tokio::time::Instant::now() + READY_TIMEOUT;
     let mut last = None;
@@ -99,7 +98,7 @@ async fn the_description_is_enough_to_reach_the_server() {
     let stop = setup.stopper();
     let serving = tokio::spawn(setup.serve());
 
-    // Read back over TCP, as a client that did not start this process would.
+    // Read it back over TCP, as a client that started no part of this process reads it.
     let fetched = describe(&served.control_url).await;
     assert_eq!(
         DevNetwork {
@@ -123,7 +122,7 @@ async fn the_description_is_enough_to_reach_the_server() {
     serving.await.expect("serving should not panic");
 }
 
-/// Two clients must not share a token. See [`DevNetwork::auth_token`].
+/// Give each client its own token. See [`DevNetwork::auth_token`].
 #[tokio::test(flavor = "multi_thread")]
 async fn every_reader_is_given_a_token_of_its_own() {
     let setup = DevSetup::start(&Config {
@@ -145,7 +144,7 @@ async fn every_reader_is_given_a_token_of_its_own() {
         first.auth_token, server_token,
         "the token printed at startup is spent too",
     );
-    // Everything a client reads besides the token is the same answer every time.
+    // Each read gives the same answer for every field except the token.
     assert_eq!(first.endhost_api_url, second.endhost_api_url);
     assert_eq!(first.target, second.target);
     assert_eq!(first.ca_fingerprint, second.ca_fingerprint);
@@ -154,8 +153,8 @@ async fn every_reader_is_given_a_token_of_its_own() {
     serving.await.expect("serving should not panic");
 }
 
-/// Two people in the room at once. One client proves the transport; two prove they do not evict
-/// each other.
+/// Two people in one room. One client shows the transport works, and two show that both tunnels
+/// stay up.
 #[tokio::test(flavor = "multi_thread")]
 async fn two_clients_hold_a_conversation_across_the_link() {
     let setup = DevSetup::start(&ephemeral()).await.expect("a network");
@@ -179,8 +178,8 @@ async fn two_clients_hold_a_conversation_across_the_link() {
     ada.send(room.id, "from the first").await.expect("sent");
     grace.send(room.id, "from the second").await.expect("sent");
 
-    // Read as the other one, the message crossed the link. Read as the first, its tunnel still
-    // carries traffic.
+    // A read as the second client shows the message crossed the link. A read as the first client
+    // shows its tunnel still carries traffic.
     let expected = [
         ("ada".to_owned(), "from the first".to_owned()),
         ("grace".to_owned(), "from the second".to_owned()),
@@ -201,8 +200,7 @@ async fn two_clients_hold_a_conversation_across_the_link() {
     serving.await.expect("serving should not panic");
 }
 
-/// The third AS earns its place only if a client in it reaches the server, and does so while a
-/// client in the local AS is using the same network. Two ASes, one room.
+/// A client in the emulator's AS and a client in the local AS share one room at the same time.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_client_in_the_emulator_as_shares_a_room_with_a_local_one() {
     let setup = DevSetup::start(&emulator_on_loopback())
@@ -261,7 +259,7 @@ async fn a_client_in_the_emulator_as_shares_a_room_with_a_local_one() {
     serving.await.expect("serving should not panic");
 }
 
-/// What each client is told, and that the address for one is never handed to the other.
+/// Each client gets its own address, and the other client gets a different one.
 #[tokio::test(flavor = "multi_thread")]
 async fn only_the_emulator_is_told_the_emulator_address() {
     let setup = DevSetup::start(&ephemeral()).await.expect("a network");
@@ -273,9 +271,9 @@ async fn only_the_emulator_is_told_the_emulator_address() {
     let stop = setup.stopper();
     let serving = tokio::spawn(setup.serve());
 
-    // As a local client asks: the Host header carries the address it put in its URL.
+    // A local client asks. The Host header carries the address it wrote in its URL.
     let local = describe(&control_url).await;
-    // As the emulator asks. It reaches the same socket, having written a different URL.
+    // The emulator asks. It reaches the same socket, and it wrote a different URL.
     let emulator: DevNetwork = reqwest::Client::new()
         .get(format!("{control_url}/info"))
         .header("host", format!("10.0.2.2:{port}"))
@@ -297,7 +295,7 @@ async fn only_the_emulator_is_told_the_emulator_address() {
         emulator.endhost_api_url,
     );
 
-    // One network, two ways in. Everything that identifies the server is the same answer.
+    // One network, two ways in. Each field that names the server holds the same value.
     assert_eq!(local.target, emulator.target);
     assert_eq!(local.base_url, emulator.base_url);
     assert_eq!(local.ca_fingerprint, emulator.ca_fingerprint);
@@ -310,7 +308,7 @@ async fn only_the_emulator_is_told_the_emulator_address() {
     serving.await.expect("serving should not panic");
 }
 
-/// Refused before anything starts: the failure underneath arrives a whole topology later and says
+/// Refused before the topology starts. The failure underneath arrives much later, and it says
 /// only "error establishing SNAP tunnel".
 #[tokio::test(flavor = "multi_thread")]
 async fn a_wildcard_bind_is_refused_with_something_to_act_on() {
@@ -327,7 +325,7 @@ async fn a_wildcard_bind_is_refused_with_something_to_act_on() {
     assert!(said.contains("--bind-ip"), "{said}");
 }
 
-/// Everything but the server, for a reader who is about to start one themselves.
+/// The network without the chat server, for a reader who starts the server.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_network_without_a_server_still_says_how_to_join_it() {
     let setup = DevSetup::start(&Config {
@@ -341,7 +339,7 @@ async fn a_network_without_a_server_still_says_how_to_join_it() {
     assert_eq!(network.server, Server::External);
     assert!(!network.endhost_api_url.is_empty());
     assert!(!network.server_endhost_api_url.is_empty());
-    // The certificate is this process's to make, so it is described either way.
+    // This process makes the certificate, so the description holds it under `--no-server` too.
     assert!(network.ca_pem.contains("BEGIN CERTIFICATE"));
     assert!(
         network

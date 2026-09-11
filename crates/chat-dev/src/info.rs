@@ -11,58 +11,60 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! What this network is, in the words a client needs to reach it.
+//! The description of this network, in the values a client needs to reach it.
 //!
-//! Almost none of it can be written down ahead of time: the endhost APIs take whatever ports are
-//! free, the token is minted per run, and the certificate is generated. Only the control port is
-//! fixed, which is what makes it the one thing a client has to be told.
+//! The network decides most of these values at startup. The endhost APIs take free ports. The
+//! network makes a token for each run, and it generates the certificate. The control port is the
+//! one fixed value, so a client needs only that port to find the rest.
 
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-/// Where the chat server is, for a client that wants to reach it.
+/// Where the chat server is, for a client that must reach it.
 ///
-/// Printed as one line of JSON on standard output at startup, and served at `GET /info`. Both,
-/// because an emulator or a container has neither this terminal nor this filesystem.
+/// The process prints this as one line of JSON on standard output, and serves it at `GET /info`.
+/// A client in an emulator or a container reads the served copy.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DevNetwork {
-    /// Where this description is served, for anything that cannot read standard output.
+    /// Where this description is served, for a client that reads no standard output.
     pub control_url: String,
     /// What carries SCION traffic between the two ASes.
     pub underlay: String,
     /// Whether the chat server runs in this process, or is expected alongside it.
     pub server: Server,
-    /// The endhost API of the AS a client attaches to, which is what a client is configured with.
+    /// The endhost API of the AS a client attaches to. A client uses this one.
     pub endhost_api_url: String,
     /// The endhost API of the AS the server sits in, for a server started separately.
     pub server_endhost_api_url: String,
     /// The AS a client attaches to.
     pub client_isd_as: String,
-    /// A token for the endhost API and the SNAP control plane, minted for whoever read this.
+    /// A token for the endhost API and the SNAP control plane. Each read makes a new one.
     ///
-    /// One per client, never shared. The control plane keeps one tunnel per `pssid`, so a second
-    /// client on the same token evicts the first, which then stops working without an error.
+    /// Give each client its own token. The control plane keeps one tunnel for each `pssid`. A
+    /// second client on the same token removes the tunnel of the first client, and the first
+    /// client then stops without an error.
     pub auth_token: String,
-    /// The server's own token, on disk, for `chat-server --auth-token-file`. Not the one above.
+    /// The server's own token, on disk, for `chat-server --auth-token-file`.
     pub auth_token_file: String,
     /// Where the chat server is, as a URL. The host is the name its certificate is issued for.
     pub base_url: String,
-    /// The server's SCION address, without a port. This topology has no TSAR records, so a client
-    /// is given the address to dial.
+    /// The server's SCION address, without a port. This topology holds no TSAR records, so the
+    /// description gives a client the address to dial.
     pub target: String,
-    /// The certificate the server presents, to be trusted as an anchor.
+    /// The certificate the server presents. A client trusts it as an anchor.
     ///
-    /// Inline as well as on disk, because a client on an emulator cannot read this filesystem.
+    /// The description holds the text as well as the path, for a client that reads a different
+    /// filesystem.
     pub ca_pem: String,
     /// The same certificate on disk, for a client that takes a path.
     pub ca_path: String,
     /// Its SHA-256, as the server logs it.
     pub ca_fingerprint: String,
-    /// Where the certificate and the database live. A server started separately must be given the
-    /// same one, so it presents the certificate this description names.
+    /// Where the certificate and the database live. Give the same directory to a chat server that
+    /// you start yourself, so it presents the certificate this description names.
     pub data_dir: String,
-    /// The arguments that run a server against this network, for `--no-server`.
+    /// The arguments that join a chat server to this network, for `--no-server`.
     pub chat_server_args: Vec<String>,
 }
 
@@ -72,13 +74,13 @@ pub struct DevNetwork {
 pub enum Server {
     /// Started by this process, and stopped with it.
     Embedded,
-    /// Left to the reader to start, with [`DevNetwork::chat_server_args`].
+    /// You start it, with [`DevNetwork::chat_server_args`].
     External,
 }
 
-/// The arguments a server needs to join this network.
+/// The arguments a chat server needs to join this network.
 ///
-/// Built here, so the ports, which change every run, are current whenever anyone reads them.
+/// The ports change for each run, so this function builds the arguments from the current values.
 pub fn chat_server_args(
     listen: &str,
     data_dir: &Path,
@@ -125,8 +127,8 @@ mod tests {
         }
     }
 
-    /// The names every client parses. A rename here breaks a client written in another language,
-    /// where nothing would catch it, so the set is written out in full.
+    /// The names every client parses. This test writes them out in full, because a client in
+    /// another language reads the same names and no compiler checks them.
     #[test]
     fn the_field_names_are_the_ones_clients_read() {
         let json = serde_json::to_value(network()).expect("serialize");
@@ -179,7 +181,7 @@ mod tests {
         assert_eq!(external, r#""external""#);
     }
 
-    /// What a reader pastes into a second terminal, so it has to be the real flag names.
+    /// You paste these into a second terminal, so they must be the real flag names.
     #[test]
     fn the_server_arguments_name_the_flags_the_server_takes() {
         let args = chat_server_args(

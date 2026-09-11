@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! Starts the network, says what it is, and holds it up.
+//! Starts the network, prints its description, and holds it up.
 //!
 //! ```text
 //! cargo run -p chat-dev
@@ -24,7 +24,7 @@ use clap::Parser as _;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Standard output carries the description and nothing else, so it can be piped into a parser.
+    // Standard output carries the description only, so a parser can read it from a pipe.
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
         .with_env_filter(
@@ -44,17 +44,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {}
-        // How a harness says stop. Not watched on a terminal, where it would eat what is typed.
+        // A harness stops the process by closing standard input. On a terminal this would take
+        // the keys the reader types, so the app watches it only off a terminal.
         () = stdin_closed(), if !std::io::stdin().is_terminal() => {}
     }
 
-    // Awaited, so the network is down before the process is.
+    // Wait for the task, so the network stops before the process.
     stop.cancel();
     serving.await?;
     Ok(())
 }
 
-/// The same description in the shape a person reads, on standard error beside the logs.
+/// Prints the same description on standard error, in the form a person reads.
 fn summarise(network: &chat_dev::DevNetwork) {
     let mut out = std::io::stderr().lock();
 
@@ -99,9 +100,10 @@ fn summarise(network: &chat_dev::DevNetwork) {
     let _ = writeln!(out, "  Ctrl+C to stop. The network goes with it.\n");
 }
 
-/// Resolves when standard input reaches its end.
+/// Returns when standard input reaches its end.
 ///
-/// A blocking read cannot be cancelled, so the task is left parked and the process exits around it.
+/// A blocking read accepts no cancel, so this leaves the task parked. The process exits around
+/// it.
 async fn stdin_closed() {
     let _ = tokio::task::spawn_blocking(|| {
         let mut line = String::new();

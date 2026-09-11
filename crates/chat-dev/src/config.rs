@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! What to start, and where to let it be reached.
+//! The flags that choose what starts, and where it listens.
 
 use std::{net::IpAddr, path::PathBuf};
 
@@ -21,50 +21,46 @@ use clap::Parser;
 #[derive(Debug, Clone, Parser)]
 #[command(version, about)]
 pub struct Config {
-    /// Where the description of this network is served.
+    /// Where this network serves its description.
     ///
-    /// The one address fixed in advance, and therefore the only thing a client has to be told:
-    /// everything else is decided at startup and read from here.
+    /// This port is fixed. The network decides every other address at startup. A client reads
+    /// those addresses from this port.
     #[arg(long, env = "CHAT_DEV_CONTROL_PORT", default_value_t = 8099)]
     pub control_port: u16,
 
     /// The address every part of this network listens on.
     ///
-    /// Drives the topology, the control API and the server together. Splitting them would leave a
-    /// loopback socket unable to reach a tunnel that is not on loopback.
+    /// The topology, the control API and the chat server all use this address.
     ///
-    /// Never a wildcard: the SNAP tunnel is dialled at this address, and `0.0.0.0` names no host.
-    /// Give this machine's own address to be reached from another one.
+    /// Do not give a wildcard. The SNAP tunnel dials this address, and `0.0.0.0` names no host.
+    /// Give this machine's own address to accept a client on another machine.
     #[arg(long, env = "CHAT_DEV_BIND_IP", default_value = "127.0.0.1")]
     pub bind_ip: IpAddr,
 
     /// The address an Android emulator reaches this host at.
     ///
-    /// Published to the emulator's AS alone, which is what lets one network serve both an emulator
-    /// and a client on this machine: what each is told differs, and neither address has to be
-    /// right for the other.
+    /// The network publishes this address to the emulator's AS only. A client on this machine
+    /// keeps the bound address.
     ///
-    /// `10.0.2.2` is the emulator's alias for the host's loopback. It is not a route: the emulator
-    /// runs a user-mode network stack that terminates the connection and opens a new one from the
-    /// host process, so the address reaches only what is bound on loopback, and it exists nowhere
-    /// outside the emulator.
+    /// An emulator maps `10.0.2.2` to the loopback address of the host. The address exists only
+    /// inside the emulator.
     #[arg(long, env = "CHAT_DEV_EMULATOR_IP", default_value = "10.0.2.2")]
     pub emulator_ip: IpAddr,
 
     /// The port the chat server listens on.
     ///
-    /// Fixed, so the URL a client is given is the same between runs.
+    /// This port is fixed, so each run gives a client the same URL.
     #[arg(long, env = "CHAT_DEV_SERVER_PORT", default_value_t = 8443)]
     pub server_port: u16,
 
     /// Where the certificate and the database go.
     ///
-    /// A fresh directory each run unless one is named, so a run starts with no accounts. A server
-    /// started separately has to be given the same one.
+    /// The network makes a new directory for each run unless you name one. A new directory starts
+    /// with no accounts. Give the same directory to a chat server that you start yourself.
     #[arg(long, env = "CHAT_DEV_DATA_DIR")]
     pub data_dir: Option<PathBuf>,
 
-    /// Hold the network up, and leave the chat server to be started alongside.
+    /// Start the network without the chat server, and start the server yourself.
     #[arg(long, env = "CHAT_DEV_NO_SERVER")]
     pub no_server: bool,
 }
@@ -78,7 +74,7 @@ mod tests {
         <Config as clap::CommandFactory>::command().debug_assert();
     }
 
-    /// What someone gets by running it with nothing.
+    /// The values a run with no flags uses.
     #[test]
     fn the_defaults_start_a_whole_network_on_loopback() {
         let config = Config::parse_from(["chat-dev"]);
@@ -90,8 +86,7 @@ mod tests {
         assert!(!config.no_server);
     }
 
-    /// An emulator needs no flag: the address it reaches this host at is a default, and it is
-    /// published to an AS no local client attaches to.
+    /// An emulator needs no flag. The default address is the one an emulator uses.
     #[test]
     fn the_emulator_is_served_by_the_defaults() {
         let config = Config::parse_from(["chat-dev"]);

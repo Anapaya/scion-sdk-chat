@@ -80,26 +80,20 @@ look for how the SDK is used.
 
 ## chat-dev
 
-Three autonomous systems in a star, with the chat server in the middle one. The network lives for
-exactly as long as this process does. The underlay is SNAP: over SNAP an endpoint is addressed at
-the address its tunnel observed, which is what a client behind a translation needs.
+`chat-dev` starts a SCION network on this machine and puts the chat server in it. The network runs
+for as long as the process runs. The underlay is SNAP. Over SNAP the network addresses an endpoint
+at the address its tunnel observed, which is what a client behind a translation needs.
 
 ### The topology
 
+The network holds three autonomous systems. The server sits in the middle one.
+
 ```text
-  ┌────────────────────────┐
-  │ 1-ff00:0:132           │
-  │ the local AS           │──┐ iface 1 ↔ 3
-  │ published at 127.0.0.1 │  │
-  └────────────────────────┘  │      ┌──────────────────────────────┐
-                              └──────│ 2-ff00:0:212                 │
-                                     │ the server AS                │
-                              ┌──────│ the chat server listens here │
-  ┌────────────────────────┐  │      └──────────────────────────────┘
-  │ 2-ff00:0:222           │  │
-  │ the emulator AS        │──┘ iface 2 ↔ 4
-  │ published at 10.0.2.2  │
-  └────────────────────────┘
+  1-ff00:0:132  (clients on this machine, at 127.0.0.1)
+        |  iface 1 to 3
+  2-ff00:0:212  (the chat server)
+        |  iface 4 to 2
+  2-ff00:0:222  (clients on an Android emulator, at 10.0.2.2)
 ```
 
 | AS | who attaches to it | published at |
@@ -108,16 +102,16 @@ the address its tunnel observed, which is what a client behind a translation nee
 | `2-ff00:0:212` | the chat server | `127.0.0.1` |
 | `2-ff00:0:222` | a client on an Android emulator | `10.0.2.2` |
 
-A client AS each, because an address is published **per AS**. Two clients in one AS are told the
-same address, and an emulator reaches this host at `10.0.2.2` while a local client reaches it at
-`127.0.0.1`. A star, so each client AS is linked to the server's and to nothing else.
+The network publishes one address for each AS. An emulator reaches this host at `10.0.2.2`, and a
+client on this machine reaches it at `127.0.0.1`. One AS holds one address, so each kind of client
+needs its own AS.
 
-Where this is built:
+Two files build this:
 
 | file | what it decides |
 | --- | --- |
-| [`crates/chat-dev/src/topology.rs`](crates/chat-dev/src/topology.rs) | the three ASes, the two links, and the SNAP endpoint and endhost API in each |
-| [`crates/chat-dev/src/lib.rs`](crates/chat-dev/src/lib.rs) | the address published to each AS, and which description `GET /info` answers with |
+| [`crates/chat-dev/src/topology.rs`](crates/chat-dev/src/topology.rs) | the three ASes, the two links, and the endhost API and SNAP endpoint in each |
+| [`crates/chat-dev/src/lib.rs`](crates/chat-dev/src/lib.rs) | the address each AS publishes, and the description `GET /info` answers with |
 
 ### Starting it
 
@@ -125,15 +119,15 @@ Where this is built:
 cargo run -p chat-dev
 ```
 
-One command starts the whole network **and** the chat server inside this process: the three ASes,
+This one command starts the network and the chat server in one process. It starts the three ASes,
 an endhost API and a SNAP endpoint for each, the control API on port 8099, and the server on port
-8443. Ctrl+C stops all of it together.
+8443. Ctrl+C stops all of it.
 
-Almost nothing about the network can be written down in advance: the endhost APIs take whatever
-ports are free, the token is minted per run, and the certificate is generated. So the network
-describes itself. One line of JSON goes to standard output at startup, and the same document is
-served at `GET /info` on `--control-port` (8099) over **plain TCP**, so a client that failed to
-connect can still read it.
+The network decides most of its addresses at startup. The endhost APIs take free ports, the network
+makes a token for each run, and it generates the certificate. The network therefore describes
+itself. It prints one line of JSON on standard output, and it serves the same document at
+`GET /info` on `--control-port` (8099) over plain TCP. A client that failed to connect can still
+read it.
 
 ```sh
 curl -s http://127.0.0.1:8099/info | jq
@@ -147,47 +141,50 @@ curl -s http://127.0.0.1:8099/info | jq
   "endhost_api_url": "http://127.0.0.1:65263/",
   "server_endhost_api_url": "http://127.0.0.1:65264/",
   "client_isd_as": "1-ff00:0:132",
-  "auth_token": "eyJ0eXAiOiJKV1Qi…",
+  "auth_token": "eyJ0eXAiOiJKV1Qi...",
   "auth_token_file": "/tmp/.tmpTFIcwA/snap.token",
   "base_url": "https://localhost:8443",
   "target": "2-ff00:0:212,127.0.0.1",
-  "ca_pem": "-----BEGIN CERTIFICATE-----\n…",
+  "ca_pem": "-----BEGIN CERTIFICATE-----\n...",
   "ca_path": "/tmp/.tmpTFIcwA/cert.pem",
-  "ca_fingerprint": "a4df3e47…",
+  "ca_fingerprint": "a4df3e47...",
   "data_dir": "/tmp/.tmpTFIcwA",
-  "chat_server_args": ["--transport", "scion", "--listen", "127.0.0.1:8443", "…"]
+  "chat_server_args": ["--transport", "scion", "--listen", "127.0.0.1:8443", "..."]
 }
 ```
 
-Field by field:
+Each field, and what a client does with it:
 
 | field | what a client does with it |
 | --- | --- |
-| `base_url` | the server's URL. `https`, which is the scheme `--transport scion` is served under |
-| `endhost_api_url` | the endhost API of the **client's** AS. How the client reaches SCION at all |
-| `server_endhost_api_url` | the endhost API of the **server's** AS, for a server started separately |
+| `base_url` | the server's URL. The scheme is `https`, which serves `--transport scion` |
+| `endhost_api_url` | the endhost API of the client's AS. The client finds SCION through it |
+| `server_endhost_api_url` | the endhost API of the server's AS, for a server you start yourself |
 | `client_isd_as` | the AS this description attaches a client to |
-| `target` | the server's SCION address. This topology has no TSAR records, so the address is given |
-| `auth_token` | the SNAP token, minted fresh on every read and belonging to one client |
-| `auth_token_file` | the server's own token, on disk. A separate one |
-| `ca_pem` / `ca_path` | the certificate to trust, inline and on disk |
-| `chat_server_args` | the exact arguments that join a separately started server to this network |
+| `target` | the server's SCION address. This topology holds no TSAR records, so the client dials the address |
+| `auth_token` | the SNAP token. Each read makes a new one, and it belongs to one client |
+| `auth_token_file` | the server's own token, on disk |
+| `ca_pem` / `ca_path` | the certificate to trust, as text and as a path |
+| `chat_server_args` | the arguments that join a chat server you start yourself |
 
-Each endhost API belongs to its own AS, so a client uses `endhost_api_url` and a server uses
-`server_endhost_api_url`. `ca_pem` is inline as well as on disk, for a client that reads a
-different filesystem.
+Each endhost API belongs to one AS. A client uses `endhost_api_url`, and a chat server uses
+`server_endhost_api_url`. The description holds the certificate as text as well as a path, for a
+client that reads a different filesystem.
 
-`GET /info` answers with the description that matches the address it was asked at. A request to
-`127.0.0.1` is given the local AS, and one to `10.0.2.2` is given the emulator AS. Both name the
-same server, the same certificate and the same SCION address; only the way in differs.
+`GET /info` answers with the description that matches the address the client asked at. A request to
+`127.0.0.1` gets the local AS, and a request to `10.0.2.2` gets the emulator's AS. Both describe
+the same server, the same certificate and the same SCION address.
 
-Standard error carries the logs and the same description in the shape a person reads. Ctrl+C stops
-everything, and so does closing standard input, which is how a harness stops it.
+Standard error carries the logs and the same description in the form a person reads. Ctrl+C stops
+the process, and so does a close of standard input. A harness uses the second one.
 
 ### Connecting a client
 
-Every field above has a flag and an environment variable, so the whole description can go into the
-environment in one step. Read it once per terminal, because each client needs a token of its own:
+Each field above has a flag and an environment variable, so one command puts the whole description
+into the environment. Do these steps in a second terminal:
+
+1. Read the description into the environment.
+2. Start the terminal client.
 
 ```sh
 eval "$(curl -s http://127.0.0.1:8099/info | jq -r '
@@ -201,68 +198,69 @@ eval "$(curl -s http://127.0.0.1:8099/info | jq -r '
 cargo run -p chat-ui-ratatui -- --transport scion
 ```
 
-Repeat both commands in a third terminal for a second user. Their messages cross from
+Do both steps again in a third terminal for a second user. Their messages cross from
 `1-ff00:0:132` to `2-ff00:0:212`.
 
-Each client needs its own token. The control plane keeps one tunnel per subscriber, so a second
-client on the same token evicts the first, and the first then stops working silently while the
-server logs `wireguard error on incoming packet`. Running the `eval` again in each terminal is what
-keeps them apart.
+Give each client its own token. The control plane keeps one tunnel for each subscriber. A second
+client on the same token removes the tunnel of the first client. The first client then stops
+without an error, and the server logs `wireguard error on incoming packet`. Run the `eval` again in
+each terminal to give each client its own token.
 
 ### Running the server yourself
 
-`--no-server` holds up only the network and leaves the server out of it:
+`--no-server` starts the network without the chat server:
 
 ```sh
 cargo run -p chat-dev -- --no-server
 ```
 
-`cargo run -p chat-server` then starts the chat server as a process of its own, against the network
-already running. It is the same server `chat-dev` would have started, and it can now be stopped,
-rebuilt and restarted while the network stays up, which is what makes it worth the second terminal
-while working on the server. `chat_server_args` is the command that joins it:
+`cargo run -p chat-server` then starts the chat server as its own process against the running
+network. It is the same server that `chat-dev` starts. You can stop it, rebuild it and start it
+again while the network stays up, which is what makes the second terminal worth it while you work
+on the server. The `chat_server_args` field holds the command that joins it:
 
 ```sh
 cargo run -p chat-server -- $(curl -s http://127.0.0.1:8099/info | jq -r '.chat_server_args | join(" ")')
 ```
 
 Those arguments carry the server's own endhost API, its own token file, the listen address and the
-data directory. The data directory is shared on purpose, so the server presents the certificate the
+data directory. Give the server the same data directory, so it presents the certificate the
 description names.
 
 ### From another machine
 
-Everything above binds to `127.0.0.1`, which is reachable from this machine alone. `--bind-ip`
-moves every part of the network — the control API, all three endhost APIs, the SNAP endpoints and
-the server — to one address another machine can reach:
+The steps above bind to `127.0.0.1`, which only this machine reaches. `--bind-ip` moves every part
+of the network to one address that another machine reaches. It moves the control API, all three
+endhost APIs, the SNAP endpoints and the chat server.
 
 ```sh
 cargo run -p chat-dev -- --bind-ip 192.168.1.20
 ```
 
-It must be a real address on this machine. A wildcard is refused: the SNAP tunnel is dialled at the
-bound address, and `0.0.0.0` names no host, so the network fails to start with `error establishing
-SNAP tunnel`.
+Give a real address on this machine. `chat-dev` refuses a wildcard, because the SNAP tunnel dials
+the bound address and `0.0.0.0` names no host. With a wildcard the network fails to start, and it
+reports `error establishing SNAP tunnel`.
 
-Every client then uses that one address, this machine included, so the name `localhost` is what is
-given up in exchange. The address is a real one on a real network, so it changes when DHCP moves
-you and disappears when you work offline.
+Every client then uses that one address, this machine included, so you give up the name
+`localhost`. The address belongs to a real network, so it changes when DHCP moves you, and it
+disappears when you work offline.
 
 ### From an Android emulator
 
-Nothing to pass:
+Run `chat-dev` with no flags:
 
 ```sh
 cargo run -p chat-dev
 ```
 
-An emulator reaches the host's loopback as `10.0.2.2`, and `2-ff00:0:222` is published at exactly
-that address. A client there asks the same `GET /info`, arrives at `10.0.2.2`, and is given the
-emulator's description; a terminal client on this machine asks at `127.0.0.1` and is given its own.
-Both join the same rooms. `--emulator-ip` moves that address.
+An emulator reaches the loopback address of the host at `10.0.2.2`, and the network publishes
+`2-ff00:0:222` at that address. A client in the emulator asks the same `GET /info`, arrives at
+`10.0.2.2`, and gets the emulator's description. A terminal client on this machine asks at
+`127.0.0.1` and gets its own description. Both join the same rooms. `--emulator-ip` moves the
+emulator's address.
 
-The AS is ready and the network serves it. The Android client that attaches to it is a later
-change.
+The AS is ready and the network serves it. A later change adds the Android client that attaches to
+it.
 
 ## Development
 
