@@ -18,10 +18,8 @@ use std::{str::FromStr as _, sync::Arc};
 use async_trait::async_trait;
 use bytes::Bytes;
 use scion_http3::{
-    Client, Config, Error, Request,
-    scion_quic::{quic::config::QuicConfig, reexport::squiche},
-    scion_stack::resolver::txt::ScionTxtDnsResolver,
-    sciparse::address::ip_addr::ScionIpAddr,
+    Client, Config, Error, Request, scion_quic::quic::config::QuicConfig,
+    scion_stack::resolver::txt::ScionTxtDnsResolver, sciparse::address::ip_addr::ScionIpAddr,
 };
 use url::Url;
 
@@ -50,13 +48,7 @@ impl ScionTransport {
             settings = settings.with_auth_token(token.as_str());
         }
 
-        // The server signs with Ed25519, so it is added to BoringSSL's defaults. Every other
-        // algorithm keeps verifying.
-        let mut quic = QuicConfig::builder().verify_algorithm_prefs(
-            std::iter::once(squiche::SIGN_ED25519)
-                .chain(squiche::DEFAULT_VERIFY_ALGORITHM_PREFS.iter().copied())
-                .collect(),
-        );
+        let mut quic = QuicConfig::builder();
 
         // A pinned certificate replaces the system roots; the server signs its own.
         if let Some(path) = &config.cert_path {
