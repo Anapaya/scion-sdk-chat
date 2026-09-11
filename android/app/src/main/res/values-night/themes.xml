@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright 2026 Anapaya Systems -->
+<!-- The dark half of Theme.ScionChat. See values/themes.xml for why the background is set here. -->
+<resources>
+    <style name="Theme.ScionChat" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#1C1F2A</item>
+    </style>
+</resources>
