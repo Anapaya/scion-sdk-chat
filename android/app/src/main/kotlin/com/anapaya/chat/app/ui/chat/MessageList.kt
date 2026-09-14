@@ -19,13 +19,22 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -40,6 +49,14 @@ private val BUBBLE_MAX = 280.dp
 /** The corner a bubble turns down, on the side its author is on. */
 private val CORNER = 14.dp
 private val TAIL = 4.dp
+
+private val CLOCK_SIZE = 10.5.sp
+
+/** What separates the last word from the clock beside it. */
+private val CLOCK_GAP = 8.dp
+
+/** Names the gap the clock is drawn into. */
+private const val CLOCK_SLOT = "clock"
 
 /**
  * The open room's conversation, oldest at the top.
@@ -128,25 +145,51 @@ private fun Said(row: ChatRow.Said) {
                 )
                 .padding(horizontal = 13.dp, vertical = 9.dp),
         ) {
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = row.message.body,
-                    fontSize = 14.5.sp,
-                    lineHeight = 14.5.sp * 1.45f,
-                    color = if (row.mine) palette.onOwnBubble else MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = row.clock,
-                    fontSize = 10.5.sp,
-                    fontFamily = FontFamily.Monospace,
-                    color = if (row.mine) {
-                        palette.onOwnBubble.copy(alpha = 0.7f)
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    modifier = Modifier.padding(top = 2.dp),
-                )
+            val clockStyle = TextStyle(
+                fontSize = CLOCK_SIZE,
+                fontFamily = FontFamily.Monospace,
+                color = if (row.mine) {
+                    palette.onOwnBubble.copy(alpha = 0.7f)
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+
+            // The clock is drawn in the corner, so the text reserves its width at the end of the
+            // last line. A message that ends short keeps the clock on that line, and one that fills
+            // the line pushes the clock onto the next.
+            val measurer = rememberTextMeasurer()
+            val density = LocalDensity.current
+            val reserved = remember(row.clock, clockStyle, density) {
+                with(density) {
+                    (measurer.measure(row.clock, clockStyle).size.width.toDp() + CLOCK_GAP).toSp()
+                }
             }
+
+            Text(
+                text = buildAnnotatedString {
+                    append(row.message.body)
+                    appendInlineContent(CLOCK_SLOT, " ")
+                },
+                inlineContent = mapOf(
+                    CLOCK_SLOT to InlineTextContent(
+                        Placeholder(
+                            width = reserved,
+                            height = CLOCK_SIZE,
+                            placeholderVerticalAlign = PlaceholderVerticalAlign.TextBottom,
+                        ),
+                    ) {},
+                ),
+                fontSize = 14.5.sp,
+                lineHeight = 14.5.sp * 1.45f,
+                color = if (row.mine) palette.onOwnBubble else MaterialTheme.colorScheme.onSurface,
+            )
+
+            Text(
+                text = row.clock,
+                style = clockStyle,
+                modifier = Modifier.align(Alignment.BottomEnd),
+            )
         }
     }
 }

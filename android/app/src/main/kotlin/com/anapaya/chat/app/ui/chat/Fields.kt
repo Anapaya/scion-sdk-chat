@@ -33,6 +33,7 @@ internal fun PlainField(
     fontSize: TextUnit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    maxLines: Int = 1,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
 ) {
@@ -40,7 +41,8 @@ internal fun PlainField(
         value = value,
         onValueChange = onValue,
         enabled = enabled,
-        singleLine = true,
+        singleLine = maxLines == 1,
+        maxLines = maxLines,
         textStyle = LocalTextStyle.current.copy(
             fontSize = fontSize,
             color = MaterialTheme.colorScheme.onSurface,
