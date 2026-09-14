@@ -35,6 +35,12 @@ internal sealed interface ChatRow {
         val mine: Boolean,
         val opensGroup: Boolean,
         val closesGroup: Boolean,
+        /**
+         * Whether a sender's name is drawn directly under this message.
+         *
+         * That name carries the space between the two groups, so the row leaves none of its own.
+         */
+        val nameFollows: Boolean,
     ) : ChatRow {
         override val key: String get() = "seq ${message.seq}"
     }
@@ -99,6 +105,12 @@ internal fun chatRows(messages: List<Message>, me: String?, clocks: Clocks): Lis
             after.username != message.username ||
             clocks.dayOf(after.postedAt) != on
 
+        // A day separator carries its own space, so only a name on the same day counts.
+        val nameFollows = closes &&
+            after != null &&
+            after.username != me &&
+            clocks.dayOf(after.postedAt) == on
+
         rows.add(
             ChatRow.Said(
                 message = message,
@@ -106,6 +118,7 @@ internal fun chatRows(messages: List<Message>, me: String?, clocks: Clocks): Lis
                 mine = message.username == me,
                 opensGroup = opens,
                 closesGroup = closes,
+                nameFollows = nameFollows,
             ),
         )
     }

@@ -2,6 +2,7 @@
 
 package com.anapaya.chat.app.ui.chat
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -10,6 +11,7 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -34,6 +36,7 @@ internal fun PlainField(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     maxLines: Int = 1,
+    interactionSource: MutableInteractionSource? = null,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
 ) {
@@ -43,6 +46,7 @@ internal fun PlainField(
         enabled = enabled,
         singleLine = maxLines == 1,
         maxLines = maxLines,
+        interactionSource = interactionSource ?: remember { MutableInteractionSource() },
         textStyle = LocalTextStyle.current.copy(
             fontSize = fontSize,
             color = MaterialTheme.colorScheme.onSurface,

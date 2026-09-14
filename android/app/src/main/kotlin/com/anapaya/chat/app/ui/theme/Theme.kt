@@ -24,15 +24,15 @@ public val PanelEasing: Easing = CubicBezierEasing(0.2f, 0.6f, 0.2f, 1f)
  * The roles Material 3 has no name for.
  *
  * Blue carries emphasis — the open room, the reader's own messages, anything unread. Orange is kept
- * for risk, which here is the one thing that went wrong. Green is unused on this screen.
+ * for risk, which here is the one thing that went wrong. Green says the transport is carrying.
  */
 @Immutable
 public data class ChatPalette(
     /** Text and linework that must stay legible at small sizes, where the vivid blue does not. */
     val strongBlue: Color,
-    /** Behind a message the reader wrote. */
+    /** Behind a message the reader wrote. The blue the buttons are in. */
     val ownBubble: Color,
-    /** On top of [ownBubble]. */
+    /** On top of [ownBubble], at 3.1:1. Chosen for the look, below the 4.5:1 the small text asks. */
     val onOwnBubble: Color,
     /** Behind the open room's row, and the drawer's own button. */
     val accentTint: Color,
@@ -41,26 +41,38 @@ public data class ChatPalette(
     /** Behind a warning, and the hairline above it. */
     val riskTint: Color,
     val riskBorder: Color,
+    /** Around the composer's field, which sits on a surface too near its own fill to show an edge. */
+    val fieldBorder: Color,
+    /** The send button with nothing to send. */
+    val sendDisabled: Color,
+    /** The dot on the transport badge, while reads are arriving. */
+    val live: Color,
 )
 
 private val LightPalette = ChatPalette(
     strongBlue = Color(0xFF165A97),
-    ownBubble = Color(0xFFCCEBF8),
-    onOwnBubble = Color(0xFF12283F),
+    ownBubble = Color(0xFF009CDE),
+    onOwnBubble = Color(0xFFFFFFFF),
     accentTint = Color(0xFFE6F5FC),
     risk = Color(0xFFFF871F),
     riskTint = Color(0xFFFFEFE1),
     riskBorder = Color(0xFFFFD9B5),
+    fieldBorder = Color(0xFFE0E6ED),
+    sendDisabled = Color(0xFFB8C2CC),
+    live = Color(0xFF6DBE45),
 )
 
 private val DarkPalette = ChatPalette(
     strongBlue = Color(0xFF5FC8F2),
-    ownBubble = Color(0xFF165A97),
+    ownBubble = Color(0xFF009CDE),
     onOwnBubble = Color(0xFFFFFFFF),
     accentTint = Color(0x2E009CDE),
     risk = Color(0xFFFF871F),
     riskTint = Color(0xFF33261B),
     riskBorder = Color(0x61FF871F),
+    fieldBorder = Color(0x24FFFFFF),
+    sendDisabled = Color(0xFF4A5565),
+    live = Color(0xFF7FD65A),
 )
 
 public val LocalChatPalette: ProvidableCompositionLocal<ChatPalette> =
@@ -73,16 +85,16 @@ public val chatPalette: ChatPalette
 private val Light = lightColorScheme(
     primary = Color(0xFF009CDE),
     onPrimary = Color(0xFFFFFFFF),
-    background = Color(0xFFF7F9FB),
+    background = Color(0xFFFFFFFF),
     onBackground = Color(0xFF1C1F2A),
-    surface = Color(0xFFF7F9FB),
+    surface = Color(0xFFFFFFFF),
     onSurface = Color(0xFF1C1F2A),
-    onSurfaceVariant = Color(0xFF4A5765),
-    // Bubbles, the drawer, the sheet and the dialog all sit on this, above the page.
+    onSurfaceVariant = Color(0xFF5A6472),
+    // The drawer, the sheet and the dialog.
     surfaceContainerLowest = Color(0xFFFFFFFF),
-    // The composer's field and the dialog's, which sit below it.
-    surfaceContainer = Color(0xFFEEF2F6),
-    outlineVariant = Color(0xFFDCE3EB),
+    // An incoming bubble, the composer's field and the dialog's.
+    surfaceContainer = Color(0xFFF1F4F8),
+    outlineVariant = Color(0xFFE6EBF0),
     outline = Color(0xFF8A97A6),
     error = Color(0xFFFF871F),
     onError = Color(0xFFFFFFFF),

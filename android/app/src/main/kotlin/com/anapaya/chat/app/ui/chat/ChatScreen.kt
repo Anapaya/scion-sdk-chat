@@ -4,8 +4,10 @@ package com.anapaya.chat.app.ui.chat
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -51,6 +53,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.anapaya.chat.app.UiState
+import com.anapaya.chat.app.ui.theme.ChatPalette
+import com.anapaya.chat.app.ui.theme.chatPalette
 import com.anapaya.chat.client.model.Room
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
@@ -231,6 +235,7 @@ private fun Conversation(
                 room = state.openRoom?.name,
                 username = state.username,
                 unreadElsewhere = state.unread.isNotEmpty(),
+                live = state.feedError == null,
                 onMenu = onMenu,
             )
 
@@ -276,6 +281,7 @@ private fun TopBar(
     room: String?,
     username: String?,
     unreadElsewhere: Boolean,
+    live: Boolean,
     onMenu: (() -> Unit)?,
 ) {
     Row(
@@ -336,5 +342,43 @@ private fun TopBar(
                 )
             }
         }
+
+        TransportBadge(live = live, modifier = Modifier.padding(end = 8.dp))
+    }
+}
+
+/**
+ * That the conversation is carried over SCION, and whether it is still arriving.
+ *
+ * The transport is what this app exists to show, and a chat screen looks the same over any of them.
+ * The dot follows the reads: it turns to [ChatPalette.risk] while one is failing, so it reports the
+ * link rather than decorating it.
+ */
+@Composable
+private fun TransportBadge(live: Boolean, modifier: Modifier = Modifier) {
+    val palette = chatPalette
+
+    Row(
+        modifier = modifier
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(percent = 50))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(7.dp)
+                .background(
+                    color = if (live) palette.live else palette.risk,
+                    shape = RoundedCornerShape(percent = 50),
+                ),
+        )
+        Text(
+            text = "SCION",
+            fontSize = 10.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.12.em,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }

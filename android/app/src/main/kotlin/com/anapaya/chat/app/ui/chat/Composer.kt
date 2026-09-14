@@ -2,17 +2,15 @@
 
 package com.anapaya.chat.app.ui.chat
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,22 +18,45 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.anapaya.chat.app.ui.theme.chatPalette
 
 private val PILL = RoundedCornerShape(percent = 50)
 
-/** The height a field with one line in it stands at, and the button beside it. */
-private val SEATED = 44.dp
+/** The send button. */
+private val BUTTON = 42.dp
 
-/** Half [SEATED], so the field reads as a pill at rest and keeps those corners as it grows. */
-private val FIELD = RoundedCornerShape(22.dp)
+private val FIELD = RoundedCornerShape(18.dp)
+private val FIELD_BORDER = 1.dp
+private val FIELD_PAD = 11.dp
+
+/** [FIELD] plus the ring's offset, so the two curves stay parallel. */
+private val RING = RoundedCornerShape(20.dp)
+
+/** What the focus ring is drawn in, and how far outside the field it sits. */
+private val RING_WIDTH = 2.dp
+private val RING_GAP = 2.dp
+
+/** One line of the field, at 15sp and the line height the bubbles use. */
+private val LINE = 20.dp
+
+/**
+ * How far the button rises off the row's floor.
+ *
+ * The field keeps its ring, border and padding under its last line, so a button resting on the
+ * floor sits below the words. This lifts it until its middle is on that line.
+ */
+private val BUTTON_LIFT = RING_GAP + FIELD_BORDER + FIELD_PAD - (BUTTON - LINE) / 2
 
 /** How far the field grows before it scrolls instead. */
-private const val MAX_LINES = 5
+private const val MAX_LINES = 3
 
 /**
  * The line being typed, and the way to post it.
@@ -52,58 +73,78 @@ internal fun Composer(
     onSend: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val typed = draft.isNotBlank()
-    val ready = typed && !pending
+    val palette = chatPalette
+    val ready = draft.isNotBlank() && !pending
+
+    val typing = remember { MutableInteractionSource() }
+    val focused by typing.collectIsFocusedAsState()
+
+    val pressing = remember { MutableInteractionSource() }
+    val pressed by pressing.collectIsPressedAsState()
 
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
             .drawTopHairline(MaterialTheme.colorScheme.outlineVariant)
-            .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 12.dp),
+            .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 14.dp),
         // The field grows upwards, so the button stays level with its last line.
         verticalAlignment = Alignment.Bottom,
     ) {
         Box(
             modifier = Modifier
                 .weight(1f)
-                .heightIn(min = SEATED)
+                // Drawn outside the field, and padded whether or not it shows, so taking focus
+                // moves nothing.
+                .border(
+                    width = if (focused) RING_WIDTH else 0.dp,
+                    color = if (focused) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    shape = RING,
+                )
+                .padding(RING_GAP)
                 .background(MaterialTheme.colorScheme.surfaceContainer, FIELD)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .border(FIELD_BORDER, palette.fieldBorder, FIELD)
+                .padding(horizontal = 14.dp, vertical = FIELD_PAD),
             contentAlignment = Alignment.CenterStart,
         ) {
             PlainField(
                 value = draft,
                 onValue = onDraft,
                 placeholder = room?.let { "Message #$it" } ?: "Message",
-                fontSize = 14.5.sp,
+                fontSize = 15.sp,
                 enabled = !pending,
                 maxLines = MAX_LINES,
+                interactionSource = typing,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { if (ready) onSend() }),
                 modifier = Modifier.fillMaxWidth(),
             )
         }
 
-        // Nothing to press until there is something to post, so the field holds the width until
-        // then.
-        AnimatedVisibility(
-            visible = typed || pending,
-            enter = fadeIn() + scaleIn(initialScale = 0.7f),
-            exit = fadeOut() + scaleOut(targetScale = 0.7f),
+        Box(
+            modifier = Modifier
+                .padding(start = 10.dp, bottom = BUTTON_LIFT)
+                .size(BUTTON)
+                .background(
+                    color = when {
+                        !ready && !pending -> palette.sendDisabled
+                        pressed -> palette.strongBlue
+                        else -> MaterialTheme.colorScheme.primary
+                    },
+                    shape = PILL,
+                )
+                .clickable(
+                    interactionSource = pressing,
+                    indication = null,
+                    enabled = ready,
+                    onClick = onSend,
+                ),
+            contentAlignment = Alignment.Center,
         ) {
-            Box(
-                modifier = Modifier
-                    .padding(start = 8.dp)
-                    .size(SEATED)
-                    .background(MaterialTheme.colorScheme.primary, PILL)
-                    .clickable(enabled = ready, onClick = onSend),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (pending) {
-                    Spinner(tint = MaterialTheme.colorScheme.onPrimary)
-                } else {
-                    SendGlyph(tint = MaterialTheme.colorScheme.onPrimary)
-                }
+            if (pending) {
+                Spinner(tint = MaterialTheme.colorScheme.onPrimary)
+            } else {
+                SendGlyph(tint = MaterialTheme.colorScheme.onPrimary)
             }
         }
     }

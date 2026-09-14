@@ -7,23 +7,21 @@ import androidx.compose.ui.graphics.Color
 /**
  * What everyone else's name is drawn in.
  *
- * The same nine colours, in the same order, as the terminal client's `NICKNAMES`. Both clients pick
- * from this list with the same hash, so one person is one colour wherever the room is read.
+ * The terminal client's nine `NICKNAMES` hues, in its order, darkened to hold 4.5:1 against white.
+ * Its palette is picked for a dark terminal, where the light originals carry; here a name is 12sp on
+ * a white page. The hue of each is kept, so one person reads as the same colour in both clients.
  */
 private val NICKNAMES = listOf(
-    Color(0xFFF6B6C9), // pink
-    Color(0xFF9CD1BB), // teal
-    Color(0xFFB1B695), // sage
-    Color(0xFFD7BDE2), // lilac
-    Color(0xFF4A90E2), // blue
-    Color(0xFFD253D8), // magenta
-    Color(0xFFAF8D9F), // mauve
-    Color(0xFFB4A7D6), // periwinkle
-    Color(0xFFFFA07A), // salmon
+    Color(0xFFCF3E69), // pink
+    Color(0xFF3C8165), // teal
+    Color(0xFF737853), // sage
+    Color(0xFF9B5AB7), // lilac
+    Color(0xFF3276C7), // blue
+    Color(0xFFC132C8), // magenta
+    Color(0xFF946880), // mauve
+    Color(0xFF7E68B8), // periwinkle
+    Color(0xFFBC572F), // salmon
 )
-
-/** Whoever is logged in, so their own lines are found at a glance. */
-public val OwnNickname: Color = Color(0xFFF5D76E)
 
 /**
  * The colour `name` is drawn in, the same on every client that shows the room.
