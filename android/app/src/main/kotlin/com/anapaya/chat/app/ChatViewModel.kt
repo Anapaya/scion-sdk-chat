@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.anapaya.chat.client.ChatClient
 import com.anapaya.chat.client.ChatError
 import com.anapaya.chat.client.DevNetwork
+import com.anapaya.chat.client.ScionConfig
 import com.anapaya.chat.client.ScionTransport
 import com.anapaya.chat.client.model.Message
 import com.anapaya.chat.client.model.Room
@@ -27,11 +28,37 @@ private const val RETRY_MILLIS = 2_000L
 
 /** Which screen is showing. The flow is one way, except that an ended session goes back to signing in. */
 public sealed interface Screen {
+    /** Where a network that describes itself is asked for that description. */
     public data object Connect : Screen
+
+    /** The same configuration, typed out, for a network that describes nothing. */
+    public data object Manual : Screen
 
     public data object SignIn : Screen
 
     public data object Chat : Screen
+}
+
+/**
+ * A SCION configuration as it is typed.
+ *
+ * Strings rather than a [ScionConfig], because a half-filled form is not a configuration: a field
+ * left blank means "the network answers for this", which [toScionConfig] turns into null.
+ */
+public data class ManualForm(
+    val endhostApiUrl: String = "",
+    val baseUrl: String = "",
+    val snapToken: String = "",
+    val target: String = "",
+    val certPem: String = "",
+) {
+    public fun toScionConfig(): ScionConfig = ScionConfig(
+        endhostApiUrl = endhostApiUrl.trim(),
+        baseUrl = baseUrl.trim(),
+        snapToken = snapToken.trim().ifBlank { null },
+        target = target.trim().ifBlank { null },
+        certPem = certPem.trim().ifBlank { null },
+    )
 }
 
 /**
@@ -45,6 +72,8 @@ public sealed interface Screen {
 public data class UiState(
     val screen: Screen = Screen.Connect,
     val controlUrl: String = DevNetwork.DEFAULT_CONTROL_URL,
+    /** Kept while the reader moves between the two connect screens, and after a failed attempt. */
+    val manual: ManualForm = ManualForm(),
     val rooms: List<Room> = emptyList(),
     /**
      * Which room is open, by id rather than by value: the listing is re-read every couple of
@@ -69,6 +98,13 @@ public data class UiState(
     val actionError: String? = null,
     /** Text a refused send is handing back to the composer. Taken once, then acknowledged. */
     val restoredDraft: String? = null,
+    /**
+     * What to say in a toast. Taken once, then acknowledged.
+     *
+     * For an outcome that changes nothing on the screen. Registering is the one: it leaves the
+     * reader on the same form, with the same two buttons, and no sign it did anything.
+     */
+    val notice: String? = null,
     /** Where the server is, once it is known. Shown so the SCION address is visible. */
     val target: String? = null,
 ) {
@@ -114,22 +150,58 @@ public class ChatViewModel(application: Application) : AndroidViewModel(applicat
         _state.update { it.copy(controlUrl = url) }
     }
 
-    /** Reads the network's description, builds a client, and proves the server is there. */
-    public fun connect() {
-        ask {
-            val network = DevNetwork.discover(_state.value.controlUrl)
-            val built = ChatClient(ScionTransport(getApplication(), network))
-            // Building only parses configuration; nothing is dialled until a call is made. The
-            // health check is what turns a wrong address into an error on this screen.
-            built.health()
+    public fun manualChanged(form: ManualForm) {
+        _state.update { it.copy(manual = form) }
+    }
 
-            client = built
-            _state.update { it.copy(screen = Screen.SignIn, target = network.target) }
+    /** Moves between the two connect screens, dropping what the other one's attempt reported. */
+    public fun showConnect(screen: Screen) {
+        _state.update { it.copy(screen = screen, actionError = null) }
+    }
+
+    /** Reads the network's description, then connects with it. */
+    public fun connect() {
+        ask { open(DevNetwork.discover(_state.value.controlUrl).toScionConfig()) }
+    }
+
+    /** Connects with a configuration typed in full. */
+    public fun connectManually() {
+        ask {
+            val config = _state.value.manual.toScionConfig()
+            if (config.endhostApiUrl.isEmpty() || config.baseUrl.isEmpty()) {
+                throw ChatError.Config("an endhost API and a server URL are both needed")
+            }
+            open(config)
+        }
+    }
+
+    /** Builds a client, and proves the server is there. */
+    private suspend fun open(config: ScionConfig) {
+        val built = ChatClient(ScionTransport(getApplication(), config))
+        // Building only parses configuration; nothing is dialled until a call is made. The health
+        // check is what turns a wrong address into an error on this screen.
+        built.health()
+
+        client = built
+        _state.update {
+            it.copy(screen = Screen.SignIn, target = config.target ?: config.baseUrl)
         }
     }
 
     public fun register(username: String, password: String) {
-        ask { requireClient().register(username, password) }
+        ask(refused = { why -> announce("Could not register $username: $why") }) {
+            requireClient().register(username, password)
+            announce("Registered $username. Log in to continue.")
+        }
+    }
+
+    /** Clears the toast once it has been shown, so a recomposition does not repeat it. */
+    public fun noticeShown() {
+        _state.update { it.copy(notice = null) }
+    }
+
+    private fun announce(text: String) {
+        _state.update { it.copy(notice = text) }
     }
 
     public fun logIn(username: String, password: String) {
@@ -290,7 +362,7 @@ public class ChatViewModel(application: Application) : AndroidViewModel(applicat
      * Answers whether the call was taken, so a caller holding something the reader typed can put it
      * back rather than lose it. `refused` runs for a call that was taken and then failed.
      */
-    private fun ask(refused: () -> Unit = {}, work: suspend () -> Unit): Boolean {
+    private fun ask(refused: (String) -> Unit = {}, work: suspend () -> Unit): Boolean {
         if (_state.value.pending) return false
         _state.update { it.copy(pending = true, actionError = null) }
 
@@ -299,8 +371,9 @@ public class ChatViewModel(application: Application) : AndroidViewModel(applicat
                 work()
             } catch (error: Exception) {
                 if (!signedOut(error)) {
-                    _state.update { it.copy(actionError = error.message ?: error.toString()) }
-                    refused()
+                    val why = error.message ?: error.toString()
+                    _state.update { it.copy(actionError = why) }
+                    refused(why)
                 }
             } finally {
                 _state.update { it.copy(pending = false) }

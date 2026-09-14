@@ -3,6 +3,7 @@
 package com.anapaya.chat.app
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -13,12 +14,14 @@ import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.anapaya.chat.app.ui.ConnectScreen
+import com.anapaya.chat.app.ui.ManualScreen
 import com.anapaya.chat.app.ui.SignInScreen
 import com.anapaya.chat.app.ui.chat.ChatScreen
 import com.anapaya.chat.app.ui.theme.ChatTheme
@@ -64,8 +67,29 @@ private fun Chat(width: WindowWidthSizeClass, model: ChatViewModel = viewModel()
         }
     }
 
+    // Said in a toast rather than on a screen, because it reports an outcome that leaves the screen
+    // as it was.
+    val context = LocalContext.current
+    LaunchedEffect(state.notice) {
+        state.notice?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            model.noticeShown()
+        }
+    }
+
     when (state.screen) {
-        Screen.Connect -> ConnectScreen(state, model::controlUrlChanged, model::connect)
+        Screen.Connect -> ConnectScreen(
+            state = state,
+            onControlUrl = model::controlUrlChanged,
+            onConnect = model::connect,
+            onManual = { model.showConnect(Screen.Manual) },
+        )
+        Screen.Manual -> ManualScreen(
+            state = state,
+            onForm = model::manualChanged,
+            onConnect = model::connectManually,
+            onBack = { model.showConnect(Screen.Connect) },
+        )
         Screen.SignIn -> SignInScreen(state, model::register, model::logIn)
         Screen.Chat -> ChatScreen(
             state = state,

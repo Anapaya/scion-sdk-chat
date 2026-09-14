@@ -11,11 +11,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,14 +27,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.anapaya.chat.app.ManualForm
 import com.anapaya.chat.app.UiState
 
-/** Where the network is. Pre-filled for the emulator, editable so a real device works too. */
+/**
+ * Where a network that describes itself is asked for that description.
+ *
+ * A development network picks its ports at startup, mints a token per reader and signs its own
+ * certificate, so it serves all of that at one address that does not move. Everything after this
+ * call goes over SCION.
+ */
 @Composable
 public fun ConnectScreen(
     state: UiState,
     onControlUrl: (String) -> Unit,
     onConnect: () -> Unit,
+    onManual: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -42,7 +53,8 @@ public fun ConnectScreen(
     ) {
         Text("Connect", style = MaterialTheme.typography.headlineMedium)
         Text(
-            "The address chat-dev serves its description at. Everything after this goes over SCION.",
+            "The address a development network serves its description at. Everything after this " +
+                "goes over SCION.",
             style = MaterialTheme.typography.bodyMedium,
         )
 
@@ -57,10 +69,78 @@ public fun ConnectScreen(
         Button(onClick = onConnect, enabled = !state.pending, modifier = Modifier.fillMaxWidth()) {
             Text("Connect")
         }
+        TextButton(
+            onClick = onManual,
+            enabled = !state.pending,
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Manual SCION configuration") }
 
         Progress(state.pending)
         Failure(state.actionError)
     }
+}
+
+/**
+ * The same configuration, typed out, for a network that describes nothing.
+ *
+ * A production network needs the first two. It answers for the rest itself: its underlay may ask
+ * for no token, a TSAR record resolves the host, and a certificate from a real authority is one the
+ * device already trusts. Leave those blank and the SDK does that work.
+ */
+@Composable
+public fun ManualScreen(
+    state: UiState,
+    onForm: (ManualForm) -> Unit,
+    onConnect: () -> Unit,
+    onBack: () -> Unit,
+) {
+    val form = state.manual
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text("SCION configuration", style = MaterialTheme.typography.headlineMedium)
+
+        Field("Endhost API", form.endhostApiUrl) { onForm(form.copy(endhostApiUrl = it)) }
+        Field("Server URL", form.baseUrl) { onForm(form.copy(baseUrl = it)) }
+        Field("SNAP token", form.snapToken) { onForm(form.copy(snapToken = it)) }
+        Field("Target - the server's SCION address", form.target) { onForm(form.copy(target = it)) }
+        Field("Certificate (PEM)", form.certPem, lines = 4) { onForm(form.copy(certPem = it)) }
+
+        Button(onClick = onConnect, enabled = !state.pending, modifier = Modifier.fillMaxWidth()) {
+            Text("Connect")
+        }
+        TextButton(
+            onClick = onBack,
+            enabled = !state.pending,
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Read it from a development network") }
+
+        Progress(state.pending)
+        Failure(state.actionError)
+    }
+}
+
+@Composable
+private fun Field(
+    label: String,
+    value: String,
+    lines: Int = 1,
+    onValue: (String) -> Unit,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValue,
+        label = { Text(label) },
+        singleLine = lines == 1,
+        maxLines = lines,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 /** Registering and logging in are separate, as the API keeps them. */

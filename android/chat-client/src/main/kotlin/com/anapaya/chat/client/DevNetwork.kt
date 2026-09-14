@@ -30,6 +30,15 @@ public data class DevNetwork(
     /** The certificate to pin, inline because an emulator cannot read the host's filesystem. */
     @SerialName("ca_pem") val caPem: String,
 ) {
+    /** The same network, as the SDK is configured with it. */
+    public fun toScionConfig(): ScionConfig = ScionConfig(
+        endhostApiUrl = endhostApiUrl,
+        baseUrl = baseUrl,
+        snapToken = authToken,
+        target = target,
+        certPem = caPem,
+    )
+
     public companion object {
         private val format = Json { ignoreUnknownKeys = true }
 

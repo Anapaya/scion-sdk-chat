@@ -5,9 +5,10 @@ The chat client as an Android app: connect, sign in, chat, with every request ca
 | File | What it is |
 | --- | --- |
 | `chat-client/ScionTransport.kt` | Builds the SDK client and sends each request. **The only file that mentions SCION.** |
+| `chat-client/ScionConfig.kt` | What the SDK needs to reach a server. The same fields as `chat-client-core`. |
 | `chat-client/ChatClient.kt` | The chat API: register, log in, rooms, messages. |
 | `chat-client/Feeds.kt` | Polling, as flows. |
-| `chat-client/DevNetwork.kt` | Asks `chat-dev` where it is. A deployed app knows this already. |
+| `chat-client/DevNetwork.kt` | Asks `chat-dev` for a `ScionConfig`. A deployed app is told one. |
 | `chat-client/ChatError.kt` | What a call can fail with. |
 | `chat-client/model/` | Generated from the server's OpenAPI document. Not written by hand. |
 | `app/ChatViewModel.kt` | Every call to the client, and the state the screens draw. **The only file that talks to a server.** |
@@ -19,6 +20,12 @@ The chat client as an Android app: connect, sign in, chat, with every request ca
 `app` depends on `chat-client`, and only `chat-client` depends on the SDK, so the UI cannot reach
 SCION even by accident. Nothing under `ui/` calls a client: a screen draws what it is given and
 reports what was tapped.
+
+There are two ways to fill a `ScionConfig`, and one screen for each. The first asks a development
+network to describe itself, which is what `chat-dev` serves `/info` for. The second takes the same
+fields typed out, for a production network that describes nothing. A production network needs only
+the endhost API and the server URL: its own TSAR records resolve the host, and its certificate comes
+from an authority the device already trusts.
 
 The room list is a drawer on a phone and stays open from 840dp, so a tablet or an unfolded foldable
 reads like the terminal client's sidebar. A room holding unread messages carries a dot, never a
