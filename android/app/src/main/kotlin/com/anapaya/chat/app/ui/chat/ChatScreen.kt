@@ -113,13 +113,16 @@ public fun ChatScreen(
             }
     }
 
-    // Keyed on the room so a switch cannot race the arrival it starts with, and on the newest seq
-    // rather than the list, which changes identity for reasons that are not new messages.
     LaunchedEffect(state.openRoomId) {
         following = true
         listState.scrollToItem(0)
-        snapshotFlow { state.messages.lastOrNull()?.seq }
-            .collect { if (following) listState.animateScrollToItem(0) }
+    }
+
+    // The newest seq rather than the list, which is a new instance on every poll whether or not a
+    // message arrived. Read during composition, so each poll brings the current one.
+    val newest = state.messages.lastOrNull()?.seq
+    LaunchedEffect(newest) {
+        if (following) listState.animateScrollToItem(0)
     }
 
     val sheet: @Composable () -> Unit = {
