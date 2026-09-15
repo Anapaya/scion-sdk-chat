@@ -73,7 +73,7 @@ public class ScionTransport(
     override fun close(): Unit = client.close()
 }
 
-/** Sorts an SDK failure into the one taxonomy the app knows, as `transport/scion.rs` does. */
+/** Sorts an SDK failure into the one taxonomy the app knows. */
 internal fun failure(error: ScionHttp3Exception): ChatError.Transport {
     val kind = when (error) {
         is ScionHttp3Exception.Connectivity -> TransportFailure.Connectivity

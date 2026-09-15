@@ -23,9 +23,9 @@ reports what was tapped.
 
 There are two ways to fill a `ScionConfig`, and one screen for each. The first asks a development
 network to describe itself, which is what `chat-dev` serves `/info` for. The second takes the same
-fields typed out, for a production network that describes nothing. A production network needs only
-the endhost API and the server URL: its own TSAR records resolve the host, and its certificate comes
-from an authority the device already trusts.
+fields typed out, for a production network that describes nothing. Such a network resolves the host
+from its own TSAR records and presents a certificate the device already trusts, so it needs the
+endhost API, the server URL, and a SNAP token wherever SNAP is the underlay.
 
 The room list is a drawer on a phone and stays open from 840dp, so a tablet or an unfolded foldable
 reads like the terminal client's sidebar. A room holding unread messages carries a dot, never a

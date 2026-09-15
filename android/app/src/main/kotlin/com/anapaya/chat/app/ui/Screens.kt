@@ -83,9 +83,9 @@ public fun ConnectScreen(
 /**
  * The same configuration, typed out, for a network that describes nothing.
  *
- * A production network needs the first two. It answers for the rest itself: its underlay may ask
- * for no token, a TSAR record resolves the host, and a certificate from a real authority is one the
- * device already trusts. Leave those blank and the SDK does that work.
+ * A production network resolves the host from its TSAR records and presents a certificate the
+ * device already trusts, so those two fields are left blank and the SDK does that work. A SNAP
+ * token stays wherever SNAP is the underlay, which on a phone it usually is.
  */
 @Composable
 public fun ManualScreen(
