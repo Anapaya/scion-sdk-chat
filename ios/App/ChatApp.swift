@@ -12,6 +12,7 @@ struct ChatApp: App {
             Group {
                 switch model.screen {
                 case .connect: ConnectScreen(model: model)
+                case .manual: ManualScreen(model: model)
                 case .signIn: SignInScreen(model: model)
                 case .chat: ChatScreen(model: model)
                 }

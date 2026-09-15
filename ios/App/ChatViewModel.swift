@@ -5,9 +5,40 @@ import Foundation
 
 /// Which screen is showing. The flow is one way, except that an ended session goes back to signing in.
 enum Screen {
+    /// Where a network that describes itself is asked for that description.
     case connect
+    /// The same configuration, typed out, for a network that describes nothing.
+    case manual
     case signIn
     case chat
+}
+
+/**
+ A SCION configuration as it is typed.
+
+ Strings rather than a `ScionConfig`, because a half-filled form is not a configuration: a field
+ left blank means the network answers for it, which ``toScionConfig()`` turns into nil.
+ */
+struct ManualForm: Equatable {
+    var endhostApiUrl = ""
+    var baseUrl = ""
+    var snapToken = ""
+    var target = ""
+    var certPem = ""
+
+    func toScionConfig() -> ScionConfig {
+        ScionConfig(
+            endhostApiUrl: trimmed(endhostApiUrl) ?? "",
+            baseUrl: trimmed(baseUrl) ?? "",
+            snapToken: trimmed(snapToken),
+            target: trimmed(target),
+            certPem: trimmed(certPem))
+    }
+
+    private func trimmed(_ value: String) -> String? {
+        let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
+    }
 }
 
 /**
@@ -20,6 +51,8 @@ enum Screen {
 final class ChatViewModel: ObservableObject {
     @Published var screen: Screen = .connect
     @Published var controlUrl = DevNetwork.defaultControlUrl
+    /// Kept while the reader moves between the two connect screens, and after a failed attempt.
+    @Published var manual = ManualForm()
     @Published var rooms: [Room] = []
     @Published var openRoomId: Int64?
     @Published var messages: [Message] = []
@@ -45,20 +78,41 @@ final class ChatViewModel: ObservableObject {
 
     // MARK: - Connecting
 
-    /// Reads the network's description, builds a client, and proves the server is there.
+    /// Moves between the two connect screens, dropping what the other one's attempt reported.
+    func show(_ screen: Screen) {
+        self.screen = screen
+        actionError = nil
+    }
+
+    /// Reads the network's description, then connects with it.
     func connect() {
         ask {
             let network = try await DevNetwork.discover(controlUrl: self.controlUrl)
-            let config = network.toScionConfig()
-            let built = ChatClient(transport: try ScionTransport(config: config))
-            // Building only parses configuration; nothing is dialled until a call is made. The
-            // health check is what turns a wrong address into an error on this screen.
-            try await built.health()
-
-            self.client = built
-            self.target = config.target ?? config.baseUrl
-            self.screen = .signIn
+            try await self.open(network.toScionConfig())
         }
+    }
+
+    /// Connects with a configuration typed in full.
+    func connectManually() {
+        ask {
+            let config = self.manual.toScionConfig()
+            guard !config.endhostApiUrl.isEmpty, !config.baseUrl.isEmpty else {
+                throw ChatError.config("an endhost API and a server URL are both needed")
+            }
+            try await self.open(config)
+        }
+    }
+
+    /// Builds a client, and proves the server is there.
+    private func open(_ config: ScionConfig) async throws {
+        let built = ChatClient(transport: try ScionTransport(config: config))
+        // Building only parses configuration; nothing is dialled until a call is made. The health
+        // check is what turns a wrong address into an error on this screen.
+        try await built.health()
+
+        client = built
+        target = config.target ?? config.baseUrl
+        screen = .signIn
     }
 
     // MARK: - Signing in

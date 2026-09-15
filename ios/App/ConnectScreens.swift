@@ -25,11 +25,66 @@ struct ConnectScreen: View {
             .buttonStyle(PrimaryButton())
             .disabled(model.pending)
 
+            Button { model.show(.manual) } label: {
+                Text("Manual SCION configuration")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Palette.accent)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.plain)
+            .disabled(model.pending)
+
             Progress(pending: model.pending)
             Failure(model.actionError)
             Spacer()
         }
         .padding(24)
+    }
+}
+
+/**
+ The same configuration, typed out, for a network that describes nothing.
+
+ A production network resolves the host from its TSAR records and presents a certificate the device
+ already trusts, so those two fields are left blank and the SDK does that work. A SNAP token stays
+ wherever SNAP is the underlay.
+ */
+struct ManualScreen: View {
+    @ObservedObject var model: ChatViewModel
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("SCION configuration").font(.largeTitle.bold())
+
+                Field("Endhost API", text: $model.manual.endhostApiUrl)
+                Field("Server URL", text: $model.manual.baseUrl)
+                Field("SNAP token", text: $model.manual.snapToken)
+                Field("Target - the server's SCION address", text: $model.manual.target)
+                Field("Certificate (PEM)", text: $model.manual.certPem, lines: 4)
+
+                Button(action: model.connectManually) {
+                    Text("Connect").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(PrimaryButton())
+                .disabled(model.pending)
+
+                Button { model.show(.connect) } label: {
+                    Text("Read it from a development network")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Palette.accent)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+                .disabled(model.pending)
+
+                Progress(pending: model.pending)
+                Failure(model.actionError)
+            }
+            .padding(24)
+        }
+        .textInputAutocapitalization(.never)
+        .autocorrectionDisabled()
     }
 }
 
@@ -80,11 +135,14 @@ struct Field: View {
     let label: String
     @Binding var text: String
     var secure = false
+    /// How far the field grows before it scrolls instead.
+    var lines = 1
 
-    init(_ label: String, text: Binding<String>, secure: Bool = false) {
+    init(_ label: String, text: Binding<String>, secure: Bool = false, lines: Int = 1) {
         self.label = label
         self._text = text
         self.secure = secure
+        self.lines = lines
     }
 
     var body: some View {
@@ -94,7 +152,7 @@ struct Field: View {
                 if secure {
                     SecureField("", text: $text)
                 } else {
-                    TextField("", text: $text)
+                    TextField("", text: $text, axis: .vertical).lineLimit(1...lines)
                 }
             }
             .padding(.horizontal, 14)
