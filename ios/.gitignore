@@ -1,0 +1,8 @@
+# The SDK's Swift package, downloaded from a release. See README.md.
+libs/
+
+# Xcode
+*.xcodeproj/
+.build/
+.swiftpm/
+DerivedData/
