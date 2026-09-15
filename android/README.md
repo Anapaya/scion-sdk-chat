@@ -5,7 +5,7 @@ The chat client as an Android app: connect, sign in, chat, with every request ca
 | File | What it is |
 | --- | --- |
 | `chat-client/ScionTransport.kt` | Builds the SDK client and sends each request. **The only file that mentions SCION.** |
-| `chat-client/ScionConfig.kt` | What the SDK needs to reach a server. The same fields as `chat-client-core`. |
+| `chat-client/ScionConfig.kt` | What the SDK needs to reach a server. |
 | `chat-client/ChatClient.kt` | The chat API: register, log in, rooms, messages. |
 | `chat-client/Feeds.kt` | Polling, as flows. |
 | `chat-client/DevNetwork.kt` | Asks `chat-dev` for a `ScionConfig`. A deployed app is told one. |
@@ -54,9 +54,10 @@ Then install the app:
 cd android && ./gradlew :app:installDebug
 ```
 
-## With a terminal client at the same time
+## With other clients at the same time
 
-Nothing to change. The same `chat-dev` serves both, and the two clients share rooms:
+Nothing to change. The same `chat-dev` serves the iOS app and the terminal client too, and they all
+share rooms:
 
 ```bash
 eval "$(curl -s http://127.0.0.1:8099/info | jq -r '
