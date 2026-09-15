@@ -32,12 +32,12 @@ public actor ChatClient {
 
     /// Creates the account. Deliberately does not log in — the server keeps the two apart.
     public func register(username: String, password: String) async throws {
-        let body = Credentials(username: username, password: password)
+        let body = RegisterRequest(password: password, username: username)
         _ = try await call("POST", "/register", json: encode(body), authenticated: false)
     }
 
     public func logIn(username: String, password: String) async throws {
-        let body = Credentials(username: username, password: password)
+        let body = LoginRequest(password: password, username: username)
         let reply: LoginResponse = try decode(
             await call("POST", "/login", json: encode(body), authenticated: false))
 
@@ -62,7 +62,7 @@ public actor ChatClient {
 
     public func messagesAfter(room: Int64, after: Int64, limit: Int = page) async throws -> [Message] {
         let reply: MessagesResponse = try decode(
-            await call("GET", "/rooms/\(room)/messages?after=\(after)&limit=\(limit)"))
+            await call("GET", "/rooms/\(room)/messages?after_seq=\(after)&limit=\(limit)"))
         return reply.messages
     }
 
@@ -135,5 +135,20 @@ public actor ChatClient {
             return .api(
                 status: status, code: envelope.error.code, message: envelope.error.message)
         }
+    }
+}
+
+/**
+ The body of every failing response.
+
+ Hand-written, and `code` is a `String`: the server's `ErrorCode` carries a catch-all so a code
+ added later still decodes, and a generated enum would take that away.
+ */
+struct ErrorEnvelope: Decodable {
+    let error: ApiFailure
+
+    struct ApiFailure: Decodable {
+        let code: String
+        let message: String
     }
 }

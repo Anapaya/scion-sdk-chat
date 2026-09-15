@@ -6,3 +6,6 @@ libs/
 .build/
 .swiftpm/
 DerivedData/
+
+# Written by the model generator, as on Android.
+.openapi-generator/
