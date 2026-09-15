@@ -65,7 +65,7 @@ public class ChatClient(private val transport: Transport) {
 
     public suspend fun messagesAfter(room: Long, after: Long, limit: Int = PAGE): List<Message> =
         decode<MessagesResponse>(
-            call("GET", "/rooms/$room/messages?after=$after&limit=$limit"),
+            call("GET", "/rooms/$room/messages?after_seq=$after&limit=$limit"),
         ).messages
 
     public suspend fun send(room: Long, body: String) {
