@@ -2,28 +2,37 @@
 
 The chat client as an iOS app: connect, sign in, chat, with every request carried over SCION.
 
-| Path | What it is |
+| File | What it is |
 | --- | --- |
-| `ChatClient/Sources/ChatClient/ScionTransport.swift` | Builds the SDK client and sends each request. **The only file that mentions SCION.** |
-| `ChatClient/Sources/ChatClient/ScionConfig.swift` | What the SDK needs to reach a server. |
-| `ChatClient/Sources/ChatClient/ChatClient.swift` | The chat API: register, log in, rooms, messages. |
-| `ChatClient/Sources/ChatClient/DevNetwork.swift` | Asks `chat-dev` where it is. A deployed app is told already. |
-| `ChatClient/Sources/ChatClient/ChatError.swift` | What a call can fail with. |
-| `ChatClient/Sources/ChatClient/Models/` | Generated from the server's OpenAPI document. Not written by hand. |
+| `ChatClient/ScionTransport.swift` | Builds the SDK client and sends each request. **The only file that mentions SCION.** |
+| `ChatClient/ScionConfig.swift` | What the SDK needs to reach a server. |
+| `ChatClient/ChatClient.swift` | The chat API: register, log in, rooms, messages. |
+| `ChatClient/DevNetwork.swift` | Asks `chat-dev` for a `ScionConfig`. A deployed app is told one. |
+| `ChatClient/ChatError.swift` | What a call can fail with. |
+| `ChatClient/Models/` | Generated from the server's OpenAPI document. Not written by hand. |
+| `App/ChatViewModel.swift` | Every call to the client, and the state the screens draw. **The only file that talks to a server.** |
+| `App/ChatRows.swift` | What a room may be called, and which rooms hold something unread. |
+| `App/ChatScreen.swift` | The chat screen: the room list, the messages, the composer. |
+| `App/Theme.swift` | The colour scheme, and the nickname colours the terminal client also uses. |
+| `App/ConnectScreens.swift` | Connecting and signing in. |
 
-`App` depends on the `ChatClient` package, and only that package depends on the SDK, so the UI
-cannot reach SCION even by accident.
+The paths under `ChatClient/` are inside `ChatClient/Sources/ChatClient/`.
+
+The SDK is a dependency of the `ChatClient` package alone. `App` depends on `ChatClient`, so the UI
+cannot reach SCION by accident. No view holds a client.
+
+Two screens fill a `ScionConfig`: one reads the description a development network serves, the other
+takes the same fields by hand.
 
 ## Requirements
 
 Xcode 16 or newer with an iOS simulator runtime, and
-[XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`). No Rust and no
+[XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`). No NDK and no Rust
 cross-compilation: the SCION SDK arrives as a Swift package with a prebuilt XCFramework.
 
 The SCION SDK is on no Swift package registry, so `fetch-sdk.sh` downloads it from its GitHub
-release into `ios/libs`, which is gitignored. It checks the archive against the checksum published
-beside it, and does nothing when the directory is already there. `sdk.version` is the one place the
-version is set.
+release into `ios/libs`, which is gitignored. The version comes from `sdk.version`, and the script
+checks the archive against the checksum published beside it.
 
 SwiftPM resolves the package graph before any build phase runs, so this cannot be a step of the
 build the way it is on Android. Run it before you generate the project.
@@ -37,6 +46,9 @@ same address inside it:
 cargo run -p chat-dev
 ```
 
+No flag, and no AS of its own: the address the simulator reaches the server at is the address
+outside it, which is what the emulator on Android cannot do.
+
 Then generate the project and run it:
 
 ```bash
@@ -46,17 +58,43 @@ xcodegen generate
 open ChatApp.xcodeproj
 ```
 
-Press **Connect**, register a name, and log in.
+`chat-dev` serves its description over plain HTTP, which App Transport Security refuses without an
+exception. `Info.plist` carries `NSAllowsLocalNetworking` for that one call. The chat requests are
+HTTP/3 over the SDK's own UDP sockets, which App Transport Security does not govern.
 
-`chat-dev` serves its description at `127.0.0.1:8099` over plain HTTP, which App Transport Security
-refuses without an exception. `Info.plist` carries `NSAllowsLocalNetworking` for that one call. The
-SCION requests are HTTP/3 over the SDK's own UDP sockets, which App Transport Security does not
-govern.
+## With other clients at the same time
 
-## With the Android app or a terminal client at the same time
+Nothing to change. The same `chat-dev` serves the Android app and the terminal client too, and they
+all share rooms:
 
-Nothing to change. The same `chat-dev` serves all of them, and they share rooms. Each client needs
-its own token, and every read of `/info` mints one: two clients sharing a token evict each other.
+```bash
+eval "$(curl -s http://127.0.0.1:8099/info | jq -r '
+  "export CHAT_CLIENT_SERVER_URL=\(.base_url | @sh)",
+  "export CHAT_CLIENT_ENDHOST_API=\(.endhost_api_url | @sh)",
+  "export CHAT_CLIENT_TARGET=\(.target | @sh)",
+  "export CHAT_CLIENT_CERT_PATH=\(.ca_path | @sh)",
+  "export CHAT_CLIENT_SNAP_TOKEN=\(.auth_token | @sh)"
+')"
+
+cargo run -p chat-ui-ratatui
+```
+
+The simulator and the terminal client both get the default AS, because both reach the server at the
+same address. The root [README](../README.md#the-topology) describes the topology, and which file
+sets it up.
+
+Each client needs its own token, and every read of `/info` mints one. Two clients sharing a token
+evict each other, and it is the first that stops working.
+
+## From another machine
+
+An iPhone on the same network reaches this host at its LAN address. Move the whole network there:
+
+```bash
+cargo run -p chat-dev -- --bind-ip 192.168.1.20      # this host's address on the network
+```
+
+Then type that address into the app's Control URL.
 
 ## The generated models
 
