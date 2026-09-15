@@ -13,18 +13,17 @@ import com.anapaya.scion.http3.TrustAnchors
 /**
  * The whole of SCION, in one class.
  *
- * This is the only file in the project that imports `com.anapaya.scion.http3`. The `app` module
- * depends on this one and never on the SDK, so nothing above here can reach SCION by accident.
- *
- * An endhost API is how a client finds a SCION network at all, so [ScionConfig] always carries one.
- * The three it carries only sometimes are read here: a SNAP token, an address to dial in place of
- * resolving the host, and a certificate to trust in place of the device's anchors.
+ * The only file that imports `com.anapaya.scion.http3`. The `app` module depends on this one and
+ * never on the SDK.
  */
 public class ScionTransport(
     context: Context,
     private val config: ScionConfig,
 ) : Transport {
-    /** Where to send the packets, for a host no TSAR record answers for. */
+    /**
+     * Where to send the packets, for a network that publishes no TSAR record to look up. Null
+     * against a production network, which publishes one.
+     */
     private val address = config.target?.let { target ->
         runCatching { ScionAddress.parse(target) }
             .getOrElse { throw ChatError.Config("the target is not a SCION address: $target") }
@@ -47,8 +46,8 @@ public class ScionTransport(
             .Builder()
             .url("${config.baseUrl}/api/v1${request.path}")
             .apply {
-                // The URL's host stays the name the certificate is issued for, which is what the
-                // handshake checks. Without an address the SDK resolves that name itself.
+                // The URL's host stays the name the certificate must carry. This answers the
+                // address lookup only.
                 address?.let { target(it) }
             }
             .apply {
