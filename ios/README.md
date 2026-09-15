@@ -61,7 +61,7 @@ its own token, and every read of `/info` mints one: two clients sharing a token 
 ## The generated models
 
 `ChatClient/Sources/ChatClient/Models/` comes from `crates/chat-server/openapi.yaml`, as the Android
-client's do. Regenerate them after the API changes:
+client's models do. Regenerate them after the API changes, from the repository root:
 
 ```bash
 npx @openapitools/openapi-generator-cli generate \
