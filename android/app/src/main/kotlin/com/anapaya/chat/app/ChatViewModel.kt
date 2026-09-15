@@ -40,10 +40,7 @@ public sealed interface Screen {
 }
 
 /**
- * A SCION configuration as it is typed.
- *
- * Strings rather than a [ScionConfig], because a half-filled form is not a configuration: a field
- * left blank means "the network answers for this", which [toScionConfig] turns into null.
+ * A SCION configuration
  */
 public data class ManualForm(
     val endhostApiUrl: String = "",

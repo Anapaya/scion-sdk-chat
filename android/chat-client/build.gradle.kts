@@ -29,8 +29,6 @@ android {
 }
 
 dependencies {
-    // The one module that may depend on the SDK. `app` depends on this, never on the SDK, so the
-    // UI cannot reach SCION even by accident.
     api(libs.scion.http3)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
@@ -38,21 +36,3 @@ dependencies {
     testImplementation(kotlin("test"))
     testImplementation(libs.kotlinx.coroutines.test)
 }
-
-// The SDK is published to no public repository, so a missing directory is the first thing a reader
-// hits. Say what to run rather than let Gradle report an unresolved dependency.
-val checkSdkArtifact by tasks.registering {
-    val repository = rootProject.layout.projectDirectory.dir("libs/maven").asFile
-    doFirst {
-        check(repository.isDirectory) {
-            """
-            The SCION SDK is not in android/libs/maven. From the repository root:
-
-                gh release download v0.7.0 --repo Anapaya/scion-sdk -p 'scion-http3-android-*-maven.zip'
-                unzip -q scion-http3-android-0.7.0-maven.zip -d android/libs/maven
-            """.trimIndent()
-        }
-    }
-}
-
-tasks.named("preBuild") { dependsOn(checkSdkArtifact) }

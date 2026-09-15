@@ -17,39 +17,24 @@ The chat client as an Android app: connect, sign in, chat, with every request ca
 | `app/ui/theme/` | The colour scheme, and the nickname colours the terminal client also uses. |
 | `app/ui/Screens.kt` | Connecting and signing in. |
 
-`app` depends on `chat-client`, and only `chat-client` depends on the SDK, so the UI cannot reach
-SCION even by accident. Nothing under `ui/` calls a client: a screen draws what it is given and
-reports what was tapped.
+The SDK is a dependency of `chat-client` alone. `app` depends on `chat-client`, so the UI cannot
+reach SCION by accident. Nothing under `ui/` holds a client.
 
-There are two ways to fill a `ScionConfig`, and one screen for each. The first asks a development
-network to describe itself, which is what `chat-dev` serves `/info` for. The second takes the same
-fields typed out, for a production network that describes nothing. Such a network resolves the host
-from its own TSAR records and presents a certificate the device already trusts, so it needs the
-endhost API, the server URL, and a SNAP token wherever SNAP is the underlay.
-
-The room list is a drawer on a phone and stays open from 840dp, so a tablet or an unfolded foldable
-reads like the terminal client's sidebar. A room holding unread messages carries a dot, never a
-count — `seq` is assigned server-wide, so the gap between two of them spans other rooms.
+Two screens fill a `ScionConfig`: one reads the description a development network serves, the other
+takes the same fields by hand.
 
 ## Requirements
 
 JDK 17, an Android SDK with `platforms;android-35` and `build-tools;35.0.0`, and a running
-emulator. No NDK and no Rust cross-compilation: the SDK arrives as a published AAR.
+emulator. No NDK and no Rust cross-compilation: the SCION SDK arrives as a published AAR.
 
-Fetch it once, from the repository root:
-
-```bash
-gh release download v0.8.0 --repo Anapaya/scion-sdk -p 'scion-http3-android-*-maven.zip'
-unzip -q scion-http3-android-0.8.0-maven.zip -d android/libs/maven
-```
-
-It is not on any public repository, so Gradle reads it from `android/libs/maven`, which is
-gitignored. The build says this again if the directory is missing.
+The SCION SDK is on no Maven repository, so the first build downloads it from its GitHub release
+into `android/libs/maven`, which is gitignored. The version comes from `gradle/libs.versions.toml`,
+and `settings.gradle.kts` checks the archive against the checksum published beside it.
 
 ## Run it
 
-Start the network on the host. The emulator reaches the host's loopback as `10.0.2.2`, which is
-what the app is pre-filled with:
+Start the network on the host. The emulator reaches the host's loopback as `10.0.2.2`:
 
 ```bash
 cargo run -p chat-dev
@@ -68,10 +53,6 @@ Then install the app:
 ```bash
 cd android && ./gradlew :app:installDebug
 ```
-
-Press **Connect**, register a name, and log in. Anything typed goes to the open room, and **New
-room** in the drawer makes another. The terminal client's `/room <name>` is not repeated here: a
-phone has room for a button, so every line typed is a message.
 
 ## With a terminal client at the same time
 
@@ -98,7 +79,7 @@ evict each other, and it is the first that stops working.
 ## From another machine
 
 A phone on the same network is neither of the two cases above: it reaches this host at its LAN
-address, and nothing special-cases that. Move the whole network there:
+address. Move the whole network there:
 
 ```bash
 cargo run -p chat-dev -- --bind-ip 192.168.1.20      # this host's address on the network
@@ -121,8 +102,3 @@ npx @openapitools/openapi-generator-cli generate \
   --global-property models="Room:Message:ServerInfo:Health:LoginRequest:LoginResponse:RegisterRequest:CreateRoomRequest:PostMessageRequest:PostMessageResponse:RoomsResponse:MessagesResponse",modelTests=false,modelDocs=false \
   -o android/chat-client
 ```
-
-The model list is explicit because `ErrorCode` is deliberately left out. It is an open enum on the
-server — a catch-all variant keeps a client working when a code is added after it ships — and a
-generated Kotlin enum would be closed. `ChatError` is hand-written for the same reason, with an
-`Api(code: String)` that accepts a code this build has never seen.
