@@ -91,8 +91,8 @@ emulator has to join that run too.
 
 ## The generated models
 
-`chat-client/model/` comes from `crates/chat-server/openapi.yaml`. Regenerate it after the API
-changes:
+`chat-client/model/` comes from `crates/chat-server/openapi.yaml`, as the iOS client's models do.
+Regenerate them after the API changes, from the repository root:
 
 ```bash
 npx @openapitools/openapi-generator-cli generate \
@@ -102,3 +102,8 @@ npx @openapitools/openapi-generator-cli generate \
   --global-property models="Room:Message:ServerInfo:Health:LoginRequest:LoginResponse:RegisterRequest:CreateRoomRequest:PostMessageRequest:PostMessageResponse:RoomsResponse:MessagesResponse",modelTests=false,modelDocs=false \
   -o android/chat-client
 ```
+
+The model list is explicit because `ErrorCode` is deliberately left out. It is an open enum on the
+server — a catch-all variant keeps a client working when a code is added after it ships — and a
+generated Kotlin enum would be closed. `ChatError` is hand-written for the same reason, with an
+`Api(code: String)` that accepts a code this build has never seen.
