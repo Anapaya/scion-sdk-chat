@@ -59,7 +59,6 @@ private struct TopBar: View {
                     .font(.title3)
                     .foregroundStyle(Palette.ink)
                     .overlay(alignment: .topTrailing) {
-                        // Says a room the reader is not in has something new.
                         if !model.unread.isEmpty {
                             Circle().fill(Palette.accent).frame(width: 8, height: 8).offset(x: 5, y: -3)
                         }
@@ -88,7 +87,7 @@ private struct TopBar: View {
 /**
  That the conversation is carried over SCION, and whether it is still arriving.
 
- The dot follows the reads, so it reports the link rather than decorating it.
+ The dot follows the reads, so it reports the link instead of decorating it.
  */
 private struct TransportBadge: View {
     let live: Bool
@@ -149,16 +148,12 @@ private struct Bubble: View {
     /// The width of the list, of which a bubble may take ``bubbleShare``.
     let width: CGFloat
 
-    /// What the bubble may not grow into.
-    ///
-    /// A `Spacer` holds it rather than a maximum width, because a maximum width in SwiftUI is one a
-    /// view grows to fill. The spacer leaves the bubble its own width and takes the rest.
+    /// A `Spacer` holds this: a maximum width in SwiftUI is one a view grows to fill.
     private var gutter: CGFloat { width * (1 - bubbleShare) }
 
     var body: some View {
         VStack(alignment: said.mine ? .trailing : .leading, spacing: 0) {
-            // Written once per run, and never for the reader: on their own side of the screen
-            // there is nobody else it could be.
+            // Once per run, and never for the reader: their own side names nobody else.
             if said.opensGroup && !said.mine {
                 Text(said.message.username)
                     .font(.system(size: 12, weight: .semibold))
@@ -171,8 +166,7 @@ private struct Bubble: View {
             HStack(spacing: 0) {
                 if said.mine { Spacer(minLength: gutter) }
 
-                // The clock sits beside the text rather than under it, so a short message stays
-                // short.
+                // The clock sits beside the text, so a short message stays short.
                 HStack(alignment: .lastTextBaseline, spacing: 10) {
                     Text(said.message.body)
                         .font(.system(size: 15))
@@ -268,8 +262,7 @@ private struct RoomList: View {
                         Text("#\(room.name)")
                             .foregroundStyle(room.id == model.openRoomId ? Palette.accent : Palette.ink)
                         Spacer()
-                        // A dot, never a count: `seq` is server-wide, so the gap between two of
-                        // them spans other rooms.
+                        // A dot, never a number: `seq` is server-wide, so a gap would overstate it.
                         if model.unread.contains(room.id) {
                             Circle().fill(Palette.accent).frame(width: 8, height: 8)
                         }

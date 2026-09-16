@@ -42,13 +42,7 @@ struct ConnectScreen: View {
     }
 }
 
-/**
- The same configuration, typed out, for a network that describes nothing.
-
- A production network resolves the host from its TSAR records and presents a certificate the device
- already trusts, so those two fields are left blank and the SDK does that work. A SNAP token stays
- wherever SNAP is the underlay.
- */
+/// The same configuration, typed out, for a network that describes nothing.
 struct ManualScreen: View {
     @ObservedObject var model: ChatViewModel
 

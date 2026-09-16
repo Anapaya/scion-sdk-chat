@@ -17,8 +17,7 @@ struct ChatApp: App {
                 case .chat: ChatScreen(model: model)
                 }
             }
-            // Polling runs only while the app is in front, so a backgrounded app stops asking for
-            // messages nobody is reading.
+            // Only while the app is in front, so a backgrounded app stops reading.
             .onChange(of: phase) {
                 guard model.screen == .chat else { return }
                 if phase == .active { model.startPolling() } else { model.stopPolling() }

@@ -3,22 +3,16 @@
 import ChatClient
 import Foundation
 
-/// Which screen is showing. The flow is one way, except that an ended session goes back to signing in.
+/// Which screen is showing.
 enum Screen {
-    /// Where a network that describes itself is asked for that description.
     case connect
-    /// The same configuration, typed out, for a network that describes nothing.
+    /// Connect, with the configuration typed out.
     case manual
     case signIn
     case chat
 }
 
-/**
- A SCION configuration as it is typed.
-
- Strings rather than a `ScionConfig`, because a half-filled form is not a configuration: a field
- left blank means the network answers for it, which ``toScionConfig()`` turns into nil.
- */
+/// A SCION configuration as it is typed. A blank field means the network answers for it.
 struct ManualForm: Equatable {
     var endhostApiUrl = ""
     var baseUrl = ""
@@ -41,37 +35,28 @@ struct ManualForm: Equatable {
     }
 }
 
-/**
- Every call to the chat client, and the state the screens draw.
-
- The screens draw and report what was tapped; no view talks to a server, so there is one place to
- look for how the SDK is used.
- */
+/// Every call to the chat client, and the state the screens draw.
 @MainActor
 final class ChatViewModel: ObservableObject {
     @Published var screen: Screen = .connect
     @Published var controlUrl = DevNetwork.defaultControlUrl
-    /// Kept while the reader moves between the two connect screens, and after a failed attempt.
     @Published var manual = ManualForm()
     @Published var rooms: [Room] = []
     @Published var openRoomId: Int64?
     @Published var messages: [Message] = []
     @Published var unread: Set<Int64> = []
     @Published var username: String?
-    /// Whether a call the reader asked for is still out. One at a time.
     @Published var pending = false
     /// Why the last read failed. Cleared by the next read that works.
     @Published var feedError: String?
-    /// Why the last thing the reader asked for failed, held until they ask for something else.
+    /// Why the last thing the reader asked for failed. Held until they ask for something else.
     @Published var actionError: String?
-    /// What to say in a banner. Taken once, then acknowledged.
     @Published var notice: String?
-    /// Where the server is, once it is known.
     @Published var target: String?
 
     private var client: ChatClient?
     private var poll: Task<Void, Never>?
-    /// The newest `seq` each room had when its listing was last seen, so unread is a change.
+    /// The newest `seq` the reader has seen in each room. Only the room on screen advances it.
     private var seen: [Int64: Int64] = [:]
 
     var openRoom: Room? { rooms.first { $0.id == openRoomId } }
@@ -106,8 +91,8 @@ final class ChatViewModel: ObservableObject {
     /// Builds a client, and proves the server is there.
     private func open(_ config: ScionConfig) async throws {
         let built = ChatClient(transport: try ScionTransport(config: config))
-        // Building only parses configuration; nothing is dialled until a call is made. The health
-        // check is what turns a wrong address into an error on this screen.
+        // Nothing is dialled until a call is made, so the health check is what turns a wrong
+        // address into an error on this screen.
         try await built.health()
 
         client = built
@@ -130,7 +115,6 @@ final class ChatViewModel: ObservableObject {
             try await client.logIn(username: username, password: password)
 
             let rooms = try await client.rooms()
-            // Seeded before anything is drawn, so the first frame is quiet.
             for room in rooms { self.seen[room.id] = room.latestSeq }
 
             self.rooms = rooms
@@ -194,8 +178,7 @@ final class ChatViewModel: ObservableObject {
             let listing = try await client.rooms()
             for room in listing {
                 let was = seen[room.id]
-                // A room holding something newer than the last listing, and not the one being
-                // read, is the only thing that marks unread.
+                // Newer than the last listing, and not the room being read.
                 if let was, room.latestSeq > was, room.id != openRoomId {
                     unread.insert(room.id)
                 }
@@ -220,7 +203,7 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    /// Adds a batch, keeping one row per `seq`.
+    /// Held messages first, so a drawn row is not replaced.
     private func merge(_ batch: [Message]) {
         var held = messages
         let known = Set(held.map(\.seq))
@@ -246,7 +229,7 @@ final class ChatViewModel: ObservableObject {
         (error as? ChatError)?.errorDescription ?? error.localizedDescription
     }
 
-    /// Runs one call, refusing a second while one is out, and reporting what went wrong.
+    /// Runs a call the reader asked for, refusing a second while one is out.
     private func ask(
         refused: @escaping (String) -> Void = { _ in },
         _ work: @escaping () async throws -> Void

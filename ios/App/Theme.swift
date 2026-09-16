@@ -3,9 +3,6 @@
 import SwiftUI
 
 /// The roles the design names.
-///
-/// Blue carries emphasis — the open room, the reader's own messages, anything unread. Orange is
-/// kept for risk. Green says the transport is carrying.
 enum Palette {
     static let accent = Color(hex: 0x009CDE)
     static let strongBlue = Color(hex: 0x165A97)
@@ -18,13 +15,12 @@ enum Palette {
     static let live = Color(hex: 0x6DBE45)
     static let risk = Color(hex: 0xFF871F)
 
-    /// Behind a message the reader wrote, and the ink on it. White on that blue reaches 3.1:1,
-    /// below the 4.5:1 the small text asks for.
+    /// Behind a message the reader wrote. The ink on it is 3.1:1, below the 4.5:1 small text asks.
     static let ownBubble = accent
     static let onOwnBubble = Color.white
 }
 
-/// The nine hues a name is drawn in, dark enough to hold 4.5:1 against white at 12pt.
+/// The terminal client's nine hues, in its order, darkened to hold 4.5:1 against white.
 private let nicknames: [Color] = [
     Color(hex: 0xCF3E69),
     Color(hex: 0x3C8165),
@@ -40,7 +36,7 @@ private let nicknames: [Color] = [
 /**
  The colour `name` is drawn in, the same on every client that shows the room.
 
- FNV-1a, which is specified, so two clients agree. Unsigned throughout: a signed remainder would
+ FNV-1a, and unsigned throughout: `hashValue` is seeded per process, and a signed remainder would
  index outside the list.
  */
 func nicknameColour(_ name: String) -> Color {

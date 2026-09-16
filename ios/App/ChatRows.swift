@@ -22,18 +22,12 @@ enum ChatRow: Identifiable {
         let mine: Bool
         let opensGroup: Bool
         let closesGroup: Bool
-        /// Whether a sender's name is drawn directly under this message, which then carries the
-        /// space between the two groups.
+        /// A name under this message carries the gap, so the row leaves none of its own.
         let nameFollows: Bool
     }
 }
 
-/**
- The clock and the date, fixed rather than the reader's.
-
- A fixed locale keeps the clock at 24 hours everywhere, so two readers of one room see one time
- against a message.
- */
+/// The clock and the date. A fixed locale keeps it at 24 hours, as the terminal client prints it.
 struct Clocks {
     private let time: DateFormatter
     private let date: DateFormatter
@@ -74,13 +68,7 @@ struct Clocks {
     }
 }
 
-/**
- The messages as rows, oldest first, with a separator wherever the local date changes and each
- message told where it sits in its author's run.
-
- Built oldest-first because that is the only order in which a change of day, or of author, can be
- seen.
- */
+/// The messages as rows, oldest first: the only order a change of day or of author is visible in.
 func chatRows(messages: [Message], me: String?, clocks: Clocks) -> [ChatRow] {
     var rows: [ChatRow] = []
     var day: Int?
@@ -95,8 +83,7 @@ func chatRows(messages: [Message], me: String?, clocks: Clocks) -> [ChatRow] {
 
         let before = index > 0 ? messages[index - 1] : nil
         let after = index + 1 < messages.count ? messages[index + 1] : nil
-        // A day separator breaks a run: a name is written again under it, or the group would read
-        // as continuing across a gap of hours.
+        // A day separator breaks a run, so the name is written again under it.
         let opens = newDay || before?.username != message.username
         let closes = after == nil
             || after?.username != message.username
