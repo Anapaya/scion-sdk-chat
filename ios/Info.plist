@@ -11,6 +11,9 @@
 <dict>
     <key>CFBundleDisplayName</key>
     <string>SCION Chat</string>
+    <!-- The palette is light only. -->
+    <key>UIUserInterfaceStyle</key>
+    <string>Light</string>
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsLocalNetworking</key>
