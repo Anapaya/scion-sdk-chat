@@ -16,9 +16,6 @@ import com.anapaya.chat.app.ui.theme.ChatTheme
 import com.anapaya.chat.client.model.Message
 import com.anapaya.chat.client.model.Room
 
-/** Night mode, for a preview that should be drawn in the dark scheme. */
-private const val NIGHT = 0x21
-
 private val ROOMS = listOf(
     Room(id = 1, latestSeq = 12, name = "lobby"),
     Room(id = 2, latestSeq = 40, name = "general"),
@@ -60,7 +57,6 @@ private fun Framed(content: @Composable () -> Unit) {
 }
 
 @Preview(name = "Phone", showBackground = true, widthDp = 412, heightDp = 892)
-@Preview(name = "Phone, dark", showBackground = true, widthDp = 412, heightDp = 892, uiMode = NIGHT)
 @Composable
 private fun PhonePreview() {
     Framed {
@@ -108,7 +104,6 @@ private fun PinnedPreview() {
 }
 
 @Preview(name = "Rooms", showBackground = true, widthDp = 296)
-@Preview(name = "Rooms, dark", showBackground = true, widthDp = 296, uiMode = NIGHT)
 @Composable
 private fun RoomListPreview() {
     Framed {
@@ -124,7 +119,6 @@ private fun RoomListPreview() {
 }
 
 @Preview(name = "Messages", showBackground = true, widthDp = 412, heightDp = 420)
-@Preview(name = "Messages, dark", showBackground = true, widthDp = 412, heightDp = 420, uiMode = NIGHT)
 @Composable
 private fun MessageListPreview() {
     Framed {

@@ -4,9 +4,7 @@ package com.anapaya.chat.app.ui.theme
 
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -54,19 +52,6 @@ private val LightPalette = ChatPalette(
     live = Color(0xFF6DBE45),
 )
 
-private val DarkPalette = ChatPalette(
-    strongBlue = Color(0xFF5FC8F2),
-    ownBubble = Color(0xFF009CDE),
-    onOwnBubble = Color(0xFFFFFFFF),
-    accentTint = Color(0x2E009CDE),
-    risk = Color(0xFFFF871F),
-    riskTint = Color(0xFF33261B),
-    riskBorder = Color(0x61FF871F),
-    fieldBorder = Color(0x24FFFFFF),
-    sendDisabled = Color(0xFF4A5565),
-    live = Color(0xFF7FD65A),
-)
-
 public val LocalChatPalette: ProvidableCompositionLocal<ChatPalette> =
     staticCompositionLocalOf { LightPalette }
 
@@ -93,30 +78,10 @@ private val Light = lightColorScheme(
     scrim = Color(0x731C1F2A),
 )
 
-private val Dark = darkColorScheme(
-    primary = Color(0xFF009CDE),
-    onPrimary = Color(0xFFFFFFFF),
-    background = Color(0xFF1C1F2A),
-    onBackground = Color(0xFFE9EEF4),
-    surface = Color(0xFF1C1F2A),
-    onSurface = Color(0xFFE9EEF4),
-    onSurfaceVariant = Color(0xFFA7B4C3),
-    surfaceContainerLowest = Color(0xFF242835),
-    surfaceContainer = Color(0xFF2E3341),
-    outlineVariant = Color(0x24FFFFFF),
-    outline = Color(0xFF8A97A6),
-    error = Color(0xFFFF871F),
-    onError = Color(0xFFFFFFFF),
-    scrim = Color(0x731C1F2A),
-)
-
-/** The app's colours, light and dark. Not dynamic: two clients of one room should look alike. */
+/** The app's colours. One scheme: two clients of one room should look alike. */
 @Composable
-public fun ChatTheme(
-    dark: Boolean = isSystemInDarkTheme(),
-    content: @Composable () -> Unit,
-) {
-    CompositionLocalProvider(LocalChatPalette provides if (dark) DarkPalette else LightPalette) {
-        MaterialTheme(colorScheme = if (dark) Dark else Light, content = content)
+public fun ChatTheme(content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalChatPalette provides LightPalette) {
+        MaterialTheme(colorScheme = Light, content = content)
     }
 }
