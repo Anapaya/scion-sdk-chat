@@ -8,7 +8,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
-/** How often the open room is re-read, matching the terminal client. */
+/** How often the open room is re-read. */
 private const val MESSAGES_INTERVAL_MILLIS = 1_000L
 
 /** The room list is less urgent than the open room. */
@@ -17,11 +17,8 @@ private const val ROOMS_INTERVAL_MILLIS = 2_000L
 /**
  * Everything posted to `room`, as it arrives.
  *
- * Emits what is already there, then only what is new: `after` the newest `seq` it has seen, so a
- * long-running room is not re-read every second.
- *
- * The delay comes after each answer rather than on a fixed tick. A reply slower than the interval
- * would otherwise queue the next request behind it, and a stall would arrive as a burst.
+ * The delay comes after each answer, not on a tick: a slow reply would otherwise queue the next
+ * request behind it, and a stall would arrive as a burst.
  */
 public fun ChatClient.roomMessages(room: Long): Flow<List<Message>> = flow {
     var newest = 0L

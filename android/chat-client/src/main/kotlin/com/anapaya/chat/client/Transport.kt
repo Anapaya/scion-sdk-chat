@@ -2,7 +2,7 @@
 
 package com.anapaya.chat.client
 
-/** One exchange with the server, in the terms [ChatClient] thinks in. */
+/** One request, as the chat API asks for it. */
 public data class ChatRequest(
     val method: String,
     /** Relative to the server's `/api/v1`, with a leading slash. */
@@ -12,18 +12,13 @@ public data class ChatRequest(
     val bearer: String? = null,
 )
 
-/** What came back. The body is text because every reply this API sends is JSON. */
+/** What came back. The body is text: every reply this API sends is JSON. */
 public data class ChatReply(
     val status: Int,
     val body: String,
 )
 
-/**
- * How [ChatClient] reaches a server.
- *
- * An interface with one implementation, [ScionTransport]. It is here so the boundary is visible:
- * everything above it is ordinary HTTP and JSON, and nothing above it mentions SCION.
- */
+/** Puts a request on the wire and brings the reply back. An interface, so a test can fake it. */
 public interface Transport {
     public suspend fun send(request: ChatRequest): ChatReply
 

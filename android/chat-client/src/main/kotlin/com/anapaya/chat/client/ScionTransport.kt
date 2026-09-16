@@ -10,20 +10,12 @@ import com.anapaya.scion.http3.ScionHttp3Request
 import com.anapaya.scion.http3.ScionHttp3RequestBody
 import com.anapaya.scion.http3.TrustAnchors
 
-/**
- * The whole of SCION, in one class.
- *
- * The only file that imports `com.anapaya.scion.http3`. The `app` module depends on this one and
- * never on the SDK.
- */
+/** The whole of SCION, in one class. The only file that imports `com.anapaya.scion.http3`. */
 public class ScionTransport(
     context: Context,
     private val config: ScionConfig,
 ) : Transport {
-    /**
-     * Where to send the packets, for a network that publishes no TSAR record to look up. Null
-     * against a production network, which publishes one.
-     */
+    /** Where to send the packets, for a network that publishes no TSAR record. Null in production. */
     private val address = config.target?.let { target ->
         runCatching { ScionAddress.parse(target) }
             .getOrElse { throw ChatError.Config("the target is not a SCION address: $target") }
@@ -46,8 +38,7 @@ public class ScionTransport(
             .Builder()
             .url("${config.baseUrl}/api/v1${request.path}")
             .apply {
-                // The URL's host stays the name the certificate must carry. This answers the
-                // address lookup only.
+                // The URL's host stays the name the certificate must carry. The lookup only.
                 address?.let { target(it) }
             }
             .apply {
@@ -60,7 +51,7 @@ public class ScionTransport(
             .build()
 
         return try {
-            // Closed as the sample does: a response holds a stream until it is read and released.
+            // A response holds a stream until it is read and released.
             client.newCall(built).execute().use { reply ->
                 ChatReply(reply.code, reply.body.string())
             }

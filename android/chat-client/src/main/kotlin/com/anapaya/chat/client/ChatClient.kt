@@ -17,16 +17,11 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-/**
- * The chat API, over whatever [Transport] it is given.
- *
- * Holds the session token once someone logs in, so no caller has to carry it. Registering and
- * logging in stay apart, as the API keeps them.
- */
+/** The chat API, over whatever [Transport] it is given. Holds the session token. */
 public class ChatClient(private val transport: Transport) {
     private var token: String? = null
 
-    /** Who is logged in, or `null`. */
+    /** Who is logged in. */
     public var username: String? = null
         private set
 
@@ -37,7 +32,7 @@ public class ChatClient(private val transport: Transport) {
     public suspend fun serverInfo(): ServerInfo =
         decode(call("GET", "/server", authenticated = false))
 
-    /** Creates the account. Deliberately does not log in — the server keeps the two apart. */
+    /** Creates the account. Does not log in: the server keeps the two apart. */
     public suspend fun register(username: String, password: String) {
         call(
             "POST",
@@ -92,8 +87,7 @@ public class ChatClient(private val transport: Transport) {
         }
 
         val failure = refusal(reply.status, reply.body)
-        // The token is gone rather than merely refused, so the app sends the user back to signing
-        // in instead of retrying with something that cannot work.
+        // The token is gone, not refused, so retrying with it cannot work.
         if (failure is ChatError.SessionExpired) {
             token = null
             username = null
@@ -110,7 +104,7 @@ public class ChatClient(private val transport: Transport) {
         }
 
     private companion object {
-        /** How many messages a page holds, matching the terminal client's default. */
+        /** How many messages a page holds. */
         const val PAGE = 50
 
         val format = Json { ignoreUnknownKeys = true }
@@ -130,12 +124,7 @@ public class ChatClient(private val transport: Transport) {
     }
 }
 
-/**
- * The body of every failing response.
- *
- * Hand-written rather than generated, and `code` is a `String`: the server's `ErrorCode` carries a
- * catch-all so a code added later still decodes, and a generated enum would take that away.
- */
+/** The body of every failing response. `code` is a `String`, so a code added later still decodes. */
 @Serializable
 private data class ErrorEnvelope(@SerialName("error") val error: ApiFailure)
 
