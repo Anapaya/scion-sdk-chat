@@ -2,12 +2,7 @@
 
 import Foundation
 
-/**
- The chat API, over whatever ``Transport`` it is given.
-
- Holds the session token once someone logs in, so no caller has to carry it. Registering and
- logging in stay apart, as the API keeps them.
- */
+/// The chat API, over whatever ``Transport`` it is given. Holds the session token.
 public actor ChatClient {
     /// How many messages a page holds.
     public static let page = 50
@@ -30,7 +25,7 @@ public actor ChatClient {
         try decode(await call("GET", "/server", authenticated: false))
     }
 
-    /// Creates the account. Deliberately does not log in — the server keeps the two apart.
+    /// Creates the account. Does not log in: the server keeps the two apart.
     public func register(username: String, password: String) async throws {
         let body = RegisterRequest(password: password, username: username)
         _ = try await call("POST", "/register", json: encode(body), authenticated: false)
@@ -95,8 +90,7 @@ public actor ChatClient {
         }
 
         let refusal = Self.refusal(status: reply.status, body: reply.body)
-        // The token is gone rather than merely refused, so the app sends the reader back to signing
-        // in instead of retrying with something that cannot work.
+        // The token is gone, not refused, so retrying with it cannot work.
         if refusal == .sessionExpired {
             token = nil
             username = nil
@@ -138,12 +132,7 @@ public actor ChatClient {
     }
 }
 
-/**
- The body of every failing response.
-
- Hand-written, and `code` is a `String`: the server's `ErrorCode` carries a catch-all so a code
- added later still decodes, and a generated enum would take that away.
- */
+/// The body of every failing response. `code` is a `String`, so a code added later still decodes.
 struct ErrorEnvelope: Decodable {
     let error: ApiFailure
 

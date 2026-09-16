@@ -16,17 +16,12 @@ public enum TransportFailure: Sendable, Equatable {
 
 /// Everything a call can fail with.
 public enum ChatError: Error, Sendable, Equatable {
-    /// A setting cannot be right, found before anything is sent.
     case config(String)
     /// The request never produced a response.
     case transport(TransportFailure, String)
-    /// A reply arrived that this client cannot read.
     case protocolError(String)
-    /// The server refused, and said why.
     case api(status: Int, code: String, message: String)
-    /// A call that needs a session was made without one.
     case notLoggedIn
-    /// The session ended. The reader has to sign in again.
     case sessionExpired
 }
 

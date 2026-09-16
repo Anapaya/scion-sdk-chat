@@ -2,19 +2,13 @@
 
 import Foundation
 
-/**
- Where a `chat-dev` network is, and how to be trusted by it.
-
- A deployed app knows all of this before it is built. `chat-dev` decides it at startup — the
- endhost APIs take whatever ports are free, the certificate is generated, and a token is minted
- per read — so this asks.
- */
+/// Where a `chat-dev` network is, and how to be trusted by it. A deployed app is told this.
 public struct DevNetwork: Decodable, Sendable {
-    /// The endhost API of the AS a client attaches to. Not the server's.
+    /// The endhost API of the AS a client attaches to.
     public let endhostApiUrl: String
     /// This reader's own token. Two clients sharing one evict each other.
     public let authToken: String
-    /// Where the server is. The host is the name its certificate is issued for.
+    /// Where the server is. Its host is the name the certificate is issued for.
     public let baseUrl: String
     /// The server's SCION address, without a port.
     public let target: String
@@ -42,12 +36,7 @@ public struct DevNetwork: Decodable, Sendable {
             certPem: caPem)
     }
 
-    /**
-     Reads the description `chat-dev` serves.
-
-     Over plain HTTP, never over SCION: a client that cannot reach the network still has to be able
-     to learn why.
-     */
+    /// Reads the description `chat-dev` serves, over plain HTTP: SCION may be what is broken.
     public static func discover(controlUrl: String) async throws -> DevNetwork {
         let trimmed = controlUrl.hasSuffix("/") ? String(controlUrl.dropLast()) : controlUrl
         guard let url = URL(string: trimmed + "/info") else {

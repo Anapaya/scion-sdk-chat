@@ -3,20 +3,12 @@
 import Foundation
 import ScionHTTP3
 
-/**
- The whole of SCION, in one type.
-
- The only file that imports `ScionHTTP3`. The app target depends on this module and never on the
- SDK.
- */
+/// The whole of SCION, in one type. The only file that imports `ScionHTTP3`.
 public final class ScionTransport: Transport {
     private let config: ScionConfig
     private let client: ScionHttp3Client
 
-    /**
-     Where to send the packets, for a network that publishes no TSAR record to look up. Null
-     against a production network, which publishes one.
-     */
+    /// Where to send the packets, for a network that publishes no TSAR record. Null in production.
     private let address: ScionAddress?
 
     public init(config: ScionConfig) throws {
@@ -53,8 +45,7 @@ public final class ScionTransport: Transport {
     public func send(_ request: ChatRequest) async throws -> ChatReply {
         var built = ScionHttp3Request(url: "\(config.baseUrl)/api/v1\(request.path)")
         built.method = ScionHttp3Request.Method(request.method)
-        // The URL's host stays the name the certificate must carry. This answers the address
-        // lookup only.
+        // The URL's host stays the name the certificate must carry. The lookup only.
         if let address { built.targets = [address] }
         if let bearer = request.bearer {
             built.headers.add("authorization", "Bearer \(bearer)")

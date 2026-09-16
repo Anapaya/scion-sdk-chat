@@ -29,10 +29,7 @@ public struct ChatReply: Sendable {
     }
 }
 
-/// Puts a request on the wire and brings the reply back.
-///
-/// A protocol so the chat API can be exercised without a network: `ScionHttp3Client` is a class, so
-/// the layer above it is the one to fake.
+/// Puts a request on the wire and brings the reply back. A protocol, so a test can fake it.
 public protocol Transport: Sendable {
     func send(_ request: ChatRequest) async throws -> ChatReply
     func close() async
