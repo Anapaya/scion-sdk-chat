@@ -23,15 +23,13 @@ import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** How long a feed waits before reading again, after a read that failed. */
 private const val RETRY_MILLIS = 2_000L
 
-/** Which screen is showing. The flow is one way, except that an ended session goes back to signing in. */
+/** Which screen is showing. */
 public sealed interface Screen {
-    /** Where a network that describes itself is asked for that description. */
     public data object Connect : Screen
 
-    /** The same configuration, typed out, for a network that describes nothing. */
+    /** Connect, with the configuration typed out. */
     public data object Manual : Screen
 
     public data object SignIn : Screen
@@ -39,9 +37,7 @@ public sealed interface Screen {
     public data object Chat : Screen
 }
 
-/**
- * A SCION configuration
- */
+/** A SCION configuration as it is typed. A blank field means the network answers for it. */
 public data class ManualForm(
     val endhostApiUrl: String = "",
     val baseUrl: String = "",
@@ -58,77 +54,33 @@ public data class ManualForm(
     )
 }
 
-/**
- * Everything the screens draw.
- *
- * Every field has value semantics, which is what lets [MutableStateFlow] drop the room list the
- * feed re-reads every couple of seconds: an unchanged listing produces an equal state and costs no
- * recomposition. A `Throwable`, a `Job` or a lambda in here would compare by identity and turn that
- * poll into a recomposition every two seconds.
- */
+/** Everything the screens draw. */
 public data class UiState(
     val screen: Screen = Screen.Connect,
     val controlUrl: String = DevNetwork.DEFAULT_CONTROL_URL,
-    /** Kept while the reader moves between the two connect screens, and after a failed attempt. */
     val manual: ManualForm = ManualForm(),
     val rooms: List<Room> = emptyList(),
-    /**
-     * Which room is open, by id rather than by value: the listing is re-read every couple of
-     * seconds, and a held [Room] carries a `latestSeq` that is stale within one poll.
-     */
     val openRoomId: Long? = null,
     val messages: List<Message> = emptyList(),
-    /** The rooms holding something the reader has not seen. See [Unread] for why it is not a count. */
     val unread: Set<Long> = emptySet(),
     val username: String? = null,
-    /** Whether a call the user asked for is still out. One at a time. */
     val pending: Boolean = false,
     /** Why the last read failed. Cleared by the next read that works. */
     val feedError: String? = null,
-    /**
-     * Why the last thing the user asked for failed, held until they ask for something else.
-     *
-     * Separate from [feedError] because a read works every second or so, and a read working says
-     * nothing about a send that did not: one clearing the other would take the reason off the
-     * screen before it was read.
-     */
+    /** Why the last thing the reader asked for failed. Held until they ask for something else. */
     val actionError: String? = null,
-    /** Text a refused send is handing back to the composer. Taken once, then acknowledged. */
     val restoredDraft: String? = null,
-    /**
-     * What to say in a toast. Taken once, then acknowledged.
-     *
-     * For an outcome that changes nothing on the screen. Registering is the one: it leaves the
-     * reader on the same form, with the same two buttons, and no sign it did anything.
-     */
     val notice: String? = null,
-    /** Where the server is, once it is known. Shown so the SCION address is visible. */
     val target: String? = null,
 ) {
-    /** The open room as the last listing described it, so it cannot go stale. */
     val openRoom: Room? get() = rooms.firstOrNull { it.id == openRoomId }
 }
 
-/**
- * Adds a batch, keeping one row per `seq`.
- *
- * Polling resumes from the newest message it has seen, but a resumed feed starts again from the
- * newest page, so a batch can repeat what is already held. `seq` is server-wide and strictly
- * increasing, which makes it the identity to merge on.
- *
- * The held messages come first on purpose: `distinctBy` keeps the first of each `seq`, so a
- * message already on screen keeps the instance already drawn and its row is skipped rather than
- * recomposed.
- */
+/** Held messages first: `distinctBy` keeps the first of each `seq`, so a drawn row is not replaced. */
 private fun UiState.merge(batch: List<Message>): UiState =
     copy(messages = (messages + batch).distinctBy { it.seq }.sortedBy { it.seq })
 
-/**
- * Every call to the chat client, and the state the screens draw.
- *
- * The screens draw and report what was tapped; nothing in `ui/` talks to a server, so there is one
- * place to look for how the SDK is used.
- */
+/** Every call to the chat client, and the state the screens draw. */
 public class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _state = MutableStateFlow(UiState())
     public val state: StateFlow<UiState> = _state.asStateFlow()
@@ -237,12 +189,7 @@ public class ChatViewModel(application: Application) : AndroidViewModel(applicat
         watchMessages()
     }
 
-    /**
-     * Posts what was typed.
-     *
-     * Every line is a message. Rooms are made from the drawer, so there is no syntax to learn and
-     * nothing a message can be mistaken for.
-     */
+    /** Posts what was typed. */
     public fun send(body: String) {
         val typed = body.trim()
         if (typed.isEmpty()) return
@@ -253,15 +200,7 @@ public class ChatViewModel(application: Application) : AndroidViewModel(applicat
         if (!ask({ restore(typed) }) { requireClient().send(room, typed) }) restore(typed)
     }
 
-    /**
-     * Creates a room, refusing a name this client will not accept before any call is made.
-     *
-     * Nothing is added here: the room list feed picks the new room up within a couple of seconds,
-     * which is the same path a room somebody else created arrives by.
-     *
-     * Reached only from the drawer. The terminal client also takes `/room <name>` typed into its
-     * composer; this one does not, so a line typed here is always a message.
-     */
+    /** Creates a room, refusing a name this client will not accept before any call is made. */
     public fun createRoom(name: String) {
         val problem = roomNameProblem(name)
         if (problem != null) {
@@ -277,12 +216,7 @@ public class ChatViewModel(application: Application) : AndroidViewModel(applicat
         _state.update { it.copy(restoredDraft = null) }
     }
 
-    /**
-     * Starts both feeds, and stops them again when the app is no longer in the foreground.
-     *
-     * Called from the screen's lifecycle rather than on connecting, so a backgrounded app is not
-     * asking a server for messages nobody is reading.
-     */
+    /** Starts both feeds. Called from the screen's lifecycle, so a backgrounded app stops reading. */
     public fun startPolling() {
         if (client == null) return
         if (roomsJob?.isActive != true) watchRooms()
@@ -296,12 +230,7 @@ public class ChatViewModel(application: Application) : AndroidViewModel(applicat
         messagesJob = null
     }
 
-    /**
-     * Watches the room list.
-     *
-     * Runs whether or not a room is open, so a room created elsewhere can be discovered by a client
-     * that has none.
-     */
+    /** Watches the room list. */
     private fun watchRooms() {
         roomsJob?.cancel()
         val client = client ?: return
@@ -333,18 +262,11 @@ public class ChatViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    /**
-     * Takes a batch, and marks the room it belongs to read up to it.
-     *
-     * The room is checked rather than assumed: cancelling a feed is cooperative, so a batch already
-     * in flight when the reader moved on would otherwise land in the room they moved to.
-     */
+    /** Takes a batch, and marks the room it belongs to read up to it. */
     private fun applyBatch(room: Long, batch: List<Message>) {
         _state.update { current ->
             if (room != current.openRoomId) return@update current
 
-            // `maxOfOrNull` rather than `maxOf`: the feed only emits a batch it found something in,
-            // and a crash is a steep price for relying on that from here.
             batch.maxOfOrNull { it.seq }?.let { unread.advance(room, it) }
             current.merge(batch).copy(
                 feedError = null,
@@ -353,12 +275,7 @@ public class ChatViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    /**
-     * Runs a call the user asked for, refusing a second while one is out.
-     *
-     * Answers whether the call was taken, so a caller holding something the reader typed can put it
-     * back rather than lose it. `refused` runs for a call that was taken and then failed.
-     */
+    /** Runs a call the reader asked for, refusing a second while one is out. */
     private fun ask(refused: (String) -> Unit = {}, work: suspend () -> Unit): Boolean {
         if (_state.value.pending) return false
         _state.update { it.copy(pending = true, actionError = null) }
@@ -384,12 +301,7 @@ public class ChatViewModel(application: Application) : AndroidViewModel(applicat
         _state.update { it.copy(restoredDraft = body) }
     }
 
-    /**
-     * Records a read that failed, and answers whether the feed should keep trying.
-     *
-     * Only an ended session stops it. Anything else is worth another read: the server may be
-     * restarting, and a feed that gave up would never reach the read that clears the row.
-     */
+    /** Records a read that failed, and answers whether the feed should keep trying. */
     private fun feedFailed(error: Throwable): Boolean {
         if (signedOut(error)) return false
         _state.update { it.copy(feedError = error.message ?: error.toString()) }

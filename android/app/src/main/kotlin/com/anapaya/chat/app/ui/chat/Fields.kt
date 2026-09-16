@@ -21,12 +21,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 
-/**
- * A field with no decoration of its own.
- *
- * The design draws its own containers — a pill for the composer, a bordered box in the dialog — so
- * a Material text field would put a second one inside each of them.
- */
+/** A field with no decoration of its own: the callers draw their own containers. */
 @Composable
 internal fun PlainField(
     value: String,
@@ -70,12 +65,7 @@ internal fun PlainField(
     )
 }
 
-/**
- * A one-pixel rule along the top edge.
- *
- * Structure on this screen is carried by hairlines and space rather than elevation, so these appear
- * wherever two bands meet.
- */
+/** A one-pixel rule along the top edge. This screen's structure is hairlines and space. */
 internal fun Modifier.drawTopHairline(colour: Color): Modifier = drawBehind {
     val thickness = 1.dp.toPx()
     drawLine(

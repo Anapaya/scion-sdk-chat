@@ -15,37 +15,29 @@ import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
-/** How long a panel takes to arrive, and the curve it arrives on. Calm: no bounce, no overshoot. */
+/** How long a panel takes to arrive, and the curve it arrives on. */
 public const val PanelMillis: Int = 220
 
 public val PanelEasing: Easing = CubicBezierEasing(0.2f, 0.6f, 0.2f, 1f)
 
-/**
- * The roles Material 3 has no name for.
- *
- * Blue carries emphasis — the open room, the reader's own messages, anything unread. Orange is kept
- * for risk, which here is the one thing that went wrong. Green says the transport is carrying.
- */
+/** The roles Material 3 has no name for. */
 @Immutable
 public data class ChatPalette(
-    /** Text and linework that must stay legible at small sizes, where the vivid blue does not. */
+    /** Legible at small sizes, where the vivid blue is not. */
     val strongBlue: Color,
-    /** Behind a message the reader wrote. The blue the buttons are in. */
+    /** Behind a message the reader wrote. */
     val ownBubble: Color,
-    /** On top of [ownBubble], at 3.1:1. Chosen for the look, below the 4.5:1 the small text asks. */
+    /** On top of [ownBubble], at 3.1:1. Below the 4.5:1 the small text asks for. */
     val onOwnBubble: Color,
-    /** Behind the open room's row, and the drawer's own button. */
     val accentTint: Color,
     /** The dot on a warning. Never the text: at 12.5sp orange on tint does not carry. */
     val risk: Color,
-    /** Behind a warning, and the hairline above it. */
     val riskTint: Color,
     val riskBorder: Color,
-    /** Around the composer's field, which sits on a surface too near its own fill to show an edge. */
+    /** Around the composer's field, whose fill is too near the surface under it. */
     val fieldBorder: Color,
-    /** The send button with nothing to send. */
     val sendDisabled: Color,
-    /** The dot on the transport badge, while reads are arriving. */
+    /** The transport badge's dot, while reads are arriving. */
     val live: Color,
 )
 
@@ -118,12 +110,7 @@ private val Dark = darkColorScheme(
     scrim = Color(0x731C1F2A),
 )
 
-/**
- * The app's colours, light and dark.
- *
- * Not dynamic colour: the phone is shown beside the terminal client, and a scheme taken from the
- * reader's wallpaper would leave the two with nothing in common.
- */
+/** The app's colours, light and dark. Not dynamic: two clients of one room should look alike. */
 @Composable
 public fun ChatTheme(
     dark: Boolean = isSystemInDarkTheme(),

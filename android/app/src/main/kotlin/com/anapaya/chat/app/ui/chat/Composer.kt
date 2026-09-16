@@ -40,30 +40,20 @@ private val FIELD_PAD = 11.dp
 /** [FIELD] plus the ring's offset, so the two curves stay parallel. */
 private val RING = RoundedCornerShape(20.dp)
 
-/** What the focus ring is drawn in, and how far outside the field it sits. */
+/** How wide the focus ring is, and how far outside the field it sits. */
 private val RING_WIDTH = 2.dp
 private val RING_GAP = 2.dp
 
 /** One line of the field, at 15sp and the line height the bubbles use. */
 private val LINE = 20.dp
 
-/**
- * How far the button rises off the row's floor.
- *
- * The field keeps its ring, border and padding under its last line, so a button resting on the
- * floor sits below the words. This lifts it until its middle is on that line.
- */
+/** Lifts the button until its middle is on the field's last line, clear of the field's own inset. */
 private val BUTTON_LIFT = RING_GAP + FIELD_BORDER + FIELD_PAD - (BUTTON - LINE) / 2
 
 /** How far the field grows before it scrolls instead. */
 private const val MAX_LINES = 3
 
-/**
- * The line being typed, and the way to post it.
- *
- * The send button is the only thing on the screen that says a call is out, which is why the spinner
- * lives in it rather than in a bar of its own.
- */
+/** The line being typed, and the way to post it. The send button carries the spinner. */
 @Composable
 internal fun Composer(
     draft: String,
@@ -94,8 +84,7 @@ internal fun Composer(
         Box(
             modifier = Modifier
                 .weight(1f)
-                // Drawn outside the field, and padded whether or not it shows, so taking focus
-                // moves nothing.
+                // Padded whether or not it shows, so taking focus moves nothing.
                 .border(
                     width = if (focused) RING_WIDTH else 0.dp,
                     color = if (focused) MaterialTheme.colorScheme.primary else Color.Transparent,

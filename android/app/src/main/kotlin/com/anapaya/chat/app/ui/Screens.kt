@@ -30,13 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.anapaya.chat.app.ManualForm
 import com.anapaya.chat.app.UiState
 
-/**
- * Where a network that describes itself is asked for that description.
- *
- * A development network picks its ports at startup, mints a token per reader and signs its own
- * certificate, so it serves all of that at one address that does not move. Everything after this
- * call goes over SCION.
- */
+/** Where a network that describes itself is asked for that description. */
 @Composable
 public fun ConnectScreen(
     state: UiState,
@@ -80,13 +74,7 @@ public fun ConnectScreen(
     }
 }
 
-/**
- * The same configuration, typed out, for a network that describes nothing.
- *
- * A production network resolves the host from its TSAR records and presents a certificate the
- * device already trusts, so those two fields are left blank and the SDK does that work. A SNAP
- * token stays wherever SNAP is the underlay, which on a phone it usually is.
- */
+/** The same configuration, typed out, for a network that describes nothing. */
 @Composable
 public fun ManualScreen(
     state: UiState,

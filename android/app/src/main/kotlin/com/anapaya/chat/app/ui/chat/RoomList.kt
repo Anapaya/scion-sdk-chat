@@ -33,12 +33,7 @@ internal val DRAWER_WIDTH = 296.dp
 
 private val ROW_SHAPE = RoundedCornerShape(percent = 50)
 
-/**
- * Every room, and the way to make another.
- *
- * The body of both drawers. Which one wraps it is [ChatScreen]'s business, so the list is written
- * once.
- */
+/** Every room, and the way to make another. The body of both drawers. */
 @Composable
 internal fun RoomList(
     rooms: List<Room>,
@@ -138,8 +133,7 @@ private fun RoomRow(
         Text(
             text = "#${room.name}",
             fontSize = 14.5.sp,
-            // Unread carries in the weight as well as the marker, so the row reads at a glance
-            // without being read. The open room is never unread, so the two cannot collide.
+            // Weight as well as the marker, so the row reads at a glance.
             fontWeight = if (selected || unread) FontWeight.SemiBold else FontWeight.Normal,
             color = if (selected) palette.strongBlue else MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
@@ -147,8 +141,7 @@ private fun RoomRow(
             modifier = Modifier.weight(1f),
         )
 
-        // A dot, never a number. `seq` is assigned server-wide, so the distance between two of them
-        // counts other rooms' messages and would overstate this one's.
+        // A dot, never a number: `seq` is server-wide, so a gap would overstate this room.
         if (unread) {
             Box(
                 modifier = Modifier

@@ -41,12 +41,7 @@ import androidx.compose.ui.window.Dialog
 import com.anapaya.chat.app.roomNameProblem
 import com.anapaya.chat.app.ui.theme.chatPalette
 
-/**
- * Names a new room.
- *
- * The only way to make one here. The name is checked as it is typed, so a name the server would
- * refuse never costs a round trip.
- */
+/** Names a new room. Checked as it is typed, so a refusal costs no round trip. */
 @Composable
 internal fun CreateRoomDialog(pending: Boolean, onDismiss: () -> Unit, onCreate: (String) -> Unit) {
     var name by rememberSaveable { mutableStateOf("") }
@@ -78,7 +73,6 @@ internal fun CreateRoomDialog(pending: Boolean, onDismiss: () -> Unit, onCreate:
                 modifier = Modifier.padding(top = 16.dp).focusRequester(focus),
             )
 
-            // Nothing is wrong with a field nobody has typed in yet.
             if (name.isNotEmpty() && problem != null) {
                 Text(
                     text = problem,
@@ -162,8 +156,7 @@ internal fun ErrorBanner(message: String, modifier: Modifier = Modifier) {
                 .size(8.dp)
                 .background(palette.risk, RoundedCornerShape(percent = 50)),
         )
-        // The message takes the page's ink, not the orange: orange on its own tint does not carry
-        // at this size.
+        // The page's ink, not the orange: orange on its own tint does not carry at this size.
         Text(
             text = message,
             fontSize = 12.5.sp,

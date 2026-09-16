@@ -25,13 +25,7 @@ import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/**
- * The screen's glyphs, drawn rather than imported.
- *
- * The path data is the design's own, so a stroke is the weight it was drawn at. An icon set would
- * bring a second stroke weight to a screen whose structure is carried by hairlines, and the brand
- * set has no menu or send glyph to take instead.
- */
+/** The screen's glyphs, drawn from the design's own path data so a stroke keeps its weight. */
 private fun path(data: String): Path = PathParser().parsePathString(data).toPath()
 
 /** Draws `path`, authored against a `viewBox` square, into whatever size the caller gave. */

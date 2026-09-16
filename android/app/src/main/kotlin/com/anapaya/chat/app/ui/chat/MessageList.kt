@@ -50,9 +50,7 @@ private val CLOCK_GAP = 10.dp
 /**
  * The open room's conversation, oldest at the top.
  *
- * Laid out in reverse so index 0 is the newest message and sits against the composer. That is what
- * keeps the newest message above the keyboard when it opens: a list anchored at its top would slide
- * it underneath.
+ * Reversed, so index 0 is the newest and stays above the keyboard when it opens.
  */
 @Composable
 internal fun MessageList(
@@ -74,8 +72,7 @@ internal fun MessageList(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 16.dp, bottom = 14.dp),
         ) {
-            // Keys are what let a message arriving while the reader is scrolled up leave the view
-            // where it was: without them every index shifts and the list jumps.
+            // Without keys every index shifts as a message arrives, and the list jumps.
             items(rows, key = { it.key }, contentType = { it::class }) { row ->
                 when (row) {
                     is ChatRow.Day -> DaySeparator(row.label)
@@ -86,11 +83,7 @@ internal fun MessageList(
     }
 }
 
-/**
- * A bubble's corners for where it sits in its author's run.
- *
- * The corner facing the neighbour above or below flattens, so a run reads as one block.
- */
+/** A bubble's corners: the one facing its neighbour flattens, so a run reads as one block. */
 private fun bubbleShape(mine: Boolean, opens: Boolean, closes: Boolean): RoundedCornerShape = when {
     mine && opens -> RoundedCornerShape(CORNER, CORNER, JOINED, CORNER)
     mine && closes -> RoundedCornerShape(CORNER, JOINED, CORNER, CORNER)
@@ -107,8 +100,7 @@ private fun Said(row: ChatRow.Said, widest: Dp) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            // A run closes with more space beneath it than separates its own rows, which is what
-            // makes it read as one turn rather than several. A name under it brings its own.
+            // A closing run leaves more space than its own rows do. A name under it brings its own.
             .padding(
                 bottom = when {
                     !row.closesGroup -> 4.dp
@@ -118,8 +110,7 @@ private fun Said(row: ChatRow.Said, widest: Dp) {
             ),
         horizontalAlignment = if (row.mine) Alignment.End else Alignment.Start,
     ) {
-        // Written once per run, and never for the reader: on their own side of the screen there is
-        // nobody else it could be.
+        // Once per run, and never for the reader: their own side names nobody else.
         if (row.opensGroup && !row.mine) {
             Text(
                 text = row.message.username,
@@ -130,8 +121,8 @@ private fun Said(row: ChatRow.Said, widest: Dp) {
             )
         }
 
-        // The clock sits beside the text rather than under it, so a short message stays short. The
-        // text takes only the width it needs, and the clock is measured first and never shrinks.
+        // The clock sits beside the text, so a short message stays short. It is measured first and
+        // never shrinks.
         Row(
             modifier = Modifier
                 .widthIn(max = widest)
@@ -165,9 +156,7 @@ private fun Said(row: ChatRow.Said, widest: Dp) {
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
-                // On the text's last baseline, not its box. The body carries line spacing under
-                // that baseline which the smaller clock has none of, so matching the boxes would
-                // leave the clock riding above the words.
+                // The last baseline, not the box: the body's line spacing would lift the clock.
                 modifier = Modifier
                     .padding(start = CLOCK_GAP)
                     .alignBy(LastBaseline),
@@ -189,11 +178,7 @@ private fun DaySeparator(label: String) {
     )
 }
 
-/**
- * The way back to the newest message, shown only once the reader has left it.
- *
- * Placed by the caller, which is the only thing that knows where the bottom of the screen is.
- */
+/** The way back to the newest message, shown once the reader has left it. Placed by the caller. */
 @Composable
 internal fun JumpToNewest(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Row(

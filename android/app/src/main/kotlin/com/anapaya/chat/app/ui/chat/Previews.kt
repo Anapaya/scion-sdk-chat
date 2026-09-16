@@ -28,12 +28,7 @@ private val ROOMS = listOf(
 /** Fixed, so a preview does not change with the clock. Sits mid-afternoon. */
 private const val NOON = 1_788_000_000_000L
 
-/**
- * A run each way, so grouping, the author colours and both bubble shapes are all on screen.
- *
- * `ada` is the reader. The names are different lengths and hash to different colours, which is the
- * one thing here that cannot be checked without looking.
- */
+/** A run each way, so grouping, the author colours and both bubble shapes are all on screen. */
 private val MESSAGES = listOf(
     Message(seq = 8, username = "grace", body = "the tunnel came up", postedAt = NOON),
     Message(seq = 9, username = "grace", body = "on both ASes", postedAt = NOON + 20_000),

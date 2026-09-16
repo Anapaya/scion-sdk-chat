@@ -68,9 +68,8 @@ private val STICK = 40.dp
 /**
  * The rooms, the open room's messages, and the line being typed.
  *
- * Everything the two layouts share is remembered here, above the branch between them: a composable
- * remembers by its place in the tree, and the two drawers are different places, so anything held
- * inside one would be dropped when a fold opens.
+ * What the two layouts share is remembered above the branch between them, or a fold opening would
+ * drop it.
  */
 @Composable
 public fun ChatScreen(
@@ -89,13 +88,11 @@ public fun ChatScreen(
 
     val pinned = width == PINNED
     val clocks = remember { Clocks() }
-    // Reversed as a view rather than a copy: rows are built oldest-first, the only order a change of
-    // day or of author can be found in, and drawn newest-first.
+    // A view, not a copy: rows are built oldest-first and drawn newest-first.
     val rows = remember(state.messages, state.username) {
         chatRows(state.messages, state.username, clocks).asReversed()
     }
 
-    // A send that never left hands its text back, so the reader does not lose what they typed.
     LaunchedEffect(state.restoredDraft) {
         state.restoredDraft?.let {
             draft = it
@@ -103,9 +100,8 @@ public fun ChatScreen(
         }
     }
 
-    // Whether the newest message should stay in view. Only a scroll that has settled may change it.
-    // Reading the position as rows arrive would not work: a new message takes index 0 and moves the
-    // reader's anchor to index 1, which is indistinguishable from the reader having scrolled away.
+    // Only a settled scroll may change this. An arriving message takes index 0 and moves the
+    // reader's anchor to index 1, which reads exactly like scrolling away.
     val stick = with(LocalDensity.current) { STICK.toPx() }
     var following by remember { mutableStateOf(true) }
     LaunchedEffect(listState) {
@@ -122,8 +118,8 @@ public fun ChatScreen(
         listState.scrollToItem(0)
     }
 
-    // The newest seq rather than the list, which is a new instance on every poll whether or not a
-    // message arrived. Read during composition, so each poll brings the current one.
+    // The seq, not the list: the list is a new instance on every poll. Read during composition, so
+    // each poll brings the current one.
     val newest = state.messages.lastOrNull()?.seq
     LaunchedEffect(newest) {
         if (following) listState.animateScrollToItem(0)
@@ -136,7 +132,6 @@ public fun ChatScreen(
             unread = state.unread,
             pending = state.pending,
             onOpenRoom = {
-                // Re-opening the room already on screen closes the drawer and asks for nothing.
                 if (it.id != state.openRoomId) onOpenRoom(it)
                 if (!pinned) scope.launch { drawerState.close() }
             },
@@ -154,8 +149,6 @@ public fun ChatScreen(
             draft = draft,
             listState = listState,
             detached = !following,
-            // Removed rather than disabled where the list is already on screen: a dead button
-            // leaves a hole where the title should start.
             onMenu = if (pinned) null else ({ scope.launch { drawerState.open() } }),
             onJump = {
                 following = true
@@ -207,12 +200,7 @@ public fun ChatScreen(
     }
 }
 
-/**
- * The open room: its name, its messages, and the composer.
- *
- * Inside the drawer rather than around it, so a modal drawer's scrim covers the title bar and a
- * pinned list runs the full height beside it.
- */
+/** The open room: its name, its messages, and the composer. Inside the drawer, so the scrim covers it. */
 @Composable
 private fun Conversation(
     state: UiState,
@@ -246,14 +234,11 @@ private fun Conversation(
             )
 
             Column(
-                // The keyboard's inset is measured from the bottom of the window and already covers
-                // the navigation bar, so the two are unioned rather than added.
+                // The keyboard's inset already covers the navigation bar, so the two are unioned.
                 modifier = Modifier.windowInsetsPadding(
                     WindowInsets.ime.union(WindowInsets.navigationBars),
                 ),
             ) {
-                // A read that failed and something the reader asked for that failed are different
-                // news: one clears itself on the next poll, the other has to outlive it.
                 state.feedError?.let { ErrorBanner(it) }
                 state.actionError?.let { ErrorBanner(it) }
 
@@ -306,15 +291,12 @@ private fun TopBar(
             ) {
                 MenuGlyph(tint = MaterialTheme.colorScheme.onSurface)
 
-                // Says a room the reader is not in has something new, which is the only reason to
-                // open a list they otherwise have no cause to look at.
                 if (unreadElsewhere) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(top = 9.dp, end = 10.dp)
-                            // 9dp of blue, and a 2dp ring of the page around it so the dot reads
-                            // against whichever bar it lands on.
+                            // A ring of the page around it, so the dot reads on either bar.
                             .size(13.dp)
                             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(percent = 50))
                             .padding(2.dp)
@@ -350,9 +332,7 @@ private fun TopBar(
 /**
  * That the conversation is carried over SCION, and whether it is still arriving.
  *
- * The transport is what this app exists to show, and a chat screen looks the same over any of them.
- * The dot follows the reads: it turns to [ChatPalette.risk] while one is failing, so it reports the
- * link rather than decorating it.
+ * The dot follows the reads, so it reports the link instead of decorating it.
  */
 @Composable
 private fun TransportBadge(live: Boolean, modifier: Modifier = Modifier) {
