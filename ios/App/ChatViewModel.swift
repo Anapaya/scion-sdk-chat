@@ -3,6 +3,12 @@
 import ChatClient
 import Foundation
 
+/// How often the open room is re-read.
+private let messagesInterval: UInt64 = 1_000_000_000
+
+/// The room list is less urgent than the open room.
+private let roomsInterval: UInt64 = 2_000_000_000
+
 /// Which screen is showing.
 enum Screen {
     case connect
@@ -55,7 +61,12 @@ final class ChatViewModel: ObservableObject {
     @Published var target: String?
 
     private var client: ChatClient?
-    private var poll: Task<Void, Never>?
+
+    /// The two feeds, stopped whenever the app leaves the foreground.
+    private var roomsFeed: Task<Void, Never>?
+
+    /// Restarted on its own when a room is opened, which the room list has no reason to be.
+    private var messagesFeed: Task<Void, Never>?
     /// The newest `seq` the reader has seen in each room. Only the room on screen advances it.
     private var seen: [Int64: Int64] = [:]
 
@@ -95,6 +106,7 @@ final class ChatViewModel: ObservableObject {
         // address into an error on this screen.
         try await built.health()
 
+        await client?.close()
         client = built
         target = config.target ?? config.baseUrl
         screen = .signIn
@@ -115,17 +127,13 @@ final class ChatViewModel: ObservableObject {
             try await client.logIn(username: username, password: password)
 
             let rooms = try await client.rooms()
-            for room in rooms { self.seen[room.id] = room.latestSeq }
+            self.seed(rooms)
 
             self.rooms = rooms
             self.username = username
             self.openRoomId = rooms.first?.id
             self.messages = []
             self.screen = .chat
-
-            if let open = rooms.first {
-                self.messages = try await client.messagesNewest(room: open.id)
-            }
             self.startPolling()
         }
     }
@@ -134,12 +142,12 @@ final class ChatViewModel: ObservableObject {
 
     func openRoom(_ room: Room) {
         guard room.id != openRoomId else { return }
+        // Does not advance the read cursor: only a delivered batch does. Marking a room read on
+        // opening it would silence a room whose messages never arrived.
         openRoomId = room.id
         messages = []
-        unread.remove(room.id)
-        ask {
-            self.messages = try await self.requireClient().messagesNewest(room: room.id)
-        }
+        unread = unreadRooms(rooms, open: room.id)
+        watchMessages()
     }
 
     func createRoom(_ name: String) {
@@ -156,44 +164,73 @@ final class ChatViewModel: ObservableObject {
 
     // MARK: - Polling
 
-    /// Re-reads the room list and the open room, so messages from elsewhere arrive.
+    /// Starts both feeds. Called from the screen's lifecycle, so a backgrounded app stops reading.
     func startPolling() {
-        poll?.cancel()
-        poll = Task { [weak self] in
+        watchRooms()
+        watchMessages()
+    }
+
+    func stopPolling() {
+        roomsFeed?.cancel()
+        roomsFeed = nil
+        messagesFeed?.cancel()
+        messagesFeed = nil
+    }
+
+    /// Watches the room list.
+    private func watchRooms() {
+        roomsFeed?.cancel()
+        roomsFeed = Task { [weak self] in
             while !Task.isCancelled {
-                await self?.readOnce()
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                await self?.readRooms()
+                try? await Task.sleep(nanoseconds: roomsInterval)
             }
         }
     }
 
-    func stopPolling() {
-        poll?.cancel()
-        poll = nil
+    /// Watches the open room, from the newest message it holds.
+    private func watchMessages() {
+        messagesFeed?.cancel()
+        guard openRoomId != nil else { return }
+
+        messagesFeed = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.readMessages()
+                try? await Task.sleep(nanoseconds: messagesInterval)
+            }
+        }
     }
 
-    private func readOnce() async {
+    private func readRooms() async {
         guard let client else { return }
         do {
             let listing = try await client.rooms()
-            for room in listing {
-                let was = seen[room.id]
-                // Newer than the last listing, and not the room being read.
-                if let was, room.latestSeq > was, room.id != openRoomId {
-                    unread.insert(room.id)
-                }
-                seen[room.id] = room.latestSeq
-            }
             rooms = listing
+            unread = unreadRooms(listing, open: openRoomId)
+            feedError = nil
+        } catch ChatError.sessionExpired {
+            signedOut()
+        } catch {
+            feedError = message(of: error)
+        }
+    }
 
-            if let open = openRoomId {
-                let batch: [Message]
-                if let newest = messages.last?.seq {
-                    batch = try await client.messagesAfter(room: open, after: newest)
-                } else {
-                    batch = try await client.messagesNewest(room: open)
-                }
-                if !batch.isEmpty { merge(batch) }
+    private func readMessages() async {
+        guard let client, let open = openRoomId else { return }
+        do {
+            let batch: [Message]
+            if let newest = messages.last?.seq {
+                batch = try await client.messagesAfter(room: open, after: newest)
+            } else {
+                batch = try await client.messagesNewest(room: open)
+            }
+
+            // The room is checked, not assumed: a batch in flight when the reader moved on would
+            // otherwise land in the room they moved to.
+            if !batch.isEmpty, open == openRoomId {
+                merge(batch)
+                advance(room: open, seq: batch.map(\.seq).max() ?? 0)
+                unread = unreadRooms(rooms, open: open)
             }
             feedError = nil
         } catch ChatError.sessionExpired {
@@ -201,6 +238,24 @@ final class ChatViewModel: ObservableObject {
         } catch {
             feedError = message(of: error)
         }
+    }
+
+    /// Marks every room read as it stands, so a session opens quiet.
+    private func seed(_ rooms: [Room]) {
+        seen = Dictionary(uniqueKeysWithValues: rooms.map { ($0.id, $0.latestSeq) })
+    }
+
+    private func advance(room: Int64, seq: Int64) {
+        if seq > (seen[room] ?? 0) { seen[room] = seq }
+    }
+
+    /// Which rooms hold something unseen. A set: `seq` is server-wide, so a gap counts nothing.
+    private func unreadRooms(_ rooms: [Room], open: Int64?) -> Set<Int64> {
+        var found: Set<Int64> = []
+        for room in rooms where room.id != open && room.latestSeq > (seen[room.id] ?? 0) {
+            found.insert(room.id)
+        }
+        return found
     }
 
     /// Held messages first, so a drawn row is not replaced.
@@ -221,6 +276,8 @@ final class ChatViewModel: ObservableObject {
     private func signedOut() {
         stopPolling()
         username = nil
+        messages = []
+        unread = []
         screen = .signIn
         actionError = "the session has ended; sign in again"
     }
