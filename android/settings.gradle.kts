@@ -8,6 +8,10 @@ pluginManagement {
     }
 }
 
+/** How long the SDK's release is given to answer, and then to send. */
+val CONNECT_TIMEOUT_MILLIS = 30_000
+val READ_TIMEOUT_MILLIS = 120_000
+
 fetchScionSdk(file("libs/maven"))
 
 dependencyResolutionManagement {
@@ -40,8 +44,16 @@ fun fetchScionSdk(into: File) {
     val release = "https://github.com/Anapaya/scion-sdk/releases/download/v$version"
     println("Fetching the SCION SDK $version into ${into.path}")
 
-    val bytes = java.net.URI("$release/$archive").toURL().readBytes()
-    val published = java.net.URI("$release/SHA256SUMS-android").toURL().readText()
+    // A network that never answers should fail the build rather than hang it.
+    fun read(from: String): ByteArray =
+        java.net.URI(from).toURL().openConnection().run {
+            connectTimeout = CONNECT_TIMEOUT_MILLIS
+            readTimeout = READ_TIMEOUT_MILLIS
+            getInputStream().use { it.readBytes() }
+        }
+
+    val bytes = read("$release/$archive")
+    val published = String(read("$release/SHA256SUMS-android"))
         .lineSequence()
         .firstOrNull { it.endsWith(" $archive") }
         ?.substringBefore(' ')
