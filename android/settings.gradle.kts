@@ -74,7 +74,9 @@ fun fetchScionSdk(into: File) {
             generateSequence { zip.nextEntry }.forEach { entry ->
                 val file = staging.resolve(entry.name).normalize()
                 // An archive may name a path outside the directory it is unpacked into.
-                check(file.path.startsWith(staging.path)) { "${entry.name} escapes ${staging.path}" }
+                check(file.toPath().startsWith(staging.toPath())) {
+                    "${entry.name} escapes ${staging.path}"
+                }
 
                 if (entry.isDirectory) {
                     file.mkdirs()
