@@ -51,19 +51,31 @@ fun fetchScionSdk(into: File) {
         .joinToString("") { "%02x".format(it) }
     check(digest == published) { "$archive does not match the checksum on its release" }
 
-    java.util.zip.ZipInputStream(bytes.inputStream()).use { zip ->
-        generateSequence { zip.nextEntry }.forEach { entry ->
-            val file = into.resolve(entry.name).normalize()
-            // An archive may name a path outside the directory it is unpacked into.
-            check(file.path.startsWith(into.path)) { "${entry.name} escapes ${into.path}" }
+    // Unpacked beside the directory and moved into place whole. An unpack that throws partway
+    // would otherwise leave a directory that every later build takes for a filled one.
+    val staging = File(into.parentFile, "${into.name}.incomplete")
+    staging.deleteRecursively()
+    staging.mkdirs()
 
-            if (entry.isDirectory) {
-                file.mkdirs()
-            } else {
-                file.parentFile.mkdirs()
-                file.outputStream().use { zip.copyTo(it) }
+    try {
+        java.util.zip.ZipInputStream(bytes.inputStream()).use { zip ->
+            generateSequence { zip.nextEntry }.forEach { entry ->
+                val file = staging.resolve(entry.name).normalize()
+                // An archive may name a path outside the directory it is unpacked into.
+                check(file.path.startsWith(staging.path)) { "${entry.name} escapes ${staging.path}" }
+
+                if (entry.isDirectory) {
+                    file.mkdirs()
+                } else {
+                    file.parentFile.mkdirs()
+                    file.outputStream().use { zip.copyTo(it) }
+                }
             }
         }
+        check(staging.renameTo(into)) { "could not move ${staging.path} to ${into.path}" }
+    } catch (failure: Throwable) {
+        staging.deleteRecursively()
+        throw failure
     }
 }
 
