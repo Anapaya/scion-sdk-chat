@@ -1,0 +1,9 @@
+# Machine-specific: the Android SDK path. `ANDROID_HOME` works instead.
+local.properties
+
+# Build output and Gradle's own state.
+.gradle/
+build/
+
+# The SCION SDK AAR, fetched by the command in README.md. 9 MB of binary.
+libs/

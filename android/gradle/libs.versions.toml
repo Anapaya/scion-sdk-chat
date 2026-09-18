@@ -1,0 +1,36 @@
+# Copyright 2026 Anapaya Systems
+
+[versions]
+# The SDK, from the same release as the Rust crates this workspace uses.
+scionSdk = "0.8.0"
+agp = "8.7.3"
+# Matches the kotlin-stdlib the SDK's POM declares, so one stdlib reaches the build.
+kotlin = "2.1.0"
+coroutines = "1.9.0"
+serialization = "1.7.3"
+composeBom = "2024.12.01"
+activityCompose = "1.9.3"
+lifecycle = "2.8.7"
+
+[libraries]
+scion-http3 = { module = "com.anapaya.scion:scion-http3-android", version.ref = "scionSdk" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+# Which of the two room lists to draw. Versioned by the BOM, like material3 itself.
+# Not named for the artifact's trailing "-class": the accessor would end in a Kotlin keyword.
+compose-material3-window-size = { module = "androidx.compose.material3:material3-window-size-class" }
+compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
+activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
+lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

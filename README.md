@@ -1,7 +1,7 @@
 # scion-sdk-chat
 
 A chat application that shows how to use the SCION SDK. It has a server, a client library, a
-terminal UI, and a development helper that runs them on a SCION network.
+terminal UI, an Android app, and a development helper that runs them on a SCION network.
 
 ```text
   +------------------+     +-------------------+     +-------------+
@@ -17,6 +17,8 @@ terminal UI, and a development helper that runs them on a SCION network.
 ```
 
 An arrow means "depends on". `cargo doc_dx --open` renders every crate.
+
+`android/` is a separate Gradle build that reaches the same server over the SCION SDK for Android.
 
 ## Run it
 
@@ -227,6 +229,24 @@ cargo run -p chat-server -- $(curl -s http://127.0.0.1:8099/info | jq -r '.chat_
 ```
 
 Give the server the same data directory, so it presents the certificate the description names.
+
+## The Android app
+
+`android/` holds the same client as a Jetpack Compose app. It talks to the same `chat-dev`, and it
+shares rooms with a terminal client:
+
+```sh
+cargo run -p chat-dev
+cd android && ./gradlew :app:installDebug
+```
+
+The app is pre-filled with `10.0.2.2:8099`, which is the address the emulator reaches this host's
+loopback at. That request gets the emulator's AS, as [The topology](#the-topology) describes.
+
+The SDK arrives as a published AAR, so the build needs no NDK and no Rust cross-compilation. It is
+not on a public repository, so you download it once into `android/libs/maven`. See
+[android/README.md](android/README.md) for that step, the layout of the code, and how to regenerate
+the API models.
 
 ## Development
 

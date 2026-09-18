@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright 2026 Anapaya Systems -->
+<!--
+    The window behind Compose. Only the background matters: it is what the reader sees between the
+    activity starting and the first frame drawing. Kept in step with ChatTheme's `background`.
+-->
+<resources>
+    <style name="Theme.ScionChat" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#FFFFFF</item>
+    </style>
+</resources>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright 2026 Anapaya Systems -->
+<network-security-config>
+    <!--
+      The control API is plain HTTP on purpose: a client that cannot reach SCION has to be able to
+      learn why. Its address is whatever `chat-dev` was told to bind, so it cannot be listed here —
+      the emulator's `10.0.2.2`, a host's address on the network, or loopback are all ordinary.
+
+      Everything else this app sends, which is every chat request, goes over SCION and is
+      unaffected by this.
+    -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
