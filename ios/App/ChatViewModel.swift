@@ -57,6 +57,8 @@ final class ChatViewModel: ObservableObject {
     @Published var feedError: String?
     /// Why the last thing the reader asked for failed. Held until they ask for something else.
     @Published var actionError: String?
+    /// Text a refused send is handing back to the composer. Taken once, then acknowledged.
+    @Published var restoredDraft: String?
     @Published var notice: String?
     @Published var target: String?
 
@@ -163,9 +165,20 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
+    /// Posts what was typed.
     func send(_ body: String) {
         guard let room = openRoomId, !body.isEmpty else { return }
-        ask { try await self.requireClient().send(room: room, body: body) }
+        // Handed back rather than dropped: the composer has already been cleared, and a refusal the
+        // reader cannot see would look like a message that was sent.
+        let taken = ask(refused: { _ in self.restoredDraft = body }) {
+            try await self.requireClient().send(room: room, body: body)
+        }
+        if !taken { restoredDraft = body }
+    }
+
+    /// Acknowledges ``restoredDraft``, once the composer holds it.
+    func draftRestored() {
+        restoredDraft = nil
     }
 
     // MARK: - Polling
@@ -293,11 +306,15 @@ final class ChatViewModel: ObservableObject {
     }
 
     /// Runs a call the reader asked for, refusing a second while one is out.
+    ///
+    /// Answers whether the call was taken, so a caller holding something the reader typed can put
+    /// it back.
+    @discardableResult
     private func ask(
         refused: @escaping (String) -> Void = { _ in },
         _ work: @escaping () async throws -> Void
-    ) {
-        guard !pending else { return }
+    ) -> Bool {
+        guard !pending else { return false }
         pending = true
         actionError = nil
 
@@ -313,5 +330,6 @@ final class ChatViewModel: ObservableObject {
             }
             pending = false
         }
+        return true
     }
 }

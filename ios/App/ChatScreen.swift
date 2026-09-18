@@ -34,6 +34,11 @@ struct ChatScreen: View {
             }
         }
         .background(Color.white)
+        .onChange(of: model.restoredDraft) {
+            guard let text = model.restoredDraft else { return }
+            draft = text
+            model.draftRestored()
+        }
         .sheet(isPresented: $showRooms) {
             RoomList(model: model, onCreate: { naming = true }, onDismiss: { showRooms = false })
         }
