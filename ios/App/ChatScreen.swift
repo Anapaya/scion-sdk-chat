@@ -114,6 +114,9 @@ private struct TransportBadge: View {
 private struct MessageList: View {
     let rows: [ChatRow]
 
+    /// Whether the newest message should stay in view. The bottom marker leaving says it should not.
+    @State private var following = true
+
     var body: some View {
         GeometryReader { frame in
             ScrollViewReader { scroll in
@@ -133,18 +136,51 @@ private struct MessageList: View {
                                 Bubble(said: said, width: frame.size.width - 28)
                             }
                         }
-                        Color.clear.frame(height: 1).id("newest")
+                        Color.clear
+                            .frame(height: 1)
+                            .id("newest")
+                            .onAppear { following = true }
+                            .onDisappear { following = false }
                     }
                     .padding(.horizontal, 14)
                     .padding(.top, 16)
                     .padding(.bottom, 14)
                 }
                 .onChange(of: rows.count) {
+                    guard following else { return }
                     withAnimation { scroll.scrollTo("newest", anchor: .bottom) }
                 }
                 .onAppear { scroll.scrollTo("newest", anchor: .bottom) }
+                .overlay(alignment: .bottom) {
+                    if !following {
+                        JumpToNewest {
+                            following = true
+                            withAnimation { scroll.scrollTo("newest", anchor: .bottom) }
+                        }
+                        .padding(.bottom, 12)
+                    }
+                }
             }
         }
+    }
+}
+
+/// The way back to the newest message, shown once the reader has left it.
+private struct JumpToNewest: View {
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 6) {
+                Text("Newest").font(.system(size: 12.5, weight: .semibold))
+                Image(systemName: "arrow.down").font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 15)
+            .padding(.vertical, 8)
+            .background(Palette.accent, in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 
