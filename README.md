@@ -1,7 +1,8 @@
 # scion-sdk-chat
 
 A chat application that shows how to use the SCION SDK. It has a server, a client library, a
-terminal UI, an Android app, and a development helper that runs them on a SCION network.
+terminal UI, an Android app, an iOS app, and a development helper that runs them on a SCION
+network.
 
 ```text
   +------------------+     +-------------------+     +-------------+
@@ -18,7 +19,8 @@ terminal UI, an Android app, and a development helper that runs them on a SCION 
 
 An arrow means "depends on". `cargo doc_dx --open` renders every crate.
 
-`android/` is a separate Gradle build that reaches the same server over the SCION SDK for Android.
+`android/` and `ios/` are separate builds that reach the same server over the SCION SDK for each
+platform.
 
 ## Run it
 
@@ -244,9 +246,28 @@ The app is pre-filled with `10.0.2.2:8099`, which is the address the emulator re
 loopback at. That request gets the emulator's AS, as [The topology](#the-topology) describes.
 
 The SDK arrives as a published AAR, so the build needs no NDK and no Rust cross-compilation. It is
-not on a public repository, so you download it once into `android/libs/maven`. See
-[android/README.md](android/README.md) for that step, the layout of the code, and how to regenerate
-the API models.
+not on a public repository, so the first build downloads it into `android/libs/maven`. See
+[android/README.md](android/README.md) for the layout of the code, and how to regenerate the API
+models.
+
+## The iOS app
+
+`ios/` holds the same client as a SwiftUI app. It talks to the same `chat-dev`, and it shares rooms
+with the Android app and a terminal client:
+
+```sh
+cargo run -p chat-dev
+cd ios && ./fetch-sdk.sh && xcodegen generate && open ChatApp.xcodeproj
+```
+
+The app is pre-filled with `127.0.0.1:8099`. The simulator shares the Mac's network, so that is the
+same address outside it, and the simulator attaches to the default AS like any client on this
+machine.
+
+The SDK arrives as a Swift package with a prebuilt XCFramework, so the build needs no Rust
+cross-compilation. It is on no Swift package registry, so `fetch-sdk.sh` downloads it into
+`ios/libs`. `ChatApp.xcodeproj` is generated from `project.yml`, so neither is checked in. See
+[ios/README.md](ios/README.md) for the layout of the code, and how to regenerate the API models.
 
 ## Development
 
