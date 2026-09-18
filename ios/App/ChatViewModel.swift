@@ -150,7 +150,13 @@ final class ChatViewModel: ObservableObject {
         watchMessages()
     }
 
+    /// Creates a room, refusing a name this client will not accept before any call is made.
     func createRoom(_ name: String) {
+        if let problem = roomNameProblem(name) {
+            actionError = problem
+            return
+        }
+
         ask {
             let room = try await self.requireClient().createRoom(name: name)
             self.openRoom(room)
