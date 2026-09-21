@@ -75,7 +75,7 @@ The terminal client gets the default AS and the emulator gets the fallback one. 
 [README](../README.md#the-topology) describes why, and which file sets it up.
 
 Each client needs its own token, and every read of `/info` mints one. Two clients sharing a token
-evict each other, and it is the first that stops working.
+evict each other.
 
 ## From another machine
 
@@ -92,8 +92,7 @@ emulator has to join that run too.
 
 ## The generated models
 
-`chat-client/model/` comes from `crates/chat-server/openapi.yaml`, as the iOS client's models do.
-Regenerate them after the API changes, from the repository root:
+`chat-client/model/` comes from `crates/chat-server/openapi.yaml`. Regenerate them after the API changes, from the repository root:
 
 ```bash
 npx @openapitools/openapi-generator-cli generate \
@@ -105,6 +104,4 @@ npx @openapitools/openapi-generator-cli generate \
 ```
 
 The model list is explicit because `ErrorCode` is deliberately left out. It is an open enum on the
-server — a catch-all variant keeps a client working when a code is added after it ships — and a
-generated Kotlin enum would be closed. `ChatError` is hand-written for the same reason, with an
-`Api(code: String)` that accepts a code this build has never seen.
+server with a catch-all variant that keeps a client working when a code is added after it ships.

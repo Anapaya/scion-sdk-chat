@@ -46,9 +46,6 @@ same address inside it:
 cargo run -p chat-dev
 ```
 
-No flag, and no AS of its own: the address the simulator reaches the server at is the address
-outside it, which is what the emulator on Android cannot do.
-
 Then generate the project and run it:
 
 ```bash
@@ -84,7 +81,7 @@ same address. The root [README](../README.md#the-topology) describes the topolog
 sets it up.
 
 Each client needs its own token, and every read of `/info` mints one. Two clients sharing a token
-evict each other, and it is the first that stops working.
+evict each other.
 
 ## From another machine
 
@@ -98,8 +95,7 @@ Then type that address into the app's Control URL.
 
 ## The generated models
 
-`ChatClient/Sources/ChatClient/Models/` comes from `crates/chat-server/openapi.yaml`, as the Android
-client's models do. Regenerate them after the API changes, from the repository root:
+`ChatClient/Sources/ChatClient/Models/` comes from `crates/chat-server/openapi.yaml`. Regenerate them after the API changes, from the repository root:
 
 ```bash
 npx @openapitools/openapi-generator-cli generate \
@@ -111,9 +107,7 @@ npx @openapitools/openapi-generator-cli generate \
 ```
 
 The model list is explicit because `ErrorCode` is deliberately left out. It is an open enum on the
-server — a catch-all variant keeps a client working when a code is added after it ships — and a
-generated Swift enum would be closed. `ErrorEnvelope` is hand-written for the same reason, with a
-`code: String` that accepts a code this build has never seen.
+server with a catch-all variant that keeps a client working when a code is added after it ships.
 
 `Validation.swift` comes with them: the models reference `NumericRule` for the bounds the document
 declares.
