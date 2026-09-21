@@ -172,7 +172,7 @@ impl RoomsFeed {
         fetched
     }
 
-    /// The same feed as a [`Stream`], for an interface whose subscription consumes one.
+    /// The same feed as a [`Stream`].
     pub fn into_stream(self) -> impl Stream<Item = Result<Vec<Room>, ChatError>> {
         futures::stream::unfold(
             self,

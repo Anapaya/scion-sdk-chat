@@ -15,7 +15,7 @@
 
 use chat_core::api::v1::{ErrorCode, ErrorResponse};
 
-/// Anything a client method can fail with. The one error type a user interface sees.
+/// Anything a client method can fail with.
 #[derive(Debug, thiserror::Error)]
 pub enum ChatError {
     /// The configuration cannot be used: a bad address, a missing certificate.

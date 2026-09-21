@@ -14,7 +14,6 @@
 //! A transport that answers from a script instead of a network.
 //!
 //! It produces what a server cannot on demand: a body that is not JSON, a 401 mid-run, a drop.
-//! Always compiled, so an offline demo can use it.
 
 use std::{
     collections::HashMap,

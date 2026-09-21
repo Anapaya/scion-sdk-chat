@@ -89,7 +89,7 @@ impl ChatClient {
         ))
     }
 
-    /// Builds a client around a transport the caller already has, which in practice is a mock.
+    /// Builds a client around a transport the caller already has.
     pub fn new_with_transport(
         transport: Arc<dyn Transport>,
         server_url: Url,

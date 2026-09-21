@@ -48,7 +48,7 @@ pub struct ScionConfig {
 
 /// A token for the SNAP underlay.
 ///
-/// `Debug` prints a placeholder. Serialization is not redacted: a settings screen persists it.
+/// `Debug` prints a placeholder. Serialization is not redacted.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct SnapToken(String);
@@ -80,7 +80,7 @@ impl std::str::FromStr for SnapToken {
     }
 }
 
-/// Everything a client reads at startup. Plain data, so a settings screen persists the value.
+/// Everything a client reads at startup. Plain data, so the whole value serializes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientConfig {
     /// Which transport to talk over.
