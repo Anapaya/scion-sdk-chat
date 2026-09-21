@@ -40,7 +40,7 @@ pub enum Transport {
 }
 
 impl Transport {
-    /// The other one. There are two, so a toggle is the whole of the choice.
+    /// The other one.
     fn other(self) -> Self {
         match self {
             Self::Scion => Self::Tcp,
@@ -50,8 +50,7 @@ impl Transport {
 
     /// The URL scheme this transport is served under.
     ///
-    /// One each, and neither is a preference. Over SCION only HTTP/3 exists, which is always TLS;
-    /// over TCP this server has no TLS to offer, so `https` would reach nothing.
+    /// SCION carries only HTTP/3, which is always TLS. This server offers no TLS over TCP.
     pub fn scheme(self) -> &'static str {
         match self {
             Self::Scion => "https",
@@ -89,9 +88,7 @@ pub struct ConnectionForm {
     #[arg(long, env = "CHAT_CLIENT_SERVER_URL", default_value = DEV_SERVER_URL)]
     pub server_url: String,
 
-    /// The endhost API the client finds SCION through. Required by an `https` URL.
-    ///
-    /// The client's own AS, not the server's. A local `chat-dev` prints both.
+    /// The endhost API the client finds SCION through, in its own AS. Required by an `https` URL.
     #[arg(long, env = "CHAT_CLIENT_ENDHOST_API", default_value = "")]
     pub endhost_api: String,
 
@@ -103,10 +100,7 @@ pub struct ConnectionForm {
     #[arg(long, env = "CHAT_CLIENT_CERT_PATH", default_value = "")]
     pub cert_path: String,
 
-    /// The token the SNAP underlay asks for.
-    ///
-    /// Better given as `CHAT_CLIENT_SNAP_TOKEN`: an argument is readable by anyone who can list
-    /// processes.
+    /// The token the SNAP underlay asks for. An argument is readable by anyone listing processes.
     #[arg(
         long,
         env = "CHAT_CLIENT_SNAP_TOKEN",
@@ -132,7 +126,7 @@ impl Default for ConnectionForm {
 /// Which field the keys are going to.
 #[derive(Default, Clone, Copy, PartialEq, Eq)]
 enum Focus {
-    /// First, because it decides what the fields under it are for.
+    /// First: it decides what the fields under it are for.
     #[default]
     Transport,
     ServerUrl,

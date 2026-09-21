@@ -45,11 +45,9 @@ impl State {
     }
 }
 
-/// Draws a bordered field, and on the focused one puts the terminal's own cursor where the next
-/// character will land.
+/// Draws a bordered field, putting the terminal's cursor where the next character lands.
 ///
-/// The value is scrolled here rather than by the input, because what fits depends on how wide the
-/// box is and nothing knows that until it is being drawn.
+/// The value is scrolled here: what fits is known only while the box is being drawn.
 pub fn draw(
     frame: &mut Frame,
     area: Rect,

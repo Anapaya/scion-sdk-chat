@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //! Rooms on the left, the open room's messages on the right, a line to type at the bottom.
-//!
-//! What the screen holds and which keys mean what. [`view`] draws it and [`commands`] reads the
-//! line that was typed.
 
 use std::collections::HashMap;
 
@@ -46,18 +43,15 @@ pub struct Chat {
     open: ListState,
     /// The open room's messages, oldest first.
     messages: Vec<Message>,
-    /// Lines this client wrote itself, drawn under the messages. Nobody else sees them and the
-    /// server never hears about them, which is what makes them the right place for `/help`.
+    /// Lines this client wrote itself. The server never hears about them, so `/help` lives here.
     notices: Vec<Line<'static>>,
-    /// The newest `seq` the user has actually seen in each room. Only the room on screen advances
-    /// it, which is what makes it the badge cursor rather than a resume cursor.
+    /// The newest `seq` the user has seen in each room. Only the room on screen advances it.
     last_read: HashMap<RoomId, Seq>,
     /// The room a feed is watching, which is therefore being read.
     watched: Option<RoomId>,
     /// How far down the pane is scrolled, or `None` to follow the newest message.
     scroll: Option<u16>,
-    /// What the last draw measured: the largest offset, and how many rows fit. Scrolling by a
-    /// screenful needs both, and only a draw knows the pane's size.
+    /// What the last draw measured: the largest offset, and how many rows fit.
     measured: (u16, u16),
     /// Who is logged in, so their own name is drawn apart from everyone else's.
     me: String,
@@ -67,9 +61,6 @@ pub struct Chat {
     /// The message pane as it was last drawn.
     pane: Option<view::Pane>,
     /// Counts the changes to what the pane shows, which is what a kept one is checked against.
-    ///
-    /// The room list is not counted: it is re-read every couple of seconds, and the pane's title
-    /// follows the room rather than its place in the list.
     revision: u64,
 }
 
@@ -117,8 +108,6 @@ impl Chat {
     }
 
     /// Appends a batch the feed delivered, and marks the open room read up to it.
-    ///
-    /// Batches arrive oldest first and never overlap, so appending is all there is to do.
     pub fn append(&mut self, messages: Vec<Message>) {
         let newest = messages.last().map(|message| message.seq);
         let open = self.open_room().map(|room| room.id);
@@ -151,11 +140,7 @@ impl Chat {
 
     /// Claims the keys that mean something here and leaves the rest to the input.
     ///
-    /// Tab moves rooms because the composer is the only field on this screen, so there is nothing
-    /// for it to move between. That leaves the arrows for the messages, which the composer does
-    /// not read either, being one line.
-    /// `pending` refuses the keys that reach the server. Scrolling and typing are this screen's
-    /// own and always work.
+    /// `pending` refuses the keys that reach a server. Scrolling and typing always work.
     pub fn handle_key(&mut self, key: KeyEvent, pending: bool) -> Option<Intent> {
         match key.code {
             KeyCode::Enter => return self.submit(pending),
@@ -172,11 +157,7 @@ impl Chat {
         None
     }
 
-    /// Complains in the pane rather than on the error row, about a line that was typed or a call
-    /// it asked for.
-    ///
-    /// The row is cleared by the next read that works, and a read working says nothing about
-    /// either of those. As a notice it stays until the next line is typed.
+    /// Complains in the pane, where a notice stays until the next line is typed.
     pub fn warn(&mut self, message: String) {
         self.notices = vec![ui::warning(&message)];
         self.scroll = None;
@@ -190,8 +171,7 @@ impl Chat {
         let from = i32::from(self.scroll.unwrap_or(self.measured.0));
         let to = from.saturating_add(rows).clamp(0, bottom);
 
-        // Landing on the end gives up the fixed offset rather than holding it, so a message posted
-        // afterwards still arrives on screen.
+        // Landing on the end gives up the offset, so a later message still arrives on screen.
         self.scroll = (to < bottom).then_some(to as u16);
     }
 
@@ -200,14 +180,12 @@ impl Chat {
         i32::from(self.measured.1)
     }
 
-    /// Selects a room, stopping at the last one rather than wrapping.
+    /// Selects a room, stopping at the last one.
     ///
-    /// `ListState::select_next` would count past the end — the list only clamps that while it
-    /// draws, and this index is what reaches into `rooms`.
+    /// `ListState::select_next` counts past the end, and this index reaches into `rooms`.
     fn open(&mut self, index: usize, pending: bool) -> Option<Intent> {
         let index = index.min(self.rooms.len().saturating_sub(1));
-        // Refused before the selection moves: watching the room is a call, and moving with none on
-        // its way would leave the pane cleared and empty.
+        // Refused before the selection moves: a move with no call on its way empties the pane.
         if index == self.selected() || pending {
             return None;
         }
@@ -219,10 +197,7 @@ impl Chat {
         Some(Intent::Open)
     }
 
-    /// Whether a room holds anything the user has not seen.
-    ///
-    /// A yes or no, never a count: `seq` is assigned server-wide, so the gap between two of them
-    /// includes messages posted to other rooms. Counting needs that room's messages.
+    /// Whether a room holds anything the user has not seen. Never a count: `seq` is server-wide.
     fn unread(&self, room: &Room) -> bool {
         if self.watched == Some(room.id) {
             return false;
@@ -233,8 +208,7 @@ impl Chat {
         room.latest_seq > last_read
     }
 
-    /// The colour a name is drawn in: one of everyone else's, or the one kept for whoever is logged
-    /// in.
+    /// The colour a name is drawn in.
     fn colour(&self, username: &str) -> Color {
         if username == self.me {
             theme::OWN_NICKNAME
@@ -248,8 +222,7 @@ impl Chat {
     }
 }
 
-/// Marks every room read as it stands, so a fresh launch starts quiet rather than claiming the
-/// whole history is new.
+/// Marks every room read as it stands, so a fresh launch starts quiet.
 fn read_from(rooms: &[Room]) -> HashMap<RoomId, Seq> {
     rooms
         .iter()

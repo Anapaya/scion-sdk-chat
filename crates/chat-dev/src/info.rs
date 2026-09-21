@@ -41,9 +41,8 @@ pub struct DevNetwork {
     pub client_isd_as: String,
     /// A token for the endhost API and the SNAP control plane. Each read makes a new one.
     ///
-    /// Give each client its own token. The control plane keeps one tunnel for each `pssid`. A
-    /// second client on the same token removes the tunnel of the first client, and the first
-    /// client then stops without an error.
+    /// Give each client its own. The control plane keeps one tunnel per `pssid`, so a second
+    /// client on one token evicts the first, which then stops without an error.
     pub auth_token: String,
     /// The server's own token, on disk, for `chat-server --auth-token-file`.
     pub auth_token_file: String,
@@ -52,9 +51,7 @@ pub struct DevNetwork {
     /// The server's SCION address, without a port. This topology holds no TSAR records, so the
     /// description gives a client the address to dial.
     pub target: String,
-    /// The certificate the server presents. A client trusts it as an anchor.
-    ///
-    /// The description holds the text as well as the path, for a client that reads a different
+    /// The certificate the server presents, as text as well as a path: a client may read another
     /// filesystem.
     pub ca_pem: String,
     /// The same certificate on disk, for a client that takes a path.
@@ -127,8 +124,7 @@ mod tests {
         }
     }
 
-    /// The names every client parses. This test writes them out in full, because a client in
-    /// another language reads the same names and no compiler checks them.
+    /// The names every client parses, written out: no compiler checks them across languages.
     #[test]
     fn the_field_names_are_the_ones_clients_read() {
         let json = serde_json::to_value(network()).expect("serialize");

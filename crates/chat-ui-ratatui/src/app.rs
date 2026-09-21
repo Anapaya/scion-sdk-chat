@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //! Which screen is showing, and every call to the chat client.
-//!
-//! The screens read keys and draw; they never talk to a server. Everything that does is in this
-//! file, so "where does this app use the SDK" has one answer.
 
 use std::{future::Future, io, path::PathBuf, time::Duration};
 
@@ -42,8 +39,7 @@ use crate::{
 /// How often the open room is re-read. The sidebar keeps the default, being less urgent.
 const MESSAGES_REFRESH: Duration = Duration::from_secs(1);
 
-/// The most answers that may wait to be read. One call is out at a time, so this is never reached;
-/// it is a bound so that a bug grows a queue no further than this before it blocks.
+/// The most answers that may wait to be read. A bound, so a bug blocks instead of growing.
 const MAX_ANSWERS: usize = 8;
 
 /// What woke the loop.
@@ -59,9 +55,6 @@ enum Woken {
 }
 
 /// What a call made away from the loop came back with.
-///
-/// One variant per call the app makes. The fields beside a `result` are what the answer cannot be
-/// acted on without: who logged in, or the text a failed send has to give back.
 enum Answer {
     Connected(Result<ChatClient, ChatError>),
     Registered(Result<(), ChatError>),
@@ -77,16 +70,12 @@ enum Answer {
     RoomCreated(Result<(), ChatError>),
 }
 
-/// The calls that run away from the loop, and how they come back.
-///
-/// Every call the user asks for goes through here, so the loop itself never waits on a server and
-/// keeps drawing, reading keys and taking messages while one is out.
+/// The calls that run away from the loop, so it keeps drawing while one is out.
 struct Background {
     answers: mpsc::Receiver<Answer>,
     /// The end a call answers through. Cloned into every one of them.
     answer_to: mpsc::Sender<Answer>,
-    /// Whether a call the user asked for is still out. One at a time: a second Ctrl+R cannot make
-    /// a second account, and two messages keep the order they were typed in.
+    /// Whether a call the user asked for is still out. One at a time, so sends keep their order.
     pending: bool,
 }
 
@@ -104,9 +93,6 @@ impl Default for Background {
 
 impl Background {
     /// Starts a call, and answers whether it took it. A call already out is refused.
-    ///
-    /// Refusing quietly is safe for a caller that does nothing else, which is most of them. One
-    /// that throws something away first has to ask before it does.
     fn ask(&mut self, work: impl Future<Output = Answer> + Send + 'static) -> bool {
         if self.pending {
             return false;
@@ -115,7 +101,6 @@ impl Background {
 
         let answer_to = self.answer_to.clone();
         tokio::spawn(async move {
-            // The app is gone if this fails, and there is nobody left to tell.
             let _ = answer_to.send(work.await).await;
         });
 
@@ -136,19 +121,14 @@ pub struct App {
     screen: Screen,
     /// Built on the connection screen. Cloning is cheap and shares the session.
     client: Option<ChatClient>,
-    /// The open room's messages. One at a time: switching rooms drops this and opens another.
+    /// The open room's messages.
     ///
-    /// A stream rather than the feed, and so is [`rooms`](Self::rooms), because a `select!` drops
-    /// whichever arms did not win. A stream keeps a part-finished read inside itself, so a
-    /// keypress costs a borrow rather than the request in flight.
+    /// A stream, because `select!` drops the arms that did not win and a stream keeps a
+    /// part-finished read inside itself. The request in flight survives a keypress.
     messages: Option<BoxStream<'static, Result<Vec<Message>, ChatError>>>,
     /// The sidebar's rooms, from the moment someone signs in.
     rooms: Option<BoxStream<'static, Result<Vec<Room>, ChatError>>>,
     /// Whether opening the room failed, so the next room list asks again.
-    ///
-    /// A failed open leaves nothing behind to start the polling: the arm that carries messages is
-    /// held shut while there is no stream, and a room cannot be re-entered when it is the only
-    /// one.
     reopen: bool,
     background: Background,
     exit: bool,
@@ -169,17 +149,13 @@ impl App {
     }
 
     /// Draws, then waits for a key, until asked to stop.
-    ///
-    /// Keys arrive as a stream rather than a blocking read, so that a `select!` can wait on the
-    /// terminal and on the network at the same time.
     pub async fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         let mut keys = EventStream::new();
 
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
 
-            // Each arm produces what happened, so the borrows the select holds end before anything
-            // acts on it.
+            // Each arm produces what happened, so the select's borrows end before anything acts.
             let woken = tokio::select! {
                 event = keys.next() => Woken::Terminal(event.transpose()?),
                 batch = next_messages(&mut self.messages), if self.messages.is_some() => Woken::Messages(batch),
@@ -187,8 +163,6 @@ impl App {
                 Some(answer) = self.background.answers.recv() => Woken::Answer(answer),
             };
 
-            // Nothing here waits on a server: every call the user asks for is started by one of
-            // these and comes back as `Woken::Answer`.
             match woken {
                 Woken::Terminal(Some(Event::Key(key))) if key.kind == KeyEventKind::Press => {
                     self.handle_key(key);
@@ -206,8 +180,7 @@ impl App {
     /// Shows what the sidebar's stream delivered, or reports why it could not.
     fn apply_rooms(&mut self, list: Result<Vec<Room>, ChatError>) {
         match list {
-            // Answering at all is the sign the server is back. Without this the warning from a
-            // failed read outlives the failure, in a quiet room for as long as it stays quiet.
+            // Answering at all is the sign the server is back.
             Ok(rooms) => {
                 if let Screen::Chat(screen) = &mut self.screen {
                     screen.show_rooms(rooms);
@@ -224,7 +197,6 @@ impl App {
     /// Appends what the open room's stream delivered, or reports why it could not.
     fn apply_messages(&mut self, batch: Result<Vec<Message>, ChatError>) {
         match batch {
-            // Arriving at all is the sign the server is answering again.
             Ok(messages) => {
                 if let Screen::Chat(screen) = &mut self.screen {
                     screen.append(messages);
@@ -247,16 +219,14 @@ impl App {
     }
 
     fn handle_key(&mut self, key: KeyEvent) {
-        // Raw mode hands Ctrl+C over as a key rather than a signal, so ending the app on it is this
-        // loop's job. Claimed before any screen reads them, neither being a character to type.
+        // Raw mode delivers Ctrl+C as a key, so ending the app on it is this loop's job.
         let quit = key.code == KeyCode::Esc
             || (key.code == KeyCode::Char('c') && key.modifiers.contains(CONTROL));
         if quit {
             self.exit = true;
             return;
         }
-        // Handed to the screens rather than acted on here: a key that reaches the server has to be
-        // refused before it is consumed, and only the screen knows which of its keys those are.
+        // The screens decide: only they know which of their keys reach a server.
         let pending = self.background.pending;
 
         match &mut self.screen {
@@ -291,7 +261,6 @@ impl App {
 
     /// Acts on a call that came back, and starts the next one where a call leads to another.
     fn answer(&mut self, answer: Answer) {
-        // Cleared first, so a call chained below is free to take its place.
         self.background.pending = false;
 
         match answer {
@@ -299,8 +268,7 @@ impl App {
                 self.client = Some(client);
                 self.screen = Screen::SignIn(SignIn::default());
             }
-            // Read from the screen rather than carried here: it still holds them, no key having
-            // been taken while the call was out, and a password is not something to put on a queue.
+            // Read from the screen: a password is not something to put on a queue.
             Answer::Registered(Ok(())) => {
                 if let Screen::SignIn(screen) = &self.screen {
                     let (username, password) = screen.credentials();
@@ -317,7 +285,6 @@ impl App {
             }
             Answer::RoomOpened(Ok(messages)) => {
                 self.reopen = false;
-                // Read before the feed becomes a stream, which takes it.
                 let room = messages.room();
                 if let Screen::Chat(screen) = &mut self.screen {
                     screen.watching(room);
@@ -353,9 +320,8 @@ impl App {
 
     /// Builds the client, then proves the server is there.
     ///
-    /// Building it only parses configuration — nothing is dialled until a call is made — so the
-    /// health check is what turns a wrong address into an error on this screen rather than a
-    /// surprise on the next one.
+    /// Nothing is dialled until a call is made, so the health check is what turns a wrong address
+    /// into an error on this screen.
     fn connect(&mut self, form: ConnectionForm) {
         self.background.ask(async move {
             let built = async {
@@ -380,9 +346,6 @@ impl App {
     }
 
     /// Creates the account. Signing in follows when the answer comes back.
-    ///
-    /// The API keeps the two apart, so this is the screen composing them rather than the client
-    /// doing it behind the caller's back.
     fn register(&mut self, username: &str, password: &str) {
         let Some(client) = self.client.clone() else {
             return;
@@ -404,7 +367,6 @@ impl App {
             let result = async {
                 client.login(&username, &password).await?;
                 let mut rooms = client.watch_rooms().await?;
-                // The feed hands over the list it opened with, so this costs no second call.
                 let listed = rooms.next().await?;
 
                 Ok::<_, ChatError>((rooms, listed))
@@ -416,9 +378,6 @@ impl App {
     }
 
     /// Watches the open room, dropping whatever was being watched before.
-    ///
-    /// One at a time: the design keeps only the room on screen watched, and there is nothing to
-    /// unsubscribe from — dropping the old one ends it.
     fn open_room(&mut self) {
         let Some(client) = self.client.clone() else {
             return;
@@ -430,8 +389,7 @@ impl App {
             return;
         };
 
-        // Asked for before the old room is let go of, so a refused call cannot leave a cleared
-        // pane with nothing on its way to fill it.
+        // Asked for before the old room is let go, so a refusal leaves the pane filled.
         let asked = self.background.ask(async move {
             Answer::RoomOpened(client.watch_room_messages(room, Since::Newest).await)
         });
@@ -445,10 +403,7 @@ impl App {
         self.messages = None;
     }
 
-    /// Posts a message.
-    ///
-    /// It is not shown here: it arrives on the feed like everyone else's, which is what keeps every
-    /// client showing the same order. A failed send puts the text back rather than losing it.
+    /// Posts a message. It arrives on the feed, which is what keeps every client in one order.
     fn send(&mut self, body: String) {
         let Some(client) = self.client.clone() else {
             return;
@@ -493,11 +448,7 @@ impl App {
         }
     }
 
-    /// Shows why a call the user asked for failed, and leaves it until they ask for something else.
-    ///
-    /// Not the error row on the chat screen: a read that works clears that row every couple of
-    /// seconds, and a read working says nothing about a send that did not. A failed send also puts
-    /// the line back in the composer, and the reason it came back has to outlive the next read.
+    /// Shows why a call the user asked for failed. Held until they ask for something else.
     fn refused(&mut self, error: ChatError) {
         if self.signed_out(&error) {
             return;
@@ -512,9 +463,6 @@ impl App {
     }
 
     /// Sends an ended session back to signing in, and says whether it did.
-    ///
-    /// Both errors mean the session is gone: one because the server refused the token, the other
-    /// because the client already forgot it. Retrying either only repeats it.
     fn signed_out(&mut self, error: &ChatError) -> bool {
         let gone = matches!(error, ChatError::SessionExpired | ChatError::NotLoggedIn);
         if !gone || !matches!(self.screen, Screen::Chat(_) | Screen::SignIn(_)) {
@@ -527,18 +475,16 @@ impl App {
         self.messages = None;
         self.rooms = None;
         self.reopen = false;
-        // Dropped with them, so an answer outliving the session is thrown away.
         self.background = Background::default();
 
         true
     }
 }
 
-/// The open room's next batch. A free function, and so is [`next_rooms`], because one `select!`
-/// waits on both and two methods would each borrow the whole app.
+/// The open room's next batch.
 ///
-/// Only called with a stream open. Neither stream ever ends, so an end is read as the session
-/// having gone, which is the one thing that would explain it.
+/// A free function, because one `select!` waits on both and two methods would each borrow the
+/// whole app. An ended stream is read as an ended session, the one thing that explains it.
 async fn next_messages(
     messages: &mut Option<BoxStream<'static, Result<Vec<Message>, ChatError>>>,
 ) -> Result<Vec<Message>, ChatError> {
@@ -559,8 +505,6 @@ async fn next_rooms(
 }
 
 /// The transport that was chosen, once the URL is checked against it.
-///
-/// Each transport is served under exactly one scheme, so the URL is checked against the choice.
 fn transport(server_url: &Url, form: &ConnectionForm) -> Result<TransportKind, ChatError> {
     let wanted = form.transport.scheme();
     if server_url.scheme() != wanted {
@@ -634,8 +578,8 @@ mod tests {
             Ok(TransportKind::Scion(_))
         ));
 
-        // Nothing on the server side can answer TLS over TCP, and over SCION there is no HTTP/3
-        // without it, so neither of these is a combination a user can mean.
+        // Neither combination is one a user can mean: the server answers no TLS over TCP, and
+        // SCION carries no HTTP/3 without it.
         assert!(matches!(
             kind(&answered(Transport::Tcp, "https://localhost:8080")),
             Err(ChatError::Config(_))

@@ -55,8 +55,7 @@ struct Session {
 
 /// Everything a client does, apart from watching a room.
 ///
-/// Cheap to clone and safe to share across threads: every clone is the same client, session
-/// included, so logging in on one is logging in on all of them.
+/// Every clone is the same client, session included.
 #[derive(Clone)]
 pub struct ChatClient {
     state: Arc<ClientState>,
@@ -75,9 +74,6 @@ struct ClientState {
 
 impl ChatClient {
     /// Builds a client that talks to a real server.
-    ///
-    /// Async because it runs inside the caller's runtime: it never creates one, never keeps a
-    /// handle to one, and never spawns anything.
     pub async fn new(config: ClientConfig) -> Result<Self, ChatError> {
         let transport: Arc<dyn Transport> = match &config.transport {
             TransportKind::Tcp => Arc::new(TcpTransport::new()?),
@@ -94,9 +90,6 @@ impl ChatClient {
     }
 
     /// Builds a client around a transport the caller already has, which in practice is a mock.
-    ///
-    /// `server_url` is still needed because a request carries an absolute URL even when nothing
-    /// dials it.
     pub fn new_with_transport(
         transport: Arc<dyn Transport>,
         server_url: Url,
@@ -159,8 +152,7 @@ impl ChatClient {
             .map(drop)
     }
 
-    /// Reads the version and the limits the server enforces. Needs no login, so a user interface
-    /// can show them before anyone signs in.
+    /// Reads the version and the limits the server enforces. Needs no login.
     pub async fn server_info(&self) -> Result<ServerInfo, ChatError> {
         self.get("/api/v1/server", Auth::None).await
     }
@@ -210,8 +202,7 @@ impl ChatClient {
         self.messages(room, limit, Cursor::After(seq)).await
     }
 
-    /// Reads what came before `seq`, exclusive, oldest first. This is paging backwards through
-    /// history, as a reader scrolling up asks for.
+    /// Reads what came before `seq`, exclusive, oldest first.
     pub async fn messages_before(
         &self,
         room: RoomId,
@@ -266,8 +257,7 @@ impl ChatClient {
 
     /// Builds the request, sends it, and turns a refusal into an error.
     ///
-    /// The only place a transport is touched, which is why the URL is joined, the token attached
-    /// and the status read here and nowhere else.
+    /// The only place a transport is touched.
     async fn execute(
         &self,
         method: Method,
@@ -283,8 +273,7 @@ impl ChatClient {
         if body.is_some() {
             request = request.header(CONTENT_TYPE, "application/json");
         }
-        // Kept past the request, so the reply can tell whether the token it carried is still the
-        // one stored.
+        // Kept past the request, so the reply can tell whether its token is still the stored one.
         let mut sent = None;
         if auth == Auth::Required {
             let token = self.token().ok_or(ChatError::NotLoggedIn)?;
@@ -369,8 +358,6 @@ enum Cursor {
 }
 
 /// Whether a request carries the bearer token.
-///
-/// An enum rather than a `bool` so a call site says which it means.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Auth {
     /// Attach the token, and refuse to send the request without one.
@@ -388,10 +375,7 @@ fn encode<Body: Serialize>(body: &Body) -> Result<Bytes, ChatError> {
         .map_err(|error| ChatError::Protocol(error.to_string()))
 }
 
-/// Reads a reply.
-///
-/// A success that sends nothing — a 201 that says everything through its status — is read as the
-/// empty JSON object, which is what a body with no fields in it is.
+/// Reads a reply. A success that sends nothing is read as the empty JSON object.
 fn decode<Reply: DeserializeOwned>(body: &[u8]) -> Result<Reply, ChatError> {
     let body = if body.is_empty() { b"{}" } else { body };
 

@@ -13,9 +13,8 @@
 // limitations under the License.
 //! A transport that answers from a script instead of a network.
 //!
-//! It exists to produce what a real server cannot produce on demand: a body that is not JSON, a 401
-//! in the middle of a run, a connection that drops. Always compiled, not just under `cfg(test)`,
-//! so that an offline demo can use it too.
+//! It produces what a server cannot on demand: a body that is not JSON, a 401 mid-run, a drop.
+//! Always compiled, so an offline demo can use it.
 
 use std::{
     collections::HashMap,
@@ -30,10 +29,7 @@ use tokio::time::Instant;
 use super::Transport;
 use crate::error::TransportError;
 
-/// A transport whose answers a test writes in advance.
-///
-/// Cloning shares the script and the recording, so a test keeps a handle to read from after it has
-/// handed one to the client.
+/// A transport whose answers a test writes in advance. A clone shares the script and recording.
 #[derive(Clone, Default)]
 pub struct MockTransport {
     state: Arc<Mutex<MockState>>,
@@ -67,8 +63,7 @@ struct Received {
     parts: http::request::Parts,
     /// The body as it arrived.
     body: Bytes,
-    /// When it arrived, on the clock the test is running — so a paused clock records the gaps the
-    /// test set up rather than the microseconds the fetch really took.
+    /// When it arrived, on the test's clock, so a paused clock records the gaps it set up.
     at: Instant,
 }
 
@@ -80,10 +75,9 @@ impl MockTransport {
 
     /// Scripts a reply to `route`, written as `"POST /api/v1/login"`.
     ///
-    /// Routes match on method and path only, so a query string belongs in an assertion over
-    /// [`last_request`](Self::last_request) rather than here. Scripting the same route again queues
-    /// a second answer; the last one stands for every request after the queue runs out, which is
-    /// what lets a poll loop run as long as a test needs.
+    /// Routes match on method and path, so a query belongs in an assertion over
+    /// [`last_request`](Self::last_request). Scripting a route again queues a second answer, and
+    /// the last one stands once the queue runs out.
     #[must_use]
     pub fn respond(self, route: &str, status: u16, body: impl Into<Bytes>) -> Self {
         self.script(
@@ -186,8 +180,7 @@ impl MockState {
     ///
     /// # Panics
     ///
-    /// If `route` was never scripted. A request to an unscripted route is a test reaching further
-    /// than it meant to, and saying so beats answering it with an error the test then explains.
+    /// If `route` was never scripted: a test reaching further than it meant to.
     fn answer_to(&mut self, route: &str) -> Answer {
         let Some(answers) = self.script.get_mut(route) else {
             let mut scripted: Vec<&str> = self.script.keys().map(String::as_str).collect();
@@ -277,8 +270,7 @@ mod tests {
         }
     }
 
-    /// Once the queue is down to its last answer it stays there, so a poll loop can run as long as
-    /// the test needs without scripting every turn.
+    /// The last answer stays, so a poll loop runs without scripting every turn.
     #[tokio::test]
     async fn the_last_answer_stands_for_every_request_after_it() {
         let mock = MockTransport::new().respond("GET /api/v1/rooms", 200, "page");
@@ -331,8 +323,7 @@ mod tests {
         assert_eq!(recorded.body(), &Bytes::from(r#"{"name":"scion"}"#));
     }
 
-    /// Arrival times come off the test's clock, which is what makes a cadence assertion possible
-    /// without waiting out the real interval.
+    /// Arrival times come off the test's clock, so a cadence is asserted without waiting.
     #[tokio::test(start_paused = true)]
     async fn arrivals_are_recorded_on_the_clock_the_test_controls() {
         let mock = MockTransport::new().respond("GET /api/v1/rooms", 200, "page");
@@ -357,8 +348,7 @@ mod tests {
         let _ = mock.request(get("http://host/api/v1/rooms")).await;
     }
 
-    /// A clone shares the script and the recording, which is how a test reads back what the client
-    /// it handed the mock to actually sent.
+    /// A clone shares the script and the recording.
     #[tokio::test]
     async fn a_clone_sees_the_same_script_and_the_same_recording() {
         let mock = MockTransport::new().respond("GET /api/v1/healthz", 200, "{}");

@@ -40,14 +40,12 @@ pub enum ChatError {
     /// The call needs a token and nobody has logged in.
     #[error("no one is logged in")]
     NotLoggedIn,
-    /// The token was refused, and the client has forgotten it. Only the user can fix this, by
-    /// logging in again.
+    /// The token was refused, and the client has forgotten it. Logging in again is the fix.
     #[error("the session has ended; log in again")]
     SessionExpired,
 }
 
-/// Why a request never came back. Mirrors the taxonomy of the SDK's HTTP/3 client, so both
-/// transports report the same kinds of failure.
+/// Why a request never came back. The SDK's own taxonomy, so both transports report alike.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum TransportError {
     /// The server's name could not be resolved.
@@ -78,8 +76,8 @@ pub enum TransportError {
 
 /// Turns a refused reply into the error a caller sees.
 ///
-/// A refusal outside the server's error envelope is the server breaking its own contract, so it is
-/// a protocol failure rather than something to repeat as the server's own words.
+/// A refusal outside the error envelope is the server breaking its contract, so it is a protocol
+/// failure.
 pub(crate) fn refusal(status: u16, body: &[u8]) -> ChatError {
     match serde_json::from_slice::<ErrorResponse>(body) {
         Ok(envelope) => {
@@ -117,8 +115,7 @@ mod tests {
         assert_eq!(message, "no room with that id");
     }
 
-    /// A code added to the server after this client was built still arrives, rather than failing to
-    /// decode.
+    /// A code added after this client was built still decodes.
     #[test]
     fn a_code_this_build_does_not_know_still_arrives() {
         let body = br#"{"error":{"code":"teapot","message":"short and stout"}}"#;
@@ -134,8 +131,7 @@ mod tests {
         assert_eq!(unknown.as_str(), "teapot");
     }
 
-    /// A 401 is read like any other refusal here. Whether it ended a session depends on whether the
-    /// request carried a token, which only the caller knows.
+    /// A 401 is read like any other refusal: only the caller knows whether a token was sent.
     #[test]
     fn a_401_is_decoded_rather_than_assumed_to_be_an_ended_session() {
         let body = br#"{"error":{"code":"invalid_credentials","message":"no match"}}"#;
@@ -149,8 +145,7 @@ mod tests {
         assert_eq!(code, ErrorCode::InvalidCredentials);
     }
 
-    /// A refusal outside the envelope is the server breaking its contract, so it is not reported as
-    /// though the server had explained itself.
+    /// A refusal outside the envelope is reported as a protocol failure.
     #[test]
     fn a_refusal_without_an_envelope_is_a_protocol_failure() {
         for body in [b"{}".as_slice(), b"", b"not json"] {
@@ -163,7 +158,7 @@ mod tests {
         }
     }
 
-    /// A transport failure reaches the caller without being reworded on the way.
+    /// A transport failure reaches the caller unreworded.
     #[test]
     fn a_transport_failure_converts_without_losing_which_one_it_was() {
         let error: ChatError = TransportError::Timeout.into();

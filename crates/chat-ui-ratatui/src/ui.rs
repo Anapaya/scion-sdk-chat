@@ -28,27 +28,16 @@ pub mod field;
 pub mod layout;
 pub mod theme;
 
-/// How much room a name is given before the message it sent.
-///
-/// Also the longest name this client will register, since a wider one would push its own messages
-/// out of line with every other row. The server accepts more; this is the limit of what the pane
-/// can draw tidily.
+/// How much room a name is given, and the longest this client registers. The server accepts more.
 pub const NAME_WIDTH: usize = 10;
 
 /// What stands at the end of a name too long to draw, in the one column it takes.
 const ELLIPSIS: char = '…';
 
-/// Which column a message's own text starts in: the name, and the space after it.
-///
-/// Anything the client writes into the pane itself lines up here too, so a notice reads as an aside
-/// to the conversation rather than a row of it.
+/// Which column a message's own text starts in. A notice the client writes lines up here too.
 pub const BODY_COLUMN: usize = NAME_WIDTH + 1;
 
-/// The box a panel and a field are both drawn in: rounded, named, and filled a shade apart from the
-/// screen behind it.
-///
-/// One place decides that shape, so the message pane and the line being typed cannot drift into
-/// looking like two different applications.
+/// The box a panel and a field are both drawn in. One place, so the two cannot drift apart.
 pub fn bordered<'a>(title: impl Into<Line<'a>>, border: Color, fill: Color) -> Block<'a> {
     Block::bordered()
         .border_type(BorderType::Rounded)
@@ -64,10 +53,8 @@ pub fn label(text: &str) -> Line<'_> {
 
 /// `text` in `width` columns or fewer, ending in [`ELLIPSIS`] when something was cut.
 ///
-/// Columns, not characters: one character can take two of them, and a terminal is spent in columns.
-///
-/// A name this client would refuse is still drawn: the server takes longer ones, and another client
-/// may have made one. Padding is left to the caller, which knows the side to pad.
+/// Columns, not characters: one character can take two. Padding is the caller's, which knows the
+/// side to pad.
 pub fn clip(text: &str, width: usize) -> Cow<'_, str> {
     if text.width() <= width {
         return Cow::Borrowed(text);
@@ -102,8 +89,7 @@ pub fn right_align(text: &str, width: usize) -> String {
 
 /// A complaint, in the shape every screen makes one: the mark, then what went wrong.
 ///
-/// Returned rather than drawn, because a complaint about a typed line is written into the message
-/// pane while a failed call is drawn on a row of its own.
+/// Returned, because a typed line's complaint goes in the pane and a call's on a row of its own.
 pub fn warning(message: &str) -> Line<'static> {
     Line::from(format!("⚠ {message}")).fg(theme::ERROR)
 }

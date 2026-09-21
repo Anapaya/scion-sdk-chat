@@ -13,8 +13,7 @@
 // limitations under the License.
 //! Pollers behind a stream: one for a room's messages, one for the list of rooms.
 //!
-//! The API has no push, so staying current means asking again on a timer. These wrap that loop so
-//! a caller asks for the next batch instead of owning a timer, a cursor and a retry.
+//! The API has no push, so a caller asks for the next batch and these own the timer and cursor.
 
 use std::mem;
 
@@ -38,8 +37,7 @@ pub enum Since {
 
 /// One watched room, which fetches when asked for its next batch.
 ///
-/// There is no background task and no queue: stop calling [`next`](Self::next) and fetching stops.
-/// Dropping the feed ends it. One consumer each — two views of a room means two feeds.
+/// No background task: stop calling [`next`](Self::next) and fetching stops. One consumer each.
 pub struct MessagesFeed {
     client: ChatClient,
     room: RoomId,
@@ -47,17 +45,15 @@ pub struct MessagesFeed {
     /// Fetched but not yet handed over.
     holding: Vec<Message>,
     catching_up: bool,
-    /// A deadline rather than a duration, so a `next` dropped mid-wait resumes it. Otherwise a
-    /// caller whose `select!` holds another timer of the same interval starves the feed: its
-    /// deadlines are fixed, and a wait started afresh always lands later.
+    /// A deadline, so a `next` dropped mid-wait resumes it. A wait started afresh always lands
+    /// later, which starves the feed against a caller's timer of the same interval.
     due: Option<Instant>,
 }
 
 impl ChatClient {
     /// Opens a feed on one room's messages, fetching the page it starts from.
     ///
-    /// Fetching here is what turns a room that does not exist into an error, rather than a feed
-    /// that never delivers.
+    /// Fetching here is what turns a room that does not exist into an error.
     pub async fn watch_room_messages(
         &self,
         room: RoomId,
@@ -73,7 +69,6 @@ impl ChatClient {
             client: self.clone(),
             room,
             cursor: holding.last().map_or(from, |message| message.seq),
-            // Only a resume can have more waiting: the newest page is the end.
             catching_up: since != Since::Newest && holding.len() >= page,
             holding,
             due: None,
@@ -89,9 +84,7 @@ impl MessagesFeed {
 
     /// The next batch, oldest first, never empty.
     ///
-    /// Waits until a message exists, so a caller sees nothing of the polling underneath.
-    /// Cancel-safe: the cursor moves only after a batch has been decoded, and the wait is a
-    /// deadline, so dropping this future loses neither messages nor elapsed time.
+    /// Cancel-safe: the cursor moves once a batch is decoded, and the wait is a deadline.
     pub async fn next(&mut self) -> Result<Vec<Message>, ChatError> {
         if !self.holding.is_empty() {
             return Ok(mem::take(&mut self.holding));
@@ -110,11 +103,8 @@ impl MessagesFeed {
                 .client
                 .messages_after(self.room, self.cursor, page)
                 .await;
-            // Held until the fetch settles, so a drop anywhere above resumes this wait instead of
-            // starting another.
+            // Held until the fetch settles, so a drop above resumes this wait.
             self.due = None;
-            // Nothing arrived on a failure either, so there is nothing to chase and the next
-            // attempt pays the interval.
             self.catching_up = matches!(&fetched, Ok(messages) if messages.len() >= page);
 
             let messages = fetched?;
@@ -126,10 +116,9 @@ impl MessagesFeed {
         }
     }
 
-    /// The same feed as a [`Stream`], for an interface whose subscription consumes one.
+    /// The same feed as a [`Stream`].
     ///
-    /// Consuming rather than implementing `Stream`: `next` borrows the feed, so a `poll_next` would
-    /// hold a future borrowing the struct it lives in.
+    /// Consuming, because `next` borrows the feed and a `poll_next` would hold that borrow.
     pub fn into_stream(self) -> impl Stream<Item = Result<Vec<Message>, ChatError>> {
         futures::stream::unfold(
             self,
@@ -139,15 +128,12 @@ impl MessagesFeed {
 }
 
 /// The list of rooms, kept current the way [`MessagesFeed`] keeps a room's messages.
-///
-/// There is no background task and no queue: stop calling [`next`](Self::next) and fetching stops.
 pub struct RoomsFeed {
     client: ChatClient,
     /// Fetched but not yet handed over.
     holding: Option<Vec<Room>>,
-    /// A deadline rather than a duration, so a `next` dropped mid-wait resumes it. Otherwise a
-    /// caller whose `select!` holds another timer of the same interval starves the feed: its
-    /// deadlines are fixed, and a wait started afresh always lands later.
+    /// A deadline, so a `next` dropped mid-wait resumes it. A wait started afresh always lands
+    /// later, which starves the feed against a caller's timer of the same interval.
     due: Option<Instant>,
 }
 
@@ -167,11 +153,8 @@ impl ChatClient {
 impl RoomsFeed {
     /// The list as it now stands.
     ///
-    /// Every read is handed over, unchanged or not: a list is the whole truth rather than a batch
-    /// of new things, and a caller that hears nothing cannot tell a quiet server from a broken one.
-    ///
-    /// Cancel-safe: the wait is a deadline, so dropping this future loses no elapsed time, and a
-    /// fetch dropped part-way is asked for again at once.
+    /// Every read is handed over, unchanged or not: silence would read as a broken server.
+    /// Cancel-safe, the wait being a deadline.
     pub async fn next(&mut self) -> Result<Vec<Room>, ChatError> {
         if let Some(rooms) = self.holding.take() {
             return Ok(rooms);
@@ -183,8 +166,7 @@ impl RoomsFeed {
         tokio::time::sleep_until(due).await;
 
         let fetched = self.client.rooms().await;
-        // Held until the fetch settles, so a drop anywhere above resumes this wait instead of
-        // starting another. A failure pays the interval again rather than being chased.
+        // Held until the fetch settles, so a drop above resumes this wait.
         self.due = None;
 
         fetched
