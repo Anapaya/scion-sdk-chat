@@ -16,16 +16,10 @@ struct ChatScreen: View {
     @State private var naming = false
     @State private var newRoom = ""
 
-    private let clocks = Clocks()
-
-    private var rows: [ChatRow] {
-        chatRows(messages: model.messages, me: model.username, clocks: clocks)
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             TopBar(model: model, onMenu: { showRooms = true })
-            MessageList(rows: rows)
+            MessageList(rows: model.rows)
             if let error = model.feedError { Banner(error) }
             if let error = model.actionError { Banner(error) }
             Composer(draft: $draft, room: model.openRoom?.name, pending: model.pending) {

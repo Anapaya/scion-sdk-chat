@@ -49,7 +49,12 @@ final class ChatViewModel: ObservableObject {
     @Published var manual = ManualForm()
     @Published var rooms: [Room] = []
     @Published var openRoomId: Int64?
-    @Published var messages: [Message] = []
+    @Published var messages: [Message] = [] {
+        didSet { rebuildRows() }
+    }
+
+    /// The conversation as the screen draws it, rebuilt when the messages change.
+    @Published private(set) var rows: [ChatRow] = []
     @Published var unread: Set<Int64> = []
     @Published var username: String?
     @Published var pending = false
@@ -62,6 +67,7 @@ final class ChatViewModel: ObservableObject {
     @Published var notice: String?
     @Published var target: String?
 
+    private let clocks = Clocks()
     private var client: ChatClient?
 
     /// The two feeds, stopped whenever the app leaves the foreground.
@@ -106,7 +112,12 @@ final class ChatViewModel: ObservableObject {
         let built = ChatClient(transport: try ScionTransport(config: config))
         // Nothing is dialled until a call is made, so the health check is what turns a wrong
         // address into an error on this screen.
-        try await built.health()
+        do {
+            try await built.health()
+        } catch {
+            await built.close()
+            throw error
+        }
 
         await client?.close()
         client = built
@@ -224,9 +235,11 @@ final class ChatViewModel: ObservableObject {
         guard let client else { return }
         do {
             let listing = try await client.rooms()
-            rooms = listing
-            unread = unreadRooms(listing, open: openRoomId)
-            feedError = nil
+            let badges = unreadRooms(listing, open: openRoomId)
+
+            if rooms != listing { rooms = listing }
+            if unread != badges { unread = badges }
+            if feedError != nil { feedError = nil }
         } catch ChatError.sessionExpired {
             signedOut()
         } catch {
@@ -249,9 +262,10 @@ final class ChatViewModel: ObservableObject {
             if !batch.isEmpty, open == openRoomId {
                 merge(batch)
                 advance(room: open, seq: batch.map(\.seq).max() ?? 0)
-                unread = unreadRooms(rooms, open: open)
+                let badges = unreadRooms(rooms, open: open)
+                if unread != badges { unread = badges }
             }
-            feedError = nil
+            if feedError != nil { feedError = nil }
         } catch ChatError.sessionExpired {
             signedOut()
         } catch {
@@ -282,7 +296,13 @@ final class ChatViewModel: ObservableObject {
         var held = messages
         let known = Set(held.map(\.seq))
         held.append(contentsOf: batch.filter { !known.contains($0.seq) })
-        messages = held.sorted { $0.seq < $1.seq }
+
+        let merged = held.sorted { $0.seq < $1.seq }
+        if messages != merged { messages = merged }
+    }
+
+    private func rebuildRows() {
+        rows = chatRows(messages: messages, me: username, clocks: clocks)
     }
 
     // MARK: - Plumbing
