@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Copyright 2026 Anapaya Systems
+
+  chat-dev serves its description over plain HTTP, deliberately neither SCION nor TLS, and App
+  Transport Security refuses a cleartext request without an exception. The chat requests are
+  HTTP/3 over the SDK's own UDP sockets, which it does not govern.
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleDisplayName</key>
+    <string>SCION Chat</string>
+    <!-- The palette is light only. -->
+    <key>UIUserInterfaceStyle</key>
+    <string>Light</string>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
+</dict>
+</plist>

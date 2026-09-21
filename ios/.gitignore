@@ -1,0 +1,11 @@
+# The SDK's Swift package, downloaded from a release. See README.md.
+libs/
+
+# Xcode
+*.xcodeproj/
+.build/
+.swiftpm/
+DerivedData/
+
+# Written by the model generator, as on Android.
+.openapi-generator/
