@@ -128,7 +128,7 @@ pub struct App {
     messages: Option<BoxStream<'static, Result<Vec<Message>, ChatError>>>,
     /// The sidebar's rooms, from the moment someone signs in.
     rooms: Option<BoxStream<'static, Result<Vec<Room>, ChatError>>>,
-    /// Whether opening the room failed, so the next room list asks again.
+    /// Whether opening the room failed.
     reopen: bool,
     background: Background,
     exit: bool,

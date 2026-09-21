@@ -53,7 +53,7 @@ pub struct Chat {
     scroll: Option<u16>,
     /// What the last draw measured: the largest offset, and how many rows fit.
     measured: (u16, u16),
-    /// Who is logged in, so their own name is drawn apart from everyone else's.
+    /// Who is logged in.
     me: String,
     input: Input,
     /// Why the last call failed, shown until one works.
@@ -86,7 +86,7 @@ impl Chat {
         }
     }
 
-    /// Records that what the pane shows has changed, so the next draw builds it again.
+    /// Records that what the pane shows has changed.
     fn changed(&mut self) {
         self.revision += 1;
     }
@@ -133,7 +133,7 @@ impl Chat {
         self.watched = Some(room);
     }
 
-    /// Puts back what a failed send did not deliver, so the text is not lost.
+    /// Puts back what a failed send did not deliver.
     pub fn restore(&mut self, body: String) {
         self.input = Input::new(body);
     }

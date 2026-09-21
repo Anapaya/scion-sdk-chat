@@ -62,7 +62,7 @@ struct Received {
     parts: http::request::Parts,
     /// The body as it arrived.
     body: Bytes,
-    /// When it arrived, on the test's clock, so a paused clock records the gaps it set up.
+    /// When it arrived.
     at: Instant,
 }
 

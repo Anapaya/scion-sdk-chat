@@ -58,7 +58,7 @@ impl Transport {
         }
     }
 
-    /// The name the flag takes, so an error can quote what was passed.
+    /// The name the flag takes.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Scion => "scion",
