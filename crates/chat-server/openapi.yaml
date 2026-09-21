@@ -423,12 +423,10 @@ components:
       properties:
         expires_at:
           $ref: '#/components/schemas/UnixMillis'
-          description: When the token stops being accepted. There are no refresh tokens — a client logs in again.
+          description: 'When the token stops being accepted. No refresh tokens: a client logs in again.'
         token:
           type: string
-          description: |-
-            The JWT to send as `Authorization: Bearer <token>`. Opaque to clients: they carry it, they
-            do not parse it.
+          description: 'The JWT to send as `Authorization: Bearer <token>`. Opaque: carry it, do not parse it.'
     Message:
       type: object
       description: |-
@@ -449,7 +447,7 @@ components:
           description: When the server accepted the message.
         seq:
           $ref: '#/components/schemas/Seq'
-          description: The message's position in the sequence, and the cursor used to fetch around it.
+          description: The message's position, and the cursor used to fetch around it.
         username:
           type: string
           description: The account that posted it.
@@ -466,9 +464,8 @@ components:
           description: |-
             The page, **always oldest-first**, whichever cursor asked for it.
 
-            A page shorter than the requested `limit` means the client has reached the end it was
-            walking towards: the present when polling forwards, the start of history when loading
-            older messages. A full page means more might be waiting — ask again immediately.
+            A page shorter than `limit` is the end of what was being walked towards. A full page means
+            more may be waiting.
     PostMessageRequest:
       type: object
       description: The text of a message being posted.
@@ -493,12 +490,10 @@ components:
       properties:
         posted_at:
           $ref: '#/components/schemas/UnixMillis'
-          description: |-
-            When the server accepted the message. Server time — a client's own clock never appears on
-            the wire.
+          description: 'When the server accepted the message. Server time: no client clock reaches the wire.'
         seq:
           $ref: '#/components/schemas/Seq'
-          description: The `seq` the server assigned to the new message.
+          description: The `seq` the server assigned.
     RegisterRequest:
       type: object
       description: |-
@@ -512,9 +507,7 @@ components:
       properties:
         password:
           type: string
-          description: |-
-            The password in the clear — the connection's TLS is what protects it. The server keeps
-            only a KDF hash.
+          description: The password in the clear, protected by the connection's TLS. Only a KDF hash is kept.
         username:
           type: string
           description: |-
@@ -522,11 +515,7 @@ components:
             case-insensitively against the names already taken.
     Room:
       type: object
-      description: |-
-        A room.
-
-        Every user belongs to every room: there is no membership, no joining, and no private rooms.
-        A room named `lobby` always exists.
+      description: A room. Every user is in every room, and one named `lobby` always exists.
       required:
       - id
       - name
@@ -534,14 +523,14 @@ components:
       properties:
         id:
           $ref: '#/components/schemas/RoomId'
-          description: The room's identifier, used in the message paths.
+          description: The room's identifier, as the message paths take it.
         latest_seq:
           $ref: '#/components/schemas/Seq'
           description: |-
             The `seq` of the newest message in the room, or `0` while it has none.
 
-            Comparing it against the newest `seq` a client has read is what drives an unread badge, so
-            one listing covers every room at once. Not a count: `seq` is server-wide (see [`Seq`]).
+            Against the newest `seq` a client has read, this drives an unread badge. Never a count:
+            `seq` is server-wide (see [`Seq`]).
         name:
           type: string
           description: The room's display name. Printable ASCII, 1–64 characters; unique case-insensitively.
@@ -562,7 +551,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Room'
-          description: 'All rooms. Never empty: `lobby` is always present.'
+          description: 'Never empty: `lobby` is always present.'
     Seq:
       type: integer
       format: int64
@@ -580,9 +569,7 @@ components:
       minimum: 0
     ServerInfo:
       type: object
-      description: |-
-        Everything about the server a client may want to show or adapt to. Needs no token, so a
-        client can read it before anyone logs in.
+      description: The server's version and the limits it enforces. Needs no token.
       required:
       - version
       - max_accounts
@@ -594,23 +581,21 @@ components:
           type:
           - string
           - 'null'
-          description: |-
-            The SCION ISD-AS the server is reachable in, or `null` when it is serving over plain TCP
-            in development mode.
+          description: The SCION ISD-AS the server is reachable in. `null` while it serves over plain TCP.
         max_accounts:
           type: integer
           format: int32
-          description: How many accounts the server registers before it starts rejecting registrations.
+          description: How many accounts are registered before registration is refused.
           minimum: 0
         max_message_bytes:
           type: integer
           format: int32
-          description: The largest message body the server accepts, in bytes of UTF-8.
+          description: The largest message body accepted, in bytes of UTF-8.
           minimum: 0
         max_rooms:
           type: integer
           format: int32
-          description: How many rooms the server creates before it starts rejecting new ones.
+          description: How many rooms are created before creation is refused.
           minimum: 0
         token_validity_seconds:
           type: integer
@@ -619,7 +604,7 @@ components:
           minimum: 0
         version:
           type: string
-          description: The server build's version, as in its `Cargo.toml`.
+          description: The server build's version.
     UnixMillis:
       type: integer
       format: int64

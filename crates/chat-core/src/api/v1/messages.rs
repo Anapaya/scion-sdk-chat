@@ -32,10 +32,9 @@ pub struct PostMessageRequest {
 /// still be waiting to be polled. The cursor only ever follows what polling actually delivered.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct PostMessageResponse {
-    /// The `seq` the server assigned to the new message.
+    /// The `seq` the server assigned.
     pub seq: Seq,
-    /// When the server accepted the message. Server time — a client's own clock never appears on
-    /// the wire.
+    /// When the server accepted the message. Server time: no client clock reaches the wire.
     pub posted_at: UnixMillis,
 }
 
@@ -44,7 +43,7 @@ pub struct PostMessageResponse {
 /// Messages are append-only: never edited, never deleted.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct Message {
-    /// The message's position in the sequence, and the cursor used to fetch around it.
+    /// The message's position, and the cursor used to fetch around it.
     pub seq: Seq,
     /// The account that posted it.
     pub username: String,
@@ -59,8 +58,7 @@ pub struct Message {
 pub struct MessagesResponse {
     /// The page, **always oldest-first**, whichever cursor asked for it.
     ///
-    /// A page shorter than the requested `limit` means the client has reached the end it was
-    /// walking towards: the present when polling forwards, the start of history when loading
-    /// older messages. A full page means more might be waiting — ask again immediately.
+    /// A page shorter than `limit` is the end of what was being walked towards. A full page means
+    /// more may be waiting.
     pub messages: Vec<Message>,
 }
