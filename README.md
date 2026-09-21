@@ -5,47 +5,18 @@ Android app, and an iOS app. Every request between a client and the server is HT
 
 ## Where the SDK is
 
-Five files import the SDK. Each one has one role.
+One file for each role:
 
-| role | file | SDK entry point |
-| --- | --- | --- |
-| a client, in Rust | [`transport/scion.rs`](crates/chat-client-core/src/transport/scion.rs) | `scion_http3::Client` |
-| a client, on Android | [`ScionTransport.kt`](android/chat-client/src/main/kotlin/com/anapaya/chat/client/ScionTransport.kt) | `ScionHttp3Client.Builder` |
-| a client, on iOS | [`ScionTransport.swift`](ios/ChatClient/Sources/ChatClient/ScionTransport.swift) | `ScionHttp3Client(configuration:)` |
-| the server | [`scion.rs`](crates/chat-server/src/scion.rs) | `ScionStackBuilder`, `ScionH3AxumServer` |
-| a SCION network on this machine | [`topology.rs`](crates/chat-dev/src/topology.rs) | `pocketscion` |
-| all of the above, in one test | [`tests/scion.rs`](crates/chat-client-core/tests/scion.rs) | |
+| role | file |
+| --- | --- |
+| a client, in Rust | [`transport/scion.rs`](crates/chat-client-core/src/transport/scion.rs) |
+| a client, on Android | [`ScionTransport.kt`](android/chat-client/src/main/kotlin/com/anapaya/chat/client/ScionTransport.kt) |
+| a client, on iOS | [`ScionTransport.swift`](ios/ChatClient/Sources/ChatClient/ScionTransport.swift) |
+| the server | [`scion.rs`](crates/chat-server/src/scion.rs) |
+| a SCION network on this machine | [`topology.rs`](crates/chat-dev/src/topology.rs) |
+| all of the above, in one test | [`tests/scion.rs`](crates/chat-client-core/tests/scion.rs) |
 
-Every client builds one SDK client from the same four values, and sends every request through it:
-
-| what | Rust | Kotlin | Swift |
-| --- | --- | --- | --- |
-| the endhost API, which is how the client finds SCION | `Config::new(url)` | `.endhostApi(url)` | `Configuration(endhostApi:)` |
-| a token, on the SNAP underlay | `.with_auth_token()` | `.authToken()` | `authToken:` |
-| a pinned certificate, in place of the system roots | `QuicConfig::ca_certs_file()` | `TrustAnchors.pinned()` | `.trust = .pinned()` |
-| the target, for a host with no TSAR record | `ScionTxtDnsResolver::with_override()` | `request.target()` | `request.targets` |
-
-The Android client builds it like this:
-
-```kotlin
-ScionHttp3Client
-    .Builder(context)
-    .endhostApi(config.endhostApiUrl)
-    .apply { config.snapToken?.let { authToken(it) } }
-    .trust(
-        config.certPem
-            ?.let { TrustAnchors.pinned(it.toByteArray()) }
-            ?: TrustAnchors.systemDefault(),
-    )
-    .build()
-```
-
-The server has three steps: `ScionStackBuilder` builds a stack, `stack.bind()` opens a socket on it,
-and `ScionH3AxumServer::serve_with_graceful_shutdown` serves an Axum router on that socket.
-[`scion.rs`](crates/chat-server/src/scion.rs) holds all three.
-
-The SDK leaves the choice of a rustls provider to the application. Every Rust binary here calls
-`scion_sdk_utils::rustls::select_ring_crypto_provider()` before its first TLS handshake.
+The three clients take the same inputs and have the same shape, so one reads like the others.
 
 ## Run it
 
@@ -91,7 +62,7 @@ eval "$(curl -s http://127.0.0.1:8099/info | jq -r '
   "export CHAT_CLIENT_SNAP_TOKEN=\(.auth_token | @sh)"
 ')"
 
-cargo run -p chat-ui-ratatui -- --transport scion
+cargo run -p chat-ui-ratatui
 ```
 
 For a second user, run the same two commands in a third terminal. Each read of `/info` makes a new
@@ -162,10 +133,14 @@ reaches both.
 The server. `cargo run -p chat-server -- --help` lists every flag with its default and its `CHAT_*`
 environment fallback.
 
+[`scion.rs`](crates/chat-server/src/scion.rs) puts it on SCION in three steps: `ScionStackBuilder`
+builds a stack, `stack.bind()` opens a socket on it, and
+`ScionH3AxumServer::serve_with_graceful_shutdown` serves the Axum router on that socket.
+
 #### Endpoints
 
-Every route sits under `/api/v1`. Every route needs `A="authorization: Bearer $TOKEN"` from
-`login`, except `/healthz`, `/server`, `/register` and `/login`.
+Every route sits under `/api/v1`. Every route needs an `authorization: Bearer <token>` header, with
+the token from `login`, except `/healthz`, `/server`, `/register` and `/login`.
 
 The server describes itself at `/.well-known/openapi.json`. The repository also holds the same
 document as YAML at [`crates/chat-server/openapi.yaml`](crates/chat-server/openapi.yaml), because
@@ -184,17 +159,13 @@ The typed API, the session, and the transport under them:
 - `TcpTransport` speaks plain HTTP to the server's `--transport tcp` mode
 - `MockTransport` answers from a script, so a test can produce a reply that no real server produces
 
-`--transport` picks the transport. Each transport uses one URL scheme: `scion` uses `https`, and
-`tcp` uses `http`. The client checks the URL against the choice. SCION also needs an endhost API,
-which is how the client reaches the network. The other fields are optional.
-
 `tests/scion.rs` starts a two-AS network, puts the server in one AS and a client in the other, and
 sends a message between them.
 
 ### chat-ui-ratatui
 
 Three screens over `chat-client-core`: connect, sign in, and chat. The screens draw and read keys.
-`app.rs` holds every call to the client, so one file shows how the app uses the SDK.
+`app.rs` holds every call to the client.
 
 Every field of the connect screen also has a flag, so a launch can arrive with the form answered:
 
@@ -206,6 +177,9 @@ Every field of the connect screen also has a flag, so a launch can arrive with t
 | `--target` | `CHAT_CLIENT_TARGET` | the server's SCION address, for a host with no TSAR record |
 | `--cert-path` | `CHAT_CLIENT_CERT_PATH` | a certificate to trust instead of the system roots |
 | `--snap-token` | `CHAT_CLIENT_SNAP_TOKEN` | the token the SNAP underlay asks for |
+
+Each transport uses one URL scheme: `scion` uses `https`, and `tcp` uses `http`. The client checks
+the URL against the transport.
 
 The client reads `CHAT_CLIENT_*` and the server reads `CHAT_*`. Keep them apart. The server sits in
 one AS and the client attaches to another, so a shared `CHAT_ENDHOST_API` would point the client at
@@ -315,13 +289,16 @@ Formatting runs on a pinned nightly, because `rustfmt.toml` uses nightly-only op
 cargo +nightly-2026-03-12 fmt --all
 ```
 
+The SDK leaves the choice of a rustls provider to the application. Every binary here calls
+`scion_sdk_utils::rustls::select_ring_crypto_provider()` before its first TLS handshake.
+
 ### The database
 
 SQLite is compiled into the binary, so there is no database service to install, start, or connect
 to. The database is a single file. The store creates the file and the directory that holds it.
 Delete the file to start over.
 
-### `.sqlx` purpose
+### The `.sqlx` folder
 
 The compiler checks the server's SQL against the schema, so it needs to know the schema.
 `crates/chat-server/.sqlx/` holds that knowledge, as one JSON file for each query.
@@ -329,9 +306,6 @@ The compiler checks the server's SQL against the schema, so it needs to know the
 The repository commits this folder, so a build needs no database and no tooling. `cargo build`,
 `cargo test` and `cargo run` all work on a fresh clone without `DATABASE_URL` or `sqlx-cli`. The
 crate fails to compile without the folder.
-
-The server itself needs no database service either. SQLite and `schema.sql` are compiled into the
-binary, and that stays true with or without this folder.
 
 You need `sqlx-cli` to add or change a query. Regenerate the metadata afterwards:
 
