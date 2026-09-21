@@ -36,8 +36,7 @@ pub struct Config {
 
     /// The address an Android emulator reaches this host at.
     ///
-    /// Published to the emulator's AS alone, and mapped to this host's loopback by the emulator.
-    /// It exists nowhere else.
+    /// Published to the emulator's AS alone.
     #[arg(long, env = "CHAT_DEV_EMULATOR_IP", default_value = "10.0.2.2")]
     pub emulator_ip: IpAddr,
 

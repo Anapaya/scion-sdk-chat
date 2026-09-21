@@ -110,7 +110,7 @@ impl ChatClient {
         &self.state.poll
     }
 
-    /// Creates an account. Does not log in: the two are separate, as the API is.
+    /// Creates an account. Does not log in.
     pub async fn register(&self, username: &str, password: &str) -> Result<(), ChatError> {
         let body = RegisterRequest {
             username: username.to_owned(),
@@ -152,7 +152,7 @@ impl ChatClient {
             .map(drop)
     }
 
-    /// Reads the version and the limits the server enforces. Needs no login.
+    /// Reads the version and the limits the server enforces.
     pub async fn server_info(&self) -> Result<ServerInfo, ChatError> {
         self.get("/api/v1/server", Auth::None).await
     }
@@ -362,7 +362,7 @@ enum Cursor {
 enum Auth {
     /// Attach the token, and refuse to send the request without one.
     Required,
-    /// Send no token: liveness, server metadata, registering, logging in.
+    /// Send no token.
     None,
 }
 

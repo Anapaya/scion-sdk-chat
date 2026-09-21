@@ -16,7 +16,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-/// The server's version and the limits it enforces. Needs no token.
+/// The server's version and the limits it enforces.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct ServerInfo {
     /// The server build's version.

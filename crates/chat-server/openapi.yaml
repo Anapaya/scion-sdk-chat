@@ -569,7 +569,7 @@ components:
       minimum: 0
     ServerInfo:
       type: object
-      description: The server's version and the limits it enforces. Needs no token.
+      description: The server's version and the limits it enforces.
       required:
       - version
       - max_accounts
