@@ -284,13 +284,8 @@ impl Connection {
             Constraint::Length(3),
             Constraint::Length(3),
             Constraint::Length(3),
-            // The certificate is only asked for when it is used. The row still exists when
-            // verification is off, to carry the warning.
-            Constraint::Length(match self.trust {
-                TrustChoice::Pinned => 3,
-                TrustChoice::Insecure => 1,
-                TrustChoice::System => 0,
-            }),
+            // The certificate is only asked for when it is used.
+            Constraint::Length(if pinned { 3 } else { 0 }),
             Constraint::Length(3),
             Constraint::Length(1),
             Constraint::Length(1),
@@ -320,12 +315,6 @@ impl Connection {
             ],
             self.focus == Focus::Trust,
         );
-        if self.trust == TrustChoice::Insecure {
-            frame.render_widget(
-                Line::from(" Any server on the path can answer as this one.".fg(theme::ERROR)),
-                cert,
-            );
-        }
 
         for (area, label, input, focus, mask) in [
             (

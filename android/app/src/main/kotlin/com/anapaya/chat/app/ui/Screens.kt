@@ -113,19 +113,8 @@ public fun ManualScreen(
                 ) { Text(choice.label) }
             }
         }
-        when (form.trust) {
-            TrustChoice.Pinned ->
-                Field("Certificate (PEM)", form.certPem, lines = 4) {
-                    onForm(form.copy(certPem = it))
-                }
-            TrustChoice.Insecure ->
-                Text(
-                    "Any server on the path can answer as this one. Use it only against a server " +
-                        "you control.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            TrustChoice.SystemRoots -> Unit
+        if (form.trust == TrustChoice.Pinned) {
+            Field("Certificate (PEM)", form.certPem, lines = 4) { onForm(form.copy(certPem = it)) }
         }
 
         Button(onClick = onConnect, enabled = !state.pending, modifier = Modifier.fillMaxWidth()) {

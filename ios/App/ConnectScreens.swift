@@ -64,18 +64,8 @@ struct ManualScreen: View {
                 }
                 .pickerStyle(.segmented)
 
-                switch model.manual.trust {
-                case .pinned:
+                if model.manual.trust == .pinned {
                     Field("Certificate (PEM)", text: $model.manual.certPem, lines: 4)
-                case .insecure:
-                    Text(
-                        "Any server on the path can answer as this one. Use it only against a "
-                            + "server you control."
-                    )
-                    .font(.footnote)
-                    .foregroundStyle(Palette.risk)
-                case .systemRoots:
-                    EmptyView()
                 }
 
                 Button(action: model.connectManually) {
