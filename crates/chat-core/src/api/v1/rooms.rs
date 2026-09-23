@@ -18,27 +18,24 @@ use utoipa::ToSchema;
 
 use super::{RoomId, Seq};
 
-/// A room.
-///
-/// Every user belongs to every room: there is no membership, no joining, and no private rooms.
-/// A room named `lobby` always exists.
+/// A room. Every user is in every room, and one named `lobby` always exists.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct Room {
-    /// The room's identifier, used in the message paths.
+    /// The room's identifier, as the message paths take it.
     pub id: RoomId,
     /// The room's display name. Printable ASCII, 1–64 characters; unique case-insensitively.
     pub name: String,
     /// The `seq` of the newest message in the room, or `0` while it has none.
     ///
-    /// Comparing it against the newest `seq` a client has read is what drives an unread badge, so
-    /// one listing covers every room at once. Not a count: `seq` is server-wide (see [`Seq`]).
+    /// Against the newest `seq` a client has read, this drives an unread badge. Never a count:
+    /// `seq` is server-wide (see [`Seq`]).
     pub latest_seq: Seq,
 }
 
 /// Every room on the server.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct RoomsResponse {
-    /// All rooms. Never empty: `lobby` is always present.
+    /// Never empty: `lobby` is always present.
     pub rooms: Vec<Room>,
 }
 

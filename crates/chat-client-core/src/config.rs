@@ -18,8 +18,7 @@ use std::{fmt, path::PathBuf, time::Duration};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-/// The address [`ClientConfig::default`] leaves behind, which is also the server's own dev-mode
-/// address. A mock never dials it: it matches on method and path.
+/// The address [`ClientConfig::default`] leaves behind, and the server's own dev-mode address.
 const DEV_SERVER_URL: &str = "http://localhost:8080";
 
 /// Which transport to build
@@ -49,8 +48,7 @@ pub struct ScionConfig {
 
 /// A token for the SNAP underlay.
 ///
-/// `Debug` prints a placeholder, so logging a config, or a panic that includes one, cannot expose
-/// it. Serialization is not redacted: a settings screen that persists a config has to write it.
+/// `Debug` prints a placeholder. Serialization is not redacted.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct SnapToken(String);
@@ -82,9 +80,7 @@ impl std::str::FromStr for SnapToken {
     }
 }
 
-/// Everything a client reads at startup.
-///
-/// Plain data with no SDK types in it, so a settings screen can persist the whole value.
+/// Everything a client reads at startup. Plain data, so the whole value serializes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientConfig {
     /// Which transport to talk over.
@@ -110,23 +106,17 @@ impl Default for ClientConfig {
 pub struct PollConfig {
     /// How long to wait between reads of the open room's messages.
     ///
-    /// Both intervals sit well under the SDK's idle connection timeout, so steady polling rides
-    /// one warm connection rather than paying for a handshake each time.
+    /// Both intervals sit under the SDK's idle connection timeout, so polling rides one
+    /// connection.
     pub messages_interval: Duration,
-    /// How long to wait between reads of the room list.
-    ///
-    /// Slower than the messages by default: a room appearing a second late is nobody's problem,
-    /// while a message arriving late is what a chat is judged on.
+    /// How long to wait between reads of the room list. Slower: a late room costs nothing.
     pub rooms_interval: Duration,
     /// How many messages to ask for at a time.
     pub page_limit: usize,
 }
 
 impl PollConfig {
-    /// The page size to ask for, never zero.
-    ///
-    /// A zero would make every page count as full, which reads as "more is waiting" for ever and
-    /// leaves a feed fetching without pause.
+    /// The page size to ask for, never zero: a zero page counts as full and never stops.
     pub fn page_size(&self) -> usize {
         self.page_limit.max(1)
     }
@@ -177,14 +167,12 @@ mod tests {
         let json = serde_json::to_string(&config).expect("serialize");
         let decoded: ClientConfig = serde_json::from_str(&json).expect("deserialize");
 
-        // The transport carries its own settings, so comparing it compares them too.
         assert_eq!(decoded.transport, config.transport);
         assert_eq!(decoded.server_url, config.server_url);
         assert_eq!(decoded.poll, config.poll);
     }
 
-    /// A config reaches a log or a panic message through `Debug`, and the token must not go with
-    /// it.
+    /// A config reaches a log through `Debug`, and the token must not go with it.
     #[test]
     fn the_snap_token_is_redacted_in_debug_output() {
         let config = ClientConfig {

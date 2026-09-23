@@ -11,13 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! A SCION network on this machine, with the chat server in it.
+//! A SCION network on this machine, with the chat server in it. For development only.
 //!
-//! Three autonomous systems: one for the server, one for every client, and one for an Android
-//! emulator on this machine. See [`topology`] for the reason the emulator needs its own. The
-//! network runs for as long as this process runs.
-//!
-//! This crate is for development only.
+//! Three autonomous systems, and [`topology`] says why. The network runs as long as this
+//! process does.
 
 pub mod config;
 pub mod info;
@@ -80,10 +77,7 @@ pub enum DevError {
     Server(#[from] chat_server::RunError),
 }
 
-/// A running network, and the chat server in it.
-///
-/// Hold this value to keep the network up. A drop stops the topology and every address in the
-/// description.
+/// A running network, and the chat server in it. Hold it to keep the network up.
 pub struct DevSetup {
     /// Held, because the topology runs for as long as this value lives.
     _network: pocketscion::util::topologies::PsSetup,
@@ -95,26 +89,20 @@ pub struct DevSetup {
 }
 
 /// The same network, described once for each kind of client.
-///
-/// Three fields differ. The server, its certificate and its SCION address are the same in each
-/// description.
 #[derive(Debug, Clone)]
 struct Profiles {
     /// For every client that reaches the bound address.
     default: DevNetwork,
     /// For a client on an Android emulator.
     emulator: DevNetwork,
-    /// The address the emulator's description gives. A request to this address gets that
-    /// description.
+    /// The address the emulator's description gives, and the one that selects it.
     emulator_ip: IpAddr,
 }
 
 impl Profiles {
     /// The description that matches the address the client asked at.
     ///
-    /// The `Host` header holds the address the client wrote in its URL. A client that asked at the
-    /// emulator's address runs on an emulator. The emulator proxies TCP and keeps the payload, so
-    /// the header arrives as the client wrote it.
+    /// The emulator proxies TCP and keeps the payload, so `Host` arrives as the client wrote it.
     fn for_host(&self, headers: &HeaderMap) -> &DevNetwork {
         let asked_at = headers
             .get(HOST)
@@ -132,8 +120,7 @@ impl Profiles {
 impl DevSetup {
     /// Starts the network, and the chat server unless `--no-server` is given.
     ///
-    /// This binds the control listener before the topology, so a second copy of this process fails
-    /// in milliseconds.
+    /// The control listener is bound first, so a second copy of this process fails at once.
     pub async fn start(config: &Config) -> Result<Self, DevError> {
         if config.bind_ip.is_unspecified() {
             return Err(DevError::WildcardBind(config.bind_ip));
@@ -154,8 +141,7 @@ impl DevSetup {
 
         let io = IoConfig::new();
         io.set_bind_ip(config.bind_ip);
-        // The network publishes one address for each AS, so this reaches the emulator's
-        // description only. Every other client gets the bound address.
+        // One address per AS, so this reaches the emulator's description alone.
         io.set_advertised_ip(topology::EMULATOR, config.emulator_ip);
         let network = topology::start(io).await;
 
@@ -163,7 +149,7 @@ impl DevSetup {
         let auth_token_file = data_dir.join("snap.token");
         write(&auth_token_file, dev_auth_token())?;
 
-        // Made here, so the description holds the certificate under `--no-server` as well.
+        // Made here, so `--no-server` still describes a certificate.
         let certificate = cert::ServerCert::load_or_create(&data_dir)?;
         let ca_pem = read(&certificate.cert_path)?;
 
@@ -180,8 +166,7 @@ impl DevSetup {
             Some(start_server(&data_dir, listen, &server_api, &auth_token_file, &shutdown).await?)
         };
 
-        // Under `--no-server` this predicts the address. On this topology a tunnel observes the
-        // address it binds.
+        // Under `--no-server` this predicts the address a tunnel would observe.
         let (target, port) = served.unwrap_or_else(|| {
             (
                 format!("{},{}", topology::SERVER, listen.ip()),
@@ -216,8 +201,7 @@ impl DevSetup {
             ),
         };
 
-        // The server, its certificate and its SCION address are the same for each client. The
-        // way in differs.
+        // Only the way in differs between the two.
         let emulator = DevNetwork {
             control_url: format!(
                 "http://{}:{}",
@@ -247,8 +231,7 @@ impl DevSetup {
         &self.profiles.default
     }
 
-    /// What a client on an Android emulator needs. `GET /info` answers with this description when
-    /// the request arrives at the emulator's address.
+    /// What a client on an Android emulator needs.
     pub fn emulator_network(&self) -> &DevNetwork {
         &self.profiles.emulator
     }
@@ -258,9 +241,7 @@ impl DevSetup {
         self.shutdown.clone()
     }
 
-    /// Serves the description until [`DevSetup::stopper`] cancels it.
-    ///
-    /// Each read gets its own token. See [`DevNetwork::auth_token`].
+    /// Serves the description until [`DevSetup::stopper`] cancels it. Each read mints a token.
     pub async fn serve(self) {
         let router = Router::new()
             .route(
@@ -308,8 +289,7 @@ async fn start_server(
         auth_token_file: Some(auth_token_file.to_owned()),
     };
 
-    // Bind before serve, because serve consumes the listener and the address must be read first.
-    // The stack is built here, so this file shows both steps that join a SCION network.
+    // Bind before serve: serve consumes the listener, and the address is read first.
     let stack = scion::build_stack(&config).await?;
     let listener = scion::ScionListener::bind(stack, &config).await?;
     let addr = listener.addr();
@@ -330,10 +310,7 @@ async fn start_server(
     Ok(reachable)
 }
 
-/// Where to write, and the temporary directory to hold.
-///
-/// This makes a temporary directory unless `--data-dir` names one, so a run starts with no
-/// accounts.
+/// Where to write, and the temporary directory to hold. Temporary unless `--data-dir` names one.
 fn data_dir(config: &Config) -> Result<(PathBuf, Option<TempDir>), DevError> {
     match &config.data_dir {
         Some(named) => {

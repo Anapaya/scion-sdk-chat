@@ -25,10 +25,7 @@ const CREATE: &str = "/room";
 /// The word that lists what the other words do.
 const HELP: &str = "/help";
 
-/// Every command and key `/help` lists, and what each one does.
-///
-/// Kept beside [`instructions`] because the composer's hint line names a few of the same keys, and
-/// the two have to be changed together.
+/// Every command and key `/help` lists. Changed with [`instructions`], which names some of them.
 const COMMANDS: [(&str, &str); 8] = [
     (HELP, "list these commands"),
     ("/room <name>", "create a room"),
@@ -44,13 +41,10 @@ const COMMANDS: [(&str, &str); 8] = [
 const COMMAND_WIDTH: usize = 16;
 
 impl Chat {
-    /// Takes what was typed, leaving the line empty. A blank line does nothing.
+    /// Takes what was typed, leaving the line empty. A line starting with [`CREATE`] names a room.
     ///
-    /// A line starting with [`CREATE`] names a room instead of saying something.
-    ///
-    /// The line is read rather than taken until it is clear where it goes: `pending` refuses the
-    /// two that reach the server, and a line refused has to stay where it was typed. `/help` and a
-    /// name this client will not accept are its own, and answer whatever is out.
+    /// Read before it is taken: `pending` refuses the two that reach a server, and a refused line
+    /// stays where it was typed.
     pub(super) fn submit(&mut self, pending: bool) -> Option<Intent> {
         let typed = self.input.value().trim().to_owned();
 

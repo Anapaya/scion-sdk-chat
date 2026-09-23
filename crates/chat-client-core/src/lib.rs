@@ -13,8 +13,7 @@
 // limitations under the License.
 //! Every part of a chat client except the user interface.
 //!
-//! A user interface talks to this crate and never to a transport. Which transport is behind it is
-//! configuration, so the choice of interface framework and the choice of transport are independent.
+//! A user interface talks to this crate and never to a transport, which is configuration:
 //!
 //! ```text
 //! any user interface
@@ -28,8 +27,8 @@
 //! (no network)  (dev mode)     (the product)
 //! ```
 //!
-//! Every wire type comes from `chat-core` and is re-exported here, so a caller needs one dependency
-//! rather than two.
+//! Every wire type comes from `chat-core` and is re-exported here, so a caller needs one
+//! dependency.
 
 pub mod client;
 pub mod config;

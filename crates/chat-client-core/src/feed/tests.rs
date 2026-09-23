@@ -357,7 +357,7 @@ async fn a_next_dropped_mid_wait_resumes_rather_than_restarts() {
     assert!(batches > 0, "the feed never reached a fetch");
 }
 
-/// The same feed, read as a stream, for an interface whose subscription consumes one.
+/// The same feed, read as a stream.
 #[tokio::test(start_paused = true)]
 async fn a_feed_reads_as_a_stream() {
     let expired = r#"{"error":{"code":"expired_token","message":"log in again"}}"#;

@@ -20,8 +20,7 @@ use utoipa::ToSchema;
 
 use super::UnixMillis;
 
-/// Stands in for a secret in `Debug` output, so that no password or token can reach a log by way
-/// of a struct that merely happens to be printed.
+/// Stands in for a secret in `Debug` output, so a printed struct cannot leak one.
 const REDACTED: &str = "<redacted>";
 
 /// The credentials a new account is created with.
@@ -33,8 +32,7 @@ pub struct RegisterRequest {
     /// The name to register. UTF-8, 1–32 characters, no control characters; compared
     /// case-insensitively against the names already taken.
     pub username: String,
-    /// The password in the clear — the connection's TLS is what protects it. The server keeps
-    /// only a KDF hash.
+    /// The password in the clear, protected by the connection's TLS. Only a KDF hash is kept.
     pub password: String,
 }
 
@@ -68,10 +66,9 @@ impl fmt::Debug for LoginRequest {
 /// What a successful login yields: the bearer token every authenticated request carries.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct LoginResponse {
-    /// The JWT to send as `Authorization: Bearer <token>`. Opaque to clients: they carry it, they
-    /// do not parse it.
+    /// The JWT to send as `Authorization: Bearer <token>`. Opaque: carry it, do not parse it.
     pub token: String,
-    /// When the token stops being accepted. There are no refresh tokens — a client logs in again.
+    /// When the token stops being accepted. No refresh tokens: a client logs in again.
     pub expires_at: UnixMillis,
 }
 
@@ -88,9 +85,7 @@ impl fmt::Debug for LoginResponse {
 mod tests {
     use super::*;
 
-    /// Asserts that `value`'s `Debug` output hides `secret` behind the redaction marker while
-    /// still showing `kept` — a field that is not a secret, so that redaction cannot be passed by
-    /// rendering nothing at all.
+    /// Asserts `Debug` hides `secret` and still shows `kept`, so rendering nothing cannot pass.
     #[track_caller]
     fn assert_debug_redacts(value: impl fmt::Debug, secret: &str, kept: &str) {
         let rendered = format!("{value:?}");

@@ -33,11 +33,9 @@ use crate::ui::{self, NAME_WIDTH, field, theme};
 /// How wide the room list is. Fixed, because a room name is short and the messages want the rest.
 const SIDEBAR_WIDTH: u16 = 18;
 
-/// The message pane as it was last drawn, kept so that a keystroke changing nothing in it redraws
-/// nothing.
+/// The message pane as it was last drawn, so a keystroke that changes nothing redraws nothing.
 ///
-/// Drawing it costs a wrap of every message, twice — once to count the rows and once to place them.
-/// Typing changes none of what it is built from, and that is most of what the loop wakes for.
+/// A draw wraps every message twice, and typing changes none of what it is built from.
 pub(super) struct Pane {
     area: Rect,
     scroll: Option<u16>,
@@ -66,8 +64,7 @@ impl Chat {
         let [sidebar, opened] =
             Layout::horizontal([Constraint::Length(SIDEBAR_WIDTH), Constraint::Min(20)])
                 .areas(area);
-        // The error line is given no row at all when there is nothing to report, so the message
-        // pane grows into it rather than the screen carrying a blank row.
+        // No row at all when there is nothing to report, so the pane grows into it.
         let [messages, composer, error] = Layout::vertical([
             Constraint::Min(1),
             Constraint::Length(3),
@@ -133,8 +130,7 @@ impl Chat {
             Some(room) => format!(" #{} ", room.name),
             None => " no rooms ".to_owned(),
         };
-        // Read once for the whole pane rather than per row: every row resolves to the same zone,
-        // and each lookup is a call into the C library.
+        // Once for the whole pane: every row resolves to the same zone, and a lookup calls into C.
         let here = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
         let mut lines: Vec<Line<'_>> = Vec::with_capacity(self.messages.len() + self.notices.len());
         let mut day = None;
@@ -142,8 +138,7 @@ impl Chat {
         for message in &self.messages {
             let at = local(message.posted_at, here);
 
-            // A timestamp that will not convert carries no day, so it neither opens one of its own
-            // nor cuts the run it landed in.
+            // A timestamp that will not convert carries no day, so it cuts no run.
             if let Some(date) = at
                 .map(OffsetDateTime::date)
                 .filter(|date| Some(*date) != day)
@@ -170,17 +165,13 @@ impl Chat {
             .wrap(Wrap { trim: false })
             .block(block);
 
-        // A message longer than the pane takes several rows, so the newest is found by counting the
-        // rows a wrap actually produces rather than the messages. The count includes the block's
-        // own two rows, so it is compared against the height that also has them.
+        // Counted in wrapped rows, the block's own two included, so it matches the height.
         let rows = messages.line_count(inner.width) as u16;
         let bottom = rows.saturating_sub(area.height);
-        // Following the newest until the reader says otherwise, and never past the end when the
-        // pane has grown a message since they last looked.
+        // Following the newest until the reader says otherwise, and never past the end.
         let scroll = self.scroll.unwrap_or(bottom).min(bottom);
 
-        // Drawn into a buffer of its own so the cells can be kept. Merging them into the frame
-        // costs the pane's own size, whatever the history behind them.
+        // Into a buffer of its own, so the cells can be kept and merged at the pane's size.
         let mut buffer = Buffer::empty(area);
         Widget::render(messages.scroll((scroll, 0)), area, &mut buffer);
         draw_scrollbar(&mut buffer, area, inner.height, scroll, bottom);
@@ -215,10 +206,7 @@ fn separator(on: Date) -> Line<'static> {
         .centered()
 }
 
-/// What time a message was posted, with no seconds and no date.
-///
-/// A chat is read in the present, so the minute is all a row needs; which day it belongs to is
-/// drawn once, by [`separator`], for the whole run.
+/// What time a message was posted. [`separator`] draws the day, once per run.
 fn clock(at: Option<OffsetDateTime>) -> String {
     match at {
         Some(at) => format!(" {:02}:{:02}", at.hour(), at.minute()),
@@ -228,9 +216,8 @@ fn clock(at: Option<OffsetDateTime>) -> String {
 
 /// Draws how far down the pane is, on its own right border.
 ///
-/// `offset` is a count of rows scrolled past and `bottom` the largest it reaches, so `bottom + 1`
-/// is how many positions there are and `visible` is how many of them a thumb covers. Nothing is
-/// drawn for a pane that fits, where a thumb would fill the track and say nothing.
+/// `bottom + 1` is how many positions there are, and `visible` how many a thumb covers. A pane
+/// that fits gets none: the thumb would fill the track.
 fn draw_scrollbar(buffer: &mut Buffer, area: Rect, visible: u16, offset: u16, bottom: u16) {
     if bottom == 0 {
         return;
@@ -242,8 +229,7 @@ fn draw_scrollbar(buffer: &mut Buffer, area: Rect, visible: u16, offset: u16, bo
 
     StatefulWidget::render(
         Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            // The arrow heads would land on the rounded corners, so the track is inset past them
-            // and drawn without heads instead.
+            // The heads would land on the rounded corners, so the track is inset and has none.
             .begin_symbol(None)
             .end_symbol(None)
             .track_style(Style::new().fg(theme::BORDER))
@@ -254,8 +240,7 @@ fn draw_scrollbar(buffer: &mut Buffer, area: Rect, visible: u16, offset: u16, bo
     );
 }
 
-/// A panel: named in the colour every screen gives a title, and filled a shade lighter than the
-/// screen behind it.
+/// A panel: titled in the screens' title colour, and filled a shade lighter.
 fn panel(title: &str) -> Block<'_> {
     ui::bordered(
         Line::from(Span::from(title).fg(theme::TITLE).bold()),

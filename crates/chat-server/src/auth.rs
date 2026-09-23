@@ -29,14 +29,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::store::PasswordHash;
 
-/// A hash of nothing anyone can log in with, verified against when the account does not exist so
-/// that a caller cannot tell a wrong password from an unknown name by timing the response.
+/// A hash nobody can log in with. Verified against an unknown name, so timing says nothing.
 static ABSENT_ACCOUNT: LazyLock<PasswordHash> = LazyLock::new(|| {
     hash_password("a password no account has").expect("hashing a constant cannot fail")
 });
 
-/// Anything the auth layer can fail with. Deliberately coarse: a caller must not be able to tell
-/// these apart, so the API reports one `invalid_credentials` for all of them.
+/// Anything the auth layer can fail with. Coarse: the API reports one `invalid_credentials`.
 #[derive(Debug, thiserror::Error)]
 pub enum AuthError {
     /// Hashing or verification failed.
@@ -56,11 +54,9 @@ pub enum AuthError {
 }
 
 impl AuthError {
-    /// Whether a token this server signed has simply run out.
+    /// Whether a token this server signed has run out.
     ///
-    /// The one distinction the API does report, because reaching it means the signature already
-    /// verified: only someone who held a valid token can be told this, so it tells an attacker
-    /// nothing. A client learns to log in again rather than to show a failure.
+    /// The one distinction the API reports: reaching it means the signature already verified.
     pub fn is_expired_token(&self) -> bool {
         matches!(self, Self::Token(error)
             if matches!(error.kind(), jsonwebtoken::errors::ErrorKind::ExpiredSignature))
@@ -77,9 +73,6 @@ pub struct Claims {
 }
 
 /// Hashes a password with Argon2id and a fresh random salt.
-///
-/// Two calls with the same password produce different strings, which is why verification reads
-/// the stored hash rather than recomputing and comparing.
 pub fn hash_password(password: &str) -> Result<PasswordHash, AuthError> {
     let salt = SaltString::encode_b64(&rand::random::<[u8; Salt::RECOMMENDED_LENGTH]>())
         .map_err(AuthError::Password)?;

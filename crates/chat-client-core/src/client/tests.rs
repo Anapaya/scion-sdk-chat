@@ -363,7 +363,7 @@ async fn a_session_starts_absent_appears_on_login_and_goes_on_logout() {
     assert_eq!(client.session(), None);
 }
 
-/// Every clone is the same client, which is what lets a user interface hand copies around.
+/// Every clone is the same client.
 #[tokio::test]
 async fn a_clone_shares_the_session() {
     let mock = MockTransport::new()

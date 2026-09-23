@@ -1,31 +1,34 @@
 # scion-sdk-chat
 
-A chat application that shows how to use the SCION SDK. It has a server, a client library, a
-terminal UI, an Android app, an iOS app, and a development helper that runs them on a SCION
-network.
+A chat application, written to show the SCION SDK. 1 server and 3 clients:
 
-```text
-  +------------------+     +-------------------+     +-------------+
-  | chat-ui-ratatui  | --> | chat-client-core  | --> |             |
-  | terminal UI      |     | transports        |     |  chat-core  |
-  +------------------+     +-------------------+     |  API types  |
-                                                  
-                                                    |             |
-  +------------------+     +-------------------+     |             |
-  | chat-dev         | --> | chat-server       | --> |             |
-  | network + server |     | the API           |     +-------------+
-  +------------------+     +-------------------+
-```
+- a terminal client
+- an Android app
+- an iOS app
 
-An arrow means "depends on". `cargo doc_dx --open` renders every crate.
+Every request between a client and the server is HTTP/3 over SCION.
 
-`android/` and `ios/` are separate builds that reach the same server over the SCION SDK for each
-platform.
+## Where the SDK is
+
+1 file for each role:
+
+| role | file |
+| --- | --- |
+| a client, in Rust | [`transport/scion.rs`](crates/chat-client-core/src/transport/scion.rs) |
+| a client, on Android | [`ScionTransport.kt`](android/chat-client/src/main/kotlin/com/anapaya/chat/client/ScionTransport.kt) |
+| a client, on iOS | [`ScionTransport.swift`](ios/ChatClient/Sources/ChatClient/ScionTransport.swift) |
+| the server | [`scion.rs`](crates/chat-server/src/scion.rs) |
+| a SCION network on this machine | [`topology.rs`](crates/chat-dev/src/topology.rs) |
+| all of the above, in 1 test | [`tests/scion.rs`](crates/chat-client-core/tests/scion.rs) |
+
+The 3 clients are structurally identical. Only the language changes.
 
 ## Run it
 
-Two terminals. The first starts a SCION network with the chat server in it. The second runs a
-terminal client that talks to the server over SCION.
+2 terminals:
+
+- terminal 1 starts a SCION network with the chat server in it
+- terminal 2 runs a terminal client that talks to the server over SCION
 
 ```text
   terminal 1                        terminal 2
@@ -44,7 +47,12 @@ terminal client that talks to the server over SCION.
 cargo run -p chat-dev
 ```
 
-This one command starts the SCION network, the chat server, and a control API that describes both.
+This command starts:
+
+- the SCION network
+- the chat server
+- a control API that describes both
+
 Ctrl+C stops all of it.
 
 ### 2. Connect a terminal client
@@ -66,29 +74,70 @@ eval "$(curl -s http://127.0.0.1:8099/info | jq -r '
   "export CHAT_CLIENT_SNAP_TOKEN=\(.auth_token | @sh)"
 ')"
 
-cargo run -p chat-ui-ratatui -- --transport scion
+cargo run -p chat-ui-ratatui
 ```
 
-For a second user, run the same two commands in a third terminal. Each read of `/info` makes a new
+For another user, run the same 2 commands in another terminal. Each read of `/info` makes a new
 token, and each client needs its own.
 
-## Run it from another machine
+### 3. Connect a phone
 
-`--bind-ip` moves every part of the network to one address that another machine reaches. Give a
-real address on this machine:
+The Android app runs on an emulator on this machine:
+
+```sh
+cd android && ./gradlew :app:installDebug
+```
+
+The app is pre-filled with `10.0.2.2:8099`, which is the address the emulator reaches this host's
+loopback at. The first build downloads the SDK into `android/libs/maven`. See
+[android/README.md](android/README.md).
+
+The iOS app runs on a simulator on this machine:
+
+```sh
+cd ios && ./fetch-sdk.sh && xcodegen generate && open ChatApp.xcodeproj
+```
+
+The app is pre-filled with `127.0.0.1:8099`. The simulator shares the Mac's network, so that is the
+same address outside it. `fetch-sdk.sh` downloads the SDK into `ios/libs`. See
+[ios/README.md](ios/README.md).
+
+Every client shares the rooms. A message from the terminal client appears on the phone.
+
+### From another machine
+
+`--bind-ip` moves every part of the network to 1 address that another machine reaches. Give a real
+address on this machine:
 
 ```sh
 cargo run -p chat-dev -- --bind-ip 192.168.1.20
 ```
 
-Every client then uses that one address, this machine included, so you give up the name
-`localhost`. See [the topology](#the-topology) for which AS each client attaches to.
+Every client then uses that address, this machine included, so you give up the name `localhost`.
+See [the topology](#the-topology) for which AS each client attaches to.
 
-## The crates
+## How it fits together
+
+```text
+  +------------------+     +-------------------+     +-------------+
+  | chat-ui-ratatui  | --> | chat-client-core  | --> |             |
+  | terminal UI      |     | transports        |     |  chat-core  |
+  +------------------+     +-------------------+     |  API types  |
+                                                     |             |
+  +------------------+     +-------------------+     |             |
+  | chat-dev         | --> | chat-server       | --> |             |
+  | network + server |     | the API           |     +-------------+
+  +------------------+     +-------------------+
+```
+
+An arrow means "depends on". `cargo doc_dx --open` renders every crate.
+
+`android/` and `ios/` are separate builds. Each one reaches the same server over the SCION SDK for
+its platform, and each one has a README that lays out its code.
 
 ### chat-core
 
-The API's request and response types. Both the server and the client depend on it, so one change
+The API's request and response types. Both the server and the client depend on it, so a change
 reaches both.
 
 ### chat-server
@@ -96,15 +145,26 @@ reaches both.
 The server. `cargo run -p chat-server -- --help` lists every flag with its default and its `CHAT_*`
 environment fallback.
 
+[`scion.rs`](crates/chat-server/src/scion.rs) puts it on SCION in 3 steps:
+
+- `ScionStackBuilder` builds a stack
+- `stack.bind()` opens a socket on it
+- `ScionH3AxumServer::serve_with_graceful_shutdown` serves the Axum router on that socket
+
 #### Endpoints
 
-Every route sits under `/api/v1`. Every route needs `A="authorization: Bearer $TOKEN"` from
-`login`, except `/healthz`, `/server`, `/register` and `/login`.
+Every route sits under `/api/v1`. Every route needs an `authorization: Bearer <token>` header, with
+the token from `login`, except:
+
+- `/healthz`
+- `/server`
+- `/register`
+- `/login`
 
 The server describes itself at `/.well-known/openapi.json`. The repository also holds the same
 document as YAML at [`crates/chat-server/openapi.yaml`](crates/chat-server/openapi.yaml), because
 YAML gives a better diff. You can therefore read and review the API surface without a running
-server. A test compares the two documents, and it rewrites the file when you run:
+server. A test compares the 2 documents, and it rewrites the file when you run:
 
 ```sh
 CHAT_UPDATE_OPENAPI=1 cargo test -p chat-server
@@ -118,17 +178,18 @@ The typed API, the session, and the transport under them:
 - `TcpTransport` speaks plain HTTP to the server's `--transport tcp` mode
 - `MockTransport` answers from a script, so a test can produce a reply that no real server produces
 
-`--transport` picks the transport. Each transport uses one URL scheme: `scion` uses `https`, and
-`tcp` uses `http`. The client checks the URL against the choice. SCION also needs an endhost API,
-which is how the client reaches the network. The other fields are optional.
-
-`tests/scion.rs` starts a two-AS network, puts the server in one AS and a client in the other, and
+`tests/scion.rs` starts a network of 2 ASes, puts the server in 1 and a client in the other, and
 sends a message between them.
 
 ### chat-ui-ratatui
 
-Three screens over `chat-client-core`: connect, sign in, and chat. The screens draw and read keys.
-`app.rs` holds every call to the client, so one file shows how the app uses the SDK.
+3 screens over `chat-client-core`:
+
+- connect
+- sign in
+- chat
+
+The screens draw and read keys. `app.rs` holds every call to the client.
 
 Every field of the connect screen also has a flag, so a launch can arrive with the form answered:
 
@@ -141,8 +202,15 @@ Every field of the connect screen also has a flag, so a launch can arrive with t
 | `--cert-path` | `CHAT_CLIENT_CERT_PATH` | a certificate to trust instead of the system roots |
 | `--snap-token` | `CHAT_CLIENT_SNAP_TOKEN` | the token the SNAP underlay asks for |
 
+Each transport uses 1 URL scheme:
+
+- `scion` uses `https`
+- `tcp` uses `http`
+
+The client checks the URL against the transport.
+
 The client reads `CHAT_CLIENT_*` and the server reads `CHAT_*`. Keep them apart. The server sits in
-one AS and the client attaches to another, so a shared `CHAT_ENDHOST_API` would point the client at
+1 AS and the client attaches to another, so a shared `CHAT_ENDHOST_API` would point the client at
 the wrong endhost API.
 
 ### chat-dev
@@ -153,7 +221,7 @@ the address its tunnel observed. A client behind a translation needs that.
 
 #### The topology
 
-The network holds three autonomous systems. The server sits in the middle one.
+The network holds 3 autonomous systems. The server's AS is the middle one.
 
 ```text
   1-ff00:0:132  (every client, at the bound address)
@@ -170,19 +238,23 @@ The network holds three autonomous systems. The server sits in the middle one.
 | `2-ff00:0:222` | an Android emulator on this machine | `10.0.2.2` |
 
 `1-ff00:0:132` is the default AS. It publishes the address that `--bind-ip` binds, and every client
-that reaches that address uses it. A terminal client on this machine uses it. A client on another
-machine uses it, after you give `--bind-ip` an address that machine reaches.
+that reaches that address uses it:
 
-An Android emulator on this machine is the one client that cannot use the default. The emulator
+- a terminal client on this machine
+- a client on another machine, after you give `--bind-ip` an address that machine reaches
+
+An Android emulator on this machine is the only client that cannot use the default. The emulator
 reaches the host at `10.0.2.2`, and inside the emulator `127.0.0.1` means the emulator itself. The
-network publishes one address for each AS, and one AS holds one address, so the emulator gets
+network publishes 1 address for each AS, and 1 AS holds 1 address, so the emulator gets
 `2-ff00:0:222` as a fallback. `--bind-ip` makes the fallback unnecessary: with a LAN address bound,
 the emulator reaches that address like any other client.
 
-Two files build this. [`topology.rs`](crates/chat-dev/src/topology.rs) makes the three ASes, the
-two links, and the endhost API and SNAP endpoint in each.
-[`lib.rs`](crates/chat-dev/src/lib.rs) sets the address each AS publishes, and chooses the
-description that `GET /info` answers with.
+2 files build this:
+
+- [`topology.rs`](crates/chat-dev/src/topology.rs) makes the 3 ASes, the 2 links, and the endhost
+  API and SNAP endpoint in each
+- [`lib.rs`](crates/chat-dev/src/lib.rs) sets the address each AS publishes, and chooses the
+  description that `GET /info` answers with
 
 #### The description
 
@@ -210,9 +282,12 @@ curl -s http://127.0.0.1:8099/info | jq
 This sample shows the fields a client reads most. The document holds more. Every field carries a
 doc comment in [`info.rs`](crates/chat-dev/src/info.rs), which `cargo doc_dx` renders.
 
-`GET /info` answers with the description that matches the address the client asked at. A request to
-`10.0.2.2` gets the emulator's AS. Every other request gets the default AS. Both descriptions name
-the same server, the same certificate and the same SCION address.
+`GET /info` answers with the description that matches the address the client asked at:
+
+- a request to `10.0.2.2` gets the emulator's AS
+- every other request gets the default AS
+
+Both descriptions name the same server, certificate and SCION address.
 
 #### Running the server yourself
 
@@ -232,43 +307,6 @@ cargo run -p chat-server -- $(curl -s http://127.0.0.1:8099/info | jq -r '.chat_
 
 Give the server the same data directory, so it presents the certificate the description names.
 
-## The Android app
-
-`android/` holds the same client as a Jetpack Compose app. It talks to the same `chat-dev`, and it
-shares rooms with a terminal client:
-
-```sh
-cargo run -p chat-dev
-cd android && ./gradlew :app:installDebug
-```
-
-The app is pre-filled with `10.0.2.2:8099`, which is the address the emulator reaches this host's
-loopback at. That request gets the emulator's AS, as [The topology](#the-topology) describes.
-
-The SDK arrives as a published AAR, so the build needs no NDK and no Rust cross-compilation. It is
-not on a public repository, so the first build downloads it into `android/libs/maven`. See
-[android/README.md](android/README.md) for the layout of the code, and how to regenerate the API
-models.
-
-## The iOS app
-
-`ios/` holds the same client as a SwiftUI app. It talks to the same `chat-dev`, and it shares rooms
-with the Android app and a terminal client:
-
-```sh
-cargo run -p chat-dev
-cd ios && ./fetch-sdk.sh && xcodegen generate && open ChatApp.xcodeproj
-```
-
-The app is pre-filled with `127.0.0.1:8099`. The simulator shares the Mac's network, so that is the
-same address outside it, and the simulator attaches to the default AS like any client on this
-machine.
-
-The SDK arrives as a Swift package with a prebuilt XCFramework, so the build needs no Rust
-cross-compilation. It is on no Swift package registry, so `fetch-sdk.sh` downloads it into
-`ios/libs`. `ChatApp.xcodeproj` is generated from `project.yml`, so neither is checked in. See
-[ios/README.md](ios/README.md) for the layout of the code, and how to regenerate the API models.
-
 ## Development
 
 The pinned toolchain in `rust-toolchain.toml` is picked up automatically by rustup. CI runs the
@@ -286,23 +324,23 @@ Formatting runs on a pinned nightly, because `rustfmt.toml` uses nightly-only op
 cargo +nightly-2026-03-12 fmt --all
 ```
 
+The SDK leaves the choice of a rustls provider to the application. Every binary here calls
+`scion_sdk_utils::rustls::select_ring_crypto_provider()` before its first TLS handshake.
+
 ### The database
 
 SQLite is compiled into the binary, so there is no database service to install, start, or connect
-to. The database is a single file. The store creates the file and the directory that holds it.
-Delete the file to start over.
+to. The database is 1 file. The store creates the file and the directory that holds it. Delete the
+file to start over.
 
-### `.sqlx` purpose
+### The `.sqlx` folder
 
 The compiler checks the server's SQL against the schema, so it needs to know the schema.
-`crates/chat-server/.sqlx/` holds that knowledge, as one JSON file for each query.
+`crates/chat-server/.sqlx/` holds that knowledge, as 1 JSON file for each query.
 
-The repository commits this folder, so a build needs no database and no tooling. `cargo build`,
-`cargo test` and `cargo run` all work on a fresh clone without `DATABASE_URL` or `sqlx-cli`. The
-crate fails to compile without the folder.
-
-The server itself needs no database service either. SQLite and `schema.sql` are compiled into the
-binary, and that stays true with or without this folder.
+The repository commits this folder, so a build needs no database and no tooling. Every cargo
+command works on a fresh clone without `DATABASE_URL` or `sqlx-cli`. The crate fails to compile
+without the folder.
 
 You need `sqlx-cli` to add or change a query. Regenerate the metadata afterwards:
 
