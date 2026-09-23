@@ -16,8 +16,8 @@
 use std::{future::Future, io, path::PathBuf, time::Duration};
 
 use chat_client_core::{
-    ApiKey, ApiKeyAuth, ChatClient, ChatError, ClientConfig, Credential, MessagesFeed,
-    PollConfig, RoomsFeed, ScionConfig, Since, SnapToken, TransportKind, Trust,
+    ApiKey, ApiKeyAuth, ChatClient, ChatError, ClientConfig, Credential, MessagesFeed, PollConfig,
+    RoomsFeed, ScionConfig, Since, SnapToken, TransportKind, Trust,
     v1::{Message, Room},
 };
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};

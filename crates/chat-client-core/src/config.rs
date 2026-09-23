@@ -363,7 +363,10 @@ mod tests {
     /// A key reaches a log through `Debug` as readily as a token does, and neither may go.
     #[test]
     fn an_api_key_is_redacted_in_debug_output() {
-        let credential = Credential::ApiKey(Box::new(ApiKeyAuth::new(ApiKey::new("aakey_s3cret"), "chat")));
+        let credential = Credential::ApiKey(Box::new(ApiKeyAuth::new(
+            ApiKey::new("aakey_s3cret"),
+            "chat",
+        )));
 
         let shown = format!("{credential:?}");
 
