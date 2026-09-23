@@ -21,7 +21,7 @@ use scion_stack::{
     ScionStack,
     scion_quic::{quic::config::QuicConfig, reexport::squiche, socket::GenericScionUdpSocket},
     sciparse::address::ip_socket_addr::ScionSocketIpAddr,
-    stack::ScionStackBuilder,
+    stack::{ScionStackBuilder, builder::UdpUnderlayConfig},
     url::Url,
 };
 use tokio_util::sync::CancellationToken;
@@ -132,7 +132,17 @@ pub async fn build_stack(config: &Config) -> Result<ScionStack, RunError> {
         ))
     })?;
 
-    let mut builder = ScionStackBuilder::new().with_endhost_api(endhost_api);
+    // The UDP underlay sends from the address the server was told to listen on, which is the one
+    // its clients are given. Left to itself it picks whatever reaches the endhost API, and on a
+    // host with several addresses that is not always the same one.
+    let mut builder = ScionStackBuilder::new()
+        .with_endhost_api(endhost_api)
+        .with_udp_underlay_config(
+            UdpUnderlayConfig::default().with_outbound_ips(vec![config.listen.ip()]),
+        );
+
+    // A token is only asked for by a SNAP. A host already in an AS reaches the routers directly,
+    // and needs none.
     if let Some(path) = &config.auth_token_file {
         let token = fs::read_to_string(path).map_err(|source| {
             RunError::Config(format!(
