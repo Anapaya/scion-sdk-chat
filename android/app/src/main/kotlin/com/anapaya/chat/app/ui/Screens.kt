@@ -17,6 +17,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.anapaya.chat.app.ManualForm
+import com.anapaya.chat.app.TrustChoice
 import com.anapaya.chat.app.UiState
 
 /** Where a network that describes itself is asked for that description. */
@@ -98,7 +102,31 @@ public fun ManualScreen(
         Field("Server URL", form.baseUrl) { onForm(form.copy(baseUrl = it)) }
         Field("SNAP token", form.snapToken) { onForm(form.copy(snapToken = it)) }
         Field("Target - the server's SCION address", form.target) { onForm(form.copy(target = it)) }
-        Field("Certificate (PEM)", form.certPem, lines = 4) { onForm(form.copy(certPem = it)) }
+
+        Text("Trust", style = MaterialTheme.typography.labelMedium)
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            TrustChoice.entries.forEachIndexed { index, choice ->
+                SegmentedButton(
+                    selected = form.trust == choice,
+                    onClick = { onForm(form.copy(trust = choice)) },
+                    shape = SegmentedButtonDefaults.itemShape(index, TrustChoice.entries.size),
+                ) { Text(choice.label) }
+            }
+        }
+        when (form.trust) {
+            TrustChoice.Pinned ->
+                Field("Certificate (PEM)", form.certPem, lines = 4) {
+                    onForm(form.copy(certPem = it))
+                }
+            TrustChoice.Insecure ->
+                Text(
+                    "Any server on the path can answer as this one. Use it only against a server " +
+                        "you control.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            TrustChoice.SystemRoots -> Unit
+        }
 
         Button(onClick = onConnect, enabled = !state.pending, modifier = Modifier.fillMaxWidth()) {
             Text("Connect")

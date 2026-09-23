@@ -25,7 +25,7 @@ use url::Url;
 
 use super::{MAX_BODY_BYTES, Transport, describe};
 use crate::{
-    config::ScionConfig,
+    config::{ScionConfig, Trust},
     error::{ChatError, TransportError},
 };
 
@@ -50,13 +50,22 @@ impl ScionTransport {
 
         let mut quic = QuicConfig::builder();
 
-        // A pinned certificate replaces the system roots; the server signs its own.
-        if let Some(path) = &config.cert_path {
-            let path = path.to_str().ok_or_else(|| {
-                ChatError::Config(format!("the certificate path is not utf-8: {path:?}"))
-            })?;
+        match &config.trust {
+            Trust::SystemRoots => {}
+            Trust::Pinned(path) => {
+                let path = path.to_str().ok_or_else(|| {
+                    ChatError::Config(format!("the certificate path is not utf-8: {path:?}"))
+                })?;
 
-            quic = quic.ca_certs_file(path);
+                quic = quic.ca_certs_file(path);
+            }
+            Trust::Insecure => {
+                tracing::warn!(
+                    "certificate verification is off: any server on the path can answer as this \
+                     one"
+                );
+                quic = quic.verify_peer(false);
+            }
         }
         settings = settings.with_quic_config(quic.build());
 

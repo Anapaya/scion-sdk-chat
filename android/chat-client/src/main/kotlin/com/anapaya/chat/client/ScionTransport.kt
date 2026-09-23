@@ -27,9 +27,11 @@ public class ScionTransport(
             .endhostApi(config.endhostApiUrl)
             .apply { config.snapToken?.let { authToken(it) } }
             .trust(
-                config.certPem
-                    ?.let { TrustAnchors.pinned(it.toByteArray()) }
-                    ?: TrustAnchors.systemDefault(),
+                when (val trust = config.trust) {
+                    is Trust.SystemRoots -> TrustAnchors.systemDefault()
+                    is Trust.Pinned -> TrustAnchors.pinned(trust.pem.toByteArray())
+                    is Trust.Insecure -> TrustAnchors.insecureNoVerify()
+                },
             )
             .build()
 

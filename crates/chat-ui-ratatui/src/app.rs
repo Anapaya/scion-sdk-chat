@@ -17,7 +17,7 @@ use std::{future::Future, io, path::PathBuf, time::Duration};
 
 use chat_client_core::{
     ChatClient, ChatError, ClientConfig, MessagesFeed, PollConfig, RoomsFeed, ScionConfig, Since,
-    SnapToken, TransportKind,
+    SnapToken, TransportKind, Trust,
     v1::{Message, Room},
 };
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
@@ -516,7 +516,16 @@ fn transport(server_url: &Url, form: &ConnectionForm) -> Result<TransportKind, C
     }
 
     match form.transport {
-        Transport::Tcp => Ok(TransportKind::Tcp),
+        Transport::Tcp => {
+            if form.insecure {
+                return Err(ChatError::Config(
+                    "--insecure has nothing to turn off under --transport tcp: it carries no TLS."
+                        .to_owned(),
+                ));
+            }
+
+            Ok(TransportKind::Tcp)
+        }
         Transport::Scion => {
             let endhost_api = blank_as_none(&form.endhost_api).ok_or_else(|| {
                 ChatError::Config(
@@ -535,9 +544,24 @@ fn transport(server_url: &Url, form: &ConnectionForm) -> Result<TransportKind, C
                 endhost_api,
                 snap_token: blank_as_none(form.snap_token.as_str()).map(SnapToken::new),
                 target: blank_as_none(&form.target),
-                cert_path: blank_as_none(&form.cert_path).map(PathBuf::from),
+                trust: trust(form)?,
             }))
         }
+    }
+}
+
+/// Which certificates to accept, from the two flags that can say so.
+fn trust(form: &ConnectionForm) -> Result<Trust, ChatError> {
+    match (form.insecure, blank_as_none(&form.cert_path)) {
+        (true, Some(path)) => {
+            Err(ChatError::Config(format!(
+                "--insecure accepts any certificate, and --cert-path {path} accepts one. Give one of \
+             them."
+            )))
+        }
+        (true, None) => Ok(Trust::Insecure),
+        (false, Some(path)) => Ok(Trust::Pinned(PathBuf::from(path))),
+        (false, None) => Ok(Trust::SystemRoots),
     }
 }
 
@@ -558,6 +582,7 @@ mod tests {
             endhost_api: "http://127.0.0.1:41234/".to_owned(),
             target: "2-ff00:0:212,127.0.0.1".to_owned(),
             cert_path: "/tmp/dev/cert.pem".to_owned(),
+            insecure: false,
             snap_token: SnapToken::new("a token"),
         }
     }
@@ -621,7 +646,7 @@ mod tests {
         };
         assert_eq!(scion.endhost_api.as_str(), form.endhost_api);
         assert_eq!(scion.target, Some(form.target));
-        assert_eq!(scion.cert_path, Some(PathBuf::from(&form.cert_path)));
+        assert_eq!(scion.trust, Trust::Pinned(PathBuf::from(&form.cert_path)));
         assert_eq!(
             scion.snap_token.map(|token| token.as_str().to_owned()),
             Some(form.snap_token.as_str().to_owned())
@@ -642,7 +667,7 @@ mod tests {
             panic!("scion with an endhost API is enough");
         };
         assert_eq!(scion.target, None);
-        assert_eq!(scion.cert_path, None);
+        assert_eq!(scion.trust, Trust::SystemRoots);
         assert!(scion.snap_token.is_none());
 
         let blank = ConnectionForm {
@@ -650,6 +675,50 @@ mod tests {
             ..ConnectionForm::default()
         };
         assert!(matches!(kind(&blank), Err(ChatError::Config(_))));
+    }
+
+    /// Verification off is a choice, never something a blank field falls into.
+    #[test]
+    fn the_trust_follows_the_flag_that_named_it() {
+        let insecure = ConnectionForm {
+            cert_path: String::new(),
+            insecure: true,
+            ..answered(Transport::Scion, "https://localhost:8443")
+        };
+
+        let Ok(TransportKind::Scion(scion)) = kind(&insecure) else {
+            panic!("scion with an endhost API is enough");
+        };
+        assert_eq!(scion.trust, Trust::Insecure);
+    }
+
+    /// Both flags name a trust, and they disagree. Guessing which one was meant is worse than
+    /// saying so.
+    #[test]
+    fn a_pinned_certificate_and_insecure_together_are_refused() {
+        let both = ConnectionForm {
+            insecure: true,
+            ..answered(Transport::Scion, "https://localhost:8443")
+        };
+
+        let Err(ChatError::Config(message)) = kind(&both) else {
+            panic!("two trusts at once is refused");
+        };
+        assert!(message.contains("--insecure"), "{message}");
+        assert!(message.contains("--cert-path"), "{message}");
+    }
+
+    /// TCP carries no TLS, so there is no verification to turn off.
+    #[test]
+    fn insecure_is_refused_under_tcp() {
+        let form = ConnectionForm {
+            transport: Transport::Tcp,
+            server_url: "http://localhost:8080".to_owned(),
+            insecure: true,
+            ..ConnectionForm::default()
+        };
+
+        assert!(matches!(kind(&form), Err(ChatError::Config(_))));
     }
 
     /// The endhost API is refused under SCION alone: TCP has no use for one.

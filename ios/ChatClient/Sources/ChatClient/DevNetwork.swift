@@ -33,7 +33,7 @@ public struct DevNetwork: Decodable, Sendable {
             baseUrl: baseUrl,
             snapToken: authToken,
             target: target,
-            certPem: caPem)
+            trust: .pinned(caPem))
     }
 
     /// Reads the description `chat-dev` serves, over plain HTTP: SCION may be what is broken.

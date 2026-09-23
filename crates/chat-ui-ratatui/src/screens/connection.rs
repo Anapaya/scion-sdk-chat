@@ -100,6 +100,13 @@ pub struct ConnectionForm {
     #[arg(long, env = "CHAT_CLIENT_CERT_PATH", default_value = "")]
     pub cert_path: String,
 
+    /// Accept any certificate the server presents.
+    ///
+    /// Anyone on the path can then answer as the server. Use it against a server you control,
+    /// whose certificate you have not copied here yet.
+    #[arg(long, env = "CHAT_CLIENT_INSECURE")]
+    pub insecure: bool,
+
     /// The token the SNAP underlay asks for. An argument is readable by anyone listing processes.
     #[arg(
         long,
@@ -118,8 +125,48 @@ impl Default for ConnectionForm {
             endhost_api: String::new(),
             target: String::new(),
             cert_path: String::new(),
+            insecure: false,
             snap_token: SnapToken::new(""),
         }
+    }
+}
+
+/// Which certificates the client accepts, as the form offers the choice.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum TrustChoice {
+    /// The anchors the operating system ships.
+    #[default]
+    System,
+    /// One certificate, named in the field below.
+    Pinned,
+    /// Any certificate at all.
+    Insecure,
+}
+
+impl TrustChoice {
+    /// What the form was launched with. A named certificate is what asks for pinning.
+    fn of(form: &ConnectionForm) -> Self {
+        if form.insecure {
+            Self::Insecure
+        } else if form.cert_path.is_empty() {
+            Self::System
+        } else {
+            Self::Pinned
+        }
+    }
+
+    /// The next choice, wrapping, in the order the options are drawn.
+    fn next(self) -> Self {
+        match self {
+            Self::System => Self::Pinned,
+            Self::Pinned => Self::Insecure,
+            Self::Insecure => Self::System,
+        }
+    }
+
+    /// The previous choice, wrapping.
+    fn previous(self) -> Self {
+        self.next().next()
     }
 }
 
@@ -132,39 +179,52 @@ enum Focus {
     ServerUrl,
     EndhostApi,
     Target,
+    Trust,
     CertPath,
     SnapToken,
 }
 
 impl Focus {
-    /// The fields Tab moves through, in order.
-    fn shown(scion: bool) -> &'static [Self] {
-        if scion {
-            &[
-                Self::Transport,
-                Self::ServerUrl,
-                Self::EndhostApi,
-                Self::Target,
-                Self::CertPath,
-                Self::SnapToken,
-            ]
-        } else {
-            &[Self::Transport, Self::ServerUrl]
+    /// The fields Tab moves through, in order. The certificate is only asked for when it is used.
+    fn shown(scion: bool, pinned: bool) -> &'static [Self] {
+        match (scion, pinned) {
+            (false, _) => &[Self::Transport, Self::ServerUrl],
+            (true, false) => {
+                &[
+                    Self::Transport,
+                    Self::ServerUrl,
+                    Self::EndhostApi,
+                    Self::Target,
+                    Self::Trust,
+                    Self::SnapToken,
+                ]
+            }
+            (true, true) => {
+                &[
+                    Self::Transport,
+                    Self::ServerUrl,
+                    Self::EndhostApi,
+                    Self::Target,
+                    Self::Trust,
+                    Self::CertPath,
+                    Self::SnapToken,
+                ]
+            }
         }
     }
 
     /// The field after this one. Wraps.
-    fn next(self, scion: bool) -> Self {
-        self.step(scion, 1)
+    fn next(self, scion: bool, pinned: bool) -> Self {
+        self.step(scion, pinned, 1)
     }
 
     /// The field before this one. Wraps.
-    fn previous(self, scion: bool) -> Self {
-        self.step(scion, -1)
+    fn previous(self, scion: bool, pinned: bool) -> Self {
+        self.step(scion, pinned, -1)
     }
 
-    fn step(self, scion: bool, by: isize) -> Self {
-        let shown = Self::shown(scion);
+    fn step(self, scion: bool, pinned: bool, by: isize) -> Self {
+        let shown = Self::shown(scion, pinned);
         let at = shown.iter().position(|field| *field == self).unwrap_or(0);
         let len = shown.len() as isize;
 
@@ -178,6 +238,7 @@ pub struct Connection {
     server_url: Input,
     endhost_api: Input,
     target: Input,
+    trust: TrustChoice,
     cert_path: Input,
     snap_token: Input,
     focus: Focus,
@@ -190,6 +251,7 @@ impl Connection {
     pub fn new(form: ConnectionForm) -> Self {
         Self {
             transport: form.transport,
+            trust: TrustChoice::of(&form),
             server_url: Input::new(form.server_url),
             endhost_api: Input::new(form.endhost_api),
             target: Input::new(form.target),
@@ -202,6 +264,7 @@ impl Connection {
 
     pub fn draw(&self, frame: &mut Frame, area: Rect) {
         let scion = self.transport == Transport::Scion;
+        let pinned = self.trust == TrustChoice::Pinned;
 
         let [
             title,
@@ -209,6 +272,7 @@ impl Connection {
             url,
             endhost,
             target,
+            trust,
             cert,
             token,
             hint,
@@ -220,6 +284,13 @@ impl Connection {
             Constraint::Length(3),
             Constraint::Length(3),
             Constraint::Length(3),
+            // The certificate is only asked for when it is used. The row still exists when
+            // verification is off, to carry the warning.
+            Constraint::Length(match self.trust {
+                TrustChoice::Pinned => 3,
+                TrustChoice::Insecure => 1,
+                TrustChoice::System => 0,
+            }),
             Constraint::Length(3),
             Constraint::Length(1),
             Constraint::Length(1),
@@ -229,7 +300,8 @@ impl Connection {
 
         frame.render_widget(Line::from("Connect".fg(theme::TITLE).bold()), title);
 
-        // Drawn apart from the loop below: there is nothing to type into it, so it has no `Input`.
+        // Drawn apart from the loop below: there is nothing to type into them, so they have no
+        // `Input`.
         field::choice(
             frame,
             transport,
@@ -237,6 +309,23 @@ impl Connection {
             &[("SCION", scion), ("TCP", !scion)],
             self.focus == Focus::Transport,
         );
+        field::choice(
+            frame,
+            trust,
+            ui::label(" Trust "),
+            &[
+                ("System roots", self.trust == TrustChoice::System),
+                ("Pinned", pinned),
+                ("No check", self.trust == TrustChoice::Insecure),
+            ],
+            self.focus == Focus::Trust,
+        );
+        if self.trust == TrustChoice::Insecure {
+            frame.render_widget(
+                Line::from(" Any server on the path can answer as this one.".fg(theme::ERROR)),
+                cert,
+            );
+        }
 
         for (area, label, input, focus, mask) in [
             (
@@ -277,6 +366,10 @@ impl Connection {
                 true,
             ),
         ] {
+            if focus == Focus::CertPath && !pinned {
+                continue;
+            }
+
             let state = if self.focus == focus {
                 field::State::Focused
             } else if scion || focus == Focus::ServerUrl {
@@ -319,15 +412,19 @@ impl Connection {
                 return Some(self.form());
             }
             KeyCode::Tab | KeyCode::Down => {
-                self.focus = self.focus.next(self.transport == Transport::Scion);
+                self.focus = self.focus.next(self.scion(), self.pinned());
             }
             KeyCode::BackTab | KeyCode::Up => {
-                self.focus = self.focus.previous(self.transport == Transport::Scion);
+                self.focus = self.focus.previous(self.scion(), self.pinned());
             }
             KeyCode::Left | KeyCode::Right | KeyCode::Char(' ')
                 if self.focus == Focus::Transport =>
             {
                 self.transport = self.transport.other();
+            }
+            KeyCode::Left if self.focus == Focus::Trust => self.trust = self.trust.previous(),
+            KeyCode::Right | KeyCode::Char(' ') if self.focus == Focus::Trust => {
+                self.trust = self.trust.next();
             }
             _ => {
                 if let Some(input) = self.focused_mut() {
@@ -338,14 +435,30 @@ impl Connection {
         None
     }
 
+    fn scion(&self) -> bool {
+        self.transport == Transport::Scion
+    }
+
+    fn pinned(&self) -> bool {
+        self.trust == TrustChoice::Pinned
+    }
+
     /// Every field as typed, trimmed.
+    ///
+    /// The certificate goes out only when it is the choice, so the two ways of naming a trust can
+    /// never disagree.
     fn form(&self) -> ConnectionForm {
         ConnectionForm {
             transport: self.transport,
             server_url: self.server_url.value().trim().to_owned(),
             endhost_api: self.endhost_api.value().trim().to_owned(),
             target: self.target.value().trim().to_owned(),
-            cert_path: self.cert_path.value().trim().to_owned(),
+            insecure: self.trust == TrustChoice::Insecure,
+            cert_path: if self.pinned() {
+                self.cert_path.value().trim().to_owned()
+            } else {
+                String::new()
+            },
             snap_token: SnapToken::new(self.snap_token.value().trim()),
         }
     }
@@ -353,7 +466,7 @@ impl Connection {
     /// The field the keys are going to, or `None` when it is the one with nothing to type into.
     fn focused_mut(&mut self) -> Option<&mut Input> {
         match self.focus {
-            Focus::Transport => None,
+            Focus::Transport | Focus::Trust => None,
             Focus::ServerUrl => Some(&mut self.server_url),
             Focus::EndhostApi => Some(&mut self.endhost_api),
             Focus::Target => Some(&mut self.target),
@@ -407,8 +520,54 @@ mod tests {
                 endhost_api: "http://127.0.0.1:41234/".to_owned(),
                 target: "2-ff00:0:212,127.0.0.1".to_owned(),
                 cert_path: "/tmp/dev/cert.pem".to_owned(),
+                insecure: false,
                 snap_token: SnapToken::new("a token"),
             }
         );
+    }
+
+    /// A launch names its trust one way or the other, and the screen opens on that choice.
+    #[test]
+    fn the_form_opens_on_the_trust_the_flags_asked_for() {
+        let pinned = ConnectionForm {
+            cert_path: "/tmp/dev/cert.pem".to_owned(),
+            ..ConnectionForm::default()
+        };
+        let insecure = ConnectionForm {
+            insecure: true,
+            ..ConnectionForm::default()
+        };
+
+        assert_eq!(
+            TrustChoice::of(&ConnectionForm::default()),
+            TrustChoice::System
+        );
+        assert_eq!(TrustChoice::of(&pinned), TrustChoice::Pinned);
+        assert_eq!(TrustChoice::of(&insecure), TrustChoice::Insecure);
+    }
+
+    /// The certificate goes out only when it is the choice, so the flags can never disagree.
+    #[test]
+    fn leaving_the_pinned_choice_drops_the_certificate() {
+        let mut screen = Connection::new(ConnectionForm {
+            cert_path: "/tmp/dev/cert.pem".to_owned(),
+            ..ConnectionForm::default()
+        });
+        assert_eq!(screen.form().cert_path, "/tmp/dev/cert.pem");
+
+        screen.trust = TrustChoice::Insecure;
+
+        let form = screen.form();
+        assert!(form.insecure);
+        assert_eq!(form.cert_path, "", "a path that is not used is not sent");
+    }
+
+    /// Tab reaches the certificate only when it is going to be read.
+    #[test]
+    fn the_certificate_field_is_only_in_the_tab_order_when_it_is_pinned() {
+        assert!(!Focus::shown(true, false).contains(&Focus::CertPath));
+        assert!(Focus::shown(true, true).contains(&Focus::CertPath));
+        assert!(Focus::shown(true, false).contains(&Focus::Trust));
+        assert!(!Focus::shown(false, true).contains(&Focus::Trust));
     }
 }
