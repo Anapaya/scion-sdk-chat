@@ -12,6 +12,23 @@ public data class ScionConfig(
     val snapToken: String? = null,
     /** The server's SCION address, without a port: the port comes from [baseUrl]. */
     val target: String? = null,
-    /** A certificate to trust in place of the device's anchors. */
-    val certPem: String? = null,
+    /** Which certificates this client accepts from the server. */
+    val trust: Trust = Trust.SystemRoots,
 )
+
+/** Which certificates a client accepts from the server. */
+public sealed interface Trust {
+    /** The anchors the device ships. */
+    public data object SystemRoots : Trust
+
+    /** One certificate, in place of the device's anchors. A self-signed server needs this. */
+    public data class Pinned(val pem: String) : Trust
+
+    /**
+     * Accept any certificate.
+     *
+     * Every reply can come from anyone on the path. It exists so a demo can run against a
+     * self-signed server without moving its certificate to the device first.
+     */
+    public data object Insecure : Trust
+}

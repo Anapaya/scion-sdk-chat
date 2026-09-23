@@ -10,6 +10,7 @@ import com.anapaya.chat.client.ChatError
 import com.anapaya.chat.client.DevNetwork
 import com.anapaya.chat.client.ScionConfig
 import com.anapaya.chat.client.ScionTransport
+import com.anapaya.chat.client.Trust
 import com.anapaya.chat.client.model.Message
 import com.anapaya.chat.client.model.Room
 import com.anapaya.chat.client.roomList
@@ -44,14 +45,26 @@ public data class ManualForm(
     val snapToken: String = "",
     val target: String = "",
     val certPem: String = "",
+    val trust: TrustChoice = TrustChoice.SystemRoots,
 ) {
     public fun toScionConfig(): ScionConfig = ScionConfig(
         endhostApiUrl = endhostApiUrl.trim(),
         baseUrl = baseUrl.trim(),
         snapToken = snapToken.trim().ifBlank { null },
         target = target.trim().ifBlank { null },
-        certPem = certPem.trim().ifBlank { null },
+        trust = when (trust) {
+            TrustChoice.SystemRoots -> Trust.SystemRoots
+            TrustChoice.Pinned -> Trust.Pinned(certPem.trim())
+            TrustChoice.Insecure -> Trust.Insecure
+        },
     )
+}
+
+/** Which certificates the client accepts, as the form offers the choice. */
+public enum class TrustChoice(public val label: String) {
+    SystemRoots("System roots"),
+    Pinned("Pinned"),
+    Insecure("No check"),
 }
 
 /** Everything the screens draw. */

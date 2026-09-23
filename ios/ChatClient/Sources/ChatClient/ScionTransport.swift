@@ -27,12 +27,17 @@ public final class ScionTransport: Transport {
         var settings = ScionHttp3Client.Configuration(
             endhostApi: config.endhostApiUrl,
             authToken: config.snapToken)
-        if let pem = config.certPem {
+        switch config.trust {
+        case .systemRoots:
+            break
+        case .pinned(let pem):
             do {
                 settings.trust = try .pinned(Data(pem.utf8))
             } catch {
                 throw ChatError.config("the certificate is not readable PEM")
             }
+        case .insecure:
+            settings.trust = .insecureNoVerify
         }
 
         do {

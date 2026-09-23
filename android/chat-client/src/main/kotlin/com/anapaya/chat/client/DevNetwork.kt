@@ -30,7 +30,7 @@ public data class DevNetwork(
         baseUrl = baseUrl,
         snapToken = authToken,
         target = target,
-        certPem = caPem,
+        trust = Trust.Pinned(caPem),
     )
 
     public companion object {

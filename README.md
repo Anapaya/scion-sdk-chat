@@ -200,6 +200,7 @@ Every field of the connect screen also has a flag, so a launch can arrive with t
 | `--endhost-api` | `CHAT_CLIENT_ENDHOST_API` | how the client finds SCION. Required by `--transport scion` |
 | `--target` | `CHAT_CLIENT_TARGET` | the server's SCION address, for a host with no TSAR record |
 | `--cert-path` | `CHAT_CLIENT_CERT_PATH` | a certificate to trust instead of the system roots |
+| `--insecure` | `CHAT_CLIENT_INSECURE` | accept any certificate. See [Trust](#trust) |
 | `--snap-token` | `CHAT_CLIENT_SNAP_TOKEN` | the token the SNAP underlay asks for |
 
 Each transport uses 1 URL scheme:
@@ -208,6 +209,22 @@ Each transport uses 1 URL scheme:
 - `tcp` uses `http`
 
 The client checks the URL against the transport.
+
+#### Trust
+
+Every client accepts the server's certificate in 1 of 3 ways. The terminal client chooses with the
+flags above, and the 2 apps with a control on the configuration screen:
+
+| choice | flag | what it accepts |
+| --- | --- | --- |
+| system roots | neither flag | the anchors the machine ships |
+| pinned | `--cert-path` | 1 certificate, in place of those anchors |
+| no check | `--insecure` | any certificate at all |
+
+The default is the strict one, so a blank `--cert-path` means the system roots and a self-signed
+server is refused. `--insecure` says so on purpose. It exists to reach a server you control before
+you have copied its certificate, and while it is on, anyone on the path can answer as that server.
+Giving both flags is refused, because they name different trusts.
 
 The client reads `CHAT_CLIENT_*` and the server reads `CHAT_*`. Keep them apart. The server sits in
 1 AS and the client attaches to another, so a shared `CHAT_ENDHOST_API` would point the client at

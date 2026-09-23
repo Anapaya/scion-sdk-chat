@@ -42,8 +42,25 @@ pub struct ScionConfig {
     /// The SCION address to dial, for a host with no TSAR record. Portless: the port always comes
     /// from `server_url`.
     pub target: Option<String>,
-    /// A pinned certificate to trust instead of the system roots.
-    pub cert_path: Option<PathBuf>,
+    /// Which certificates the client accepts from the server.
+    #[serde(default)]
+    pub trust: Trust,
+}
+
+/// Which certificates a client accepts from the server.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Trust {
+    /// The anchors the operating system ships.
+    #[default]
+    SystemRoots,
+    /// One certificate, in place of the system roots. A self-signed server needs this.
+    Pinned(PathBuf),
+    /// Accept any certificate.
+    ///
+    /// Every reply can come from anyone on the path. It exists so a demo can run against a
+    /// self-signed server without moving its certificate first.
+    Insecure,
 }
 
 /// A token for the SNAP underlay.
@@ -154,7 +171,7 @@ mod tests {
                 endhost_api: Url::parse("http://127.0.0.1:8041").expect("a url"),
                 snap_token: Some(SnapToken::new("a token")),
                 target: Some("2-ff00:0:212,10.0.0.5".to_owned()),
-                cert_path: Some(PathBuf::from("chat-server.pem")),
+                trust: Trust::Pinned(PathBuf::from("chat-server.pem")),
             }),
             server_url: Url::parse("http://127.0.0.1:8080").expect("a url"),
             poll: PollConfig {
@@ -180,7 +197,7 @@ mod tests {
                 endhost_api: Url::parse("http://127.0.0.1:8041").expect("a url"),
                 snap_token: Some(SnapToken::new("s3cret")),
                 target: None,
-                cert_path: None,
+                trust: Trust::SystemRoots,
             }),
             ..ClientConfig::default()
         };
@@ -210,7 +227,7 @@ mod tests {
             endhost_api: Url::parse("http://127.0.0.1:8041").expect("a url"),
             snap_token: None,
             target: None,
-            cert_path: None,
+            trust: Trust::SystemRoots,
         }))
         .expect("serialize");
 
@@ -219,5 +236,49 @@ mod tests {
             scion.starts_with(r#"{"scion":"#),
             "the settings go under the transport's name: {scion}"
         );
+    }
+
+    /// A settings file written before [`Trust`] existed names no trust, and must still load.
+    #[test]
+    fn a_config_without_a_trust_reads_as_the_system_roots() {
+        let json = r#"{
+            "transport": {"scion": {
+                "endhost_api": "http://127.0.0.1:8041/",
+                "snap_token": null,
+                "target": null
+            }},
+            "server_url": "https://localhost:8443/",
+            "poll": {"messages_interval": {"secs": 2, "nanos": 0},
+                     "rooms_interval": {"secs": 2, "nanos": 0},
+                     "page_limit": 50}
+        }"#;
+
+        let config: ClientConfig = serde_json::from_str(json).expect("deserialize");
+
+        let TransportKind::Scion(scion) = config.transport else {
+            panic!("a scion transport");
+        };
+        assert_eq!(scion.trust, Trust::SystemRoots);
+    }
+
+    /// Each choice survives a settings file, the pinned path included.
+    #[test]
+    fn every_trust_survives_a_round_trip() {
+        for trust in [
+            Trust::SystemRoots,
+            Trust::Pinned(PathBuf::from("chat-server.pem")),
+            Trust::Insecure,
+        ] {
+            let json = serde_json::to_string(&trust).expect("serialize");
+            let decoded: Trust = serde_json::from_str(&json).expect("deserialize");
+
+            assert_eq!(decoded, trust, "{json}");
+        }
+    }
+
+    /// The default is the strict one: a missing choice never means a missing check.
+    #[test]
+    fn the_default_trust_verifies() {
+        assert_eq!(Trust::default(), Trust::SystemRoots);
     }
 }

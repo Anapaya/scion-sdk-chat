@@ -18,6 +18,15 @@ enum Screen {
     case chat
 }
 
+/// Which certificates the client accepts, as the form offers the choice.
+enum TrustChoice: String, CaseIterable, Identifiable {
+    case systemRoots = "System roots"
+    case pinned = "Pinned"
+    case insecure = "No check"
+
+    var id: Self { self }
+}
+
 /// A SCION configuration as it is typed. A blank field means the network answers for it.
 struct ManualForm: Equatable {
     var endhostApiUrl = ""
@@ -25,6 +34,7 @@ struct ManualForm: Equatable {
     var snapToken = ""
     var target = ""
     var certPem = ""
+    var trust: TrustChoice = .systemRoots
 
     func toScionConfig() -> ScionConfig {
         ScionConfig(
@@ -32,7 +42,15 @@ struct ManualForm: Equatable {
             baseUrl: trimmed(baseUrl) ?? "",
             snapToken: trimmed(snapToken),
             target: trimmed(target),
-            certPem: trimmed(certPem))
+            trust: chosen())
+    }
+
+    private func chosen() -> Trust {
+        switch trust {
+        case .systemRoots: .systemRoots
+        case .pinned: .pinned(trimmed(certPem) ?? "")
+        case .insecure: .insecure
+        }
     }
 
     private func trimmed(_ value: String) -> String? {

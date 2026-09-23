@@ -55,7 +55,18 @@ struct ManualScreen: View {
                 Field("Server URL", text: $model.manual.baseUrl)
                 Field("SNAP token", text: $model.manual.snapToken)
                 Field("Target - the server's SCION address", text: $model.manual.target)
-                Field("Certificate (PEM)", text: $model.manual.certPem, lines: 4)
+
+                Text("Trust").font(.caption).foregroundStyle(Palette.dim)
+                Picker("Trust", selection: $model.manual.trust) {
+                    ForEach(TrustChoice.allCases) { choice in
+                        Text(choice.rawValue).tag(choice)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                if model.manual.trust == .pinned {
+                    Field("Certificate (PEM)", text: $model.manual.certPem, lines: 4)
+                }
 
                 Button(action: model.connectManually) {
                     Text("Connect").frame(maxWidth: .infinity)
