@@ -114,6 +114,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "anapaya-aa-client"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e178bb26d0f6588cae29a5f5257952827b93b53990a32a2f1e58323cff38245"
+dependencies = [
+ "anapaya-aa-protobuf",
+ "anyhow",
+ "async-trait",
+ "jsonwebtoken 10.4.0",
+ "reqwest",
+ "reqwest-connect-rpc",
+ "serde",
+ "thiserror 2.0.20",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "anapaya-aa-protobuf"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c9218f18644b17b36721a2e85663a6f20b1d5e38f057c3a9451506d07f6b667"
+dependencies = [
+ "pbjson",
+ "prost",
+ "serde",
+]
+
+[[package]]
 name = "anapaya-ead-api"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -795,6 +824,7 @@ dependencies = [
 name = "chat-client-core"
 version = "0.1.0"
 dependencies = [
+ "anapaya-aa-client",
  "async-trait",
  "axum",
  "bytes",
@@ -3492,6 +3522,16 @@ name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
+
+[[package]]
+name = "pbjson"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8edd1efdd8ab23ba9cb9ace3d9987a72663d5d7c9f74fa00b51d6213645cf6c"
+dependencies = [
+ "base64 0.22.1",
+ "serde",
+]
 
 [[package]]
 name = "pem"

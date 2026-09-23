@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.anapaya.chat.client.ChatClient
 import com.anapaya.chat.client.ChatError
 import com.anapaya.chat.client.DevNetwork
+import com.anapaya.chat.client.Credential
 import com.anapaya.chat.client.ScionConfig
 import com.anapaya.chat.client.ScionTransport
 import com.anapaya.chat.client.Trust
@@ -43,6 +44,8 @@ public data class ManualForm(
     val endhostApiUrl: String = "",
     val baseUrl: String = "",
     val snapToken: String = "",
+    val authApiKey: String = "",
+    val credential: CredentialChoice = CredentialChoice.ApiKey,
     val target: String = "",
     val certPem: String = "",
     val trust: TrustChoice = TrustChoice.SystemRoots,
@@ -50,7 +53,16 @@ public data class ManualForm(
     public fun toScionConfig(): ScionConfig = ScionConfig(
         endhostApiUrl = endhostApiUrl.trim(),
         baseUrl = baseUrl.trim(),
-        snapToken = snapToken.trim().ifBlank { null },
+        credential = when (credential) {
+            CredentialChoice.ApiKey ->
+                authApiKey.trim().ifBlank { null }
+                    ?.let { Credential.ApiKey(it) }
+                    ?: Credential.None
+            CredentialChoice.Token ->
+                snapToken.trim().ifBlank { null }
+                    ?.let { Credential.Token(it) }
+                    ?: Credential.None
+        },
         target = target.trim().ifBlank { null },
         trust = when (trust) {
             TrustChoice.SystemRoots -> Trust.SystemRoots
@@ -58,6 +70,12 @@ public data class ManualForm(
             TrustChoice.Insecure -> Trust.Insecure
         },
     )
+}
+
+/** Which credential the client proves itself with, as the form offers the choice. */
+public enum class CredentialChoice(public val label: String) {
+    ApiKey("API key"),
+    Token("SNAP token"),
 }
 
 /** Which certificates the client accepts, as the form offers the choice. */
@@ -139,7 +157,7 @@ public class ChatViewModel(application: Application) : AndroidViewModel(applicat
 
     /** Builds a client, and proves the server is there. */
     private suspend fun open(config: ScionConfig) {
-        val built = ChatClient(ScionTransport(getApplication(), config))
+        val built = ChatClient(ScionTransport.open(getApplication(), config))
         // Building only parses configuration; nothing is dialled until a call is made. The health
         // check is what turns a wrong address into an error on this screen.
         built.health()

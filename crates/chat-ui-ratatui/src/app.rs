@@ -16,8 +16,8 @@
 use std::{future::Future, io, path::PathBuf, time::Duration};
 
 use chat_client_core::{
-    ChatClient, ChatError, ClientConfig, MessagesFeed, PollConfig, RoomsFeed, ScionConfig, Since,
-    SnapToken, TransportKind, Trust,
+    ApiKey, ApiKeyAuth, ChatClient, ChatError, ClientConfig, Credential, MessagesFeed,
+    PollConfig, RoomsFeed, ScionConfig, Since, SnapToken, TransportKind, Trust,
     v1::{Message, Room},
 };
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
@@ -35,6 +35,9 @@ use crate::{
     },
     ui::theme,
 };
+
+/// What this client calls itself when it asks the authority for a token.
+const DEVICE_ID: &str = "chat-ui-ratatui";
 
 /// How often the open room is re-read. The sidebar keeps the default, being less urgent.
 const MESSAGES_REFRESH: Duration = Duration::from_secs(1);
@@ -542,11 +545,41 @@ fn transport(server_url: &Url, form: &ConnectionForm) -> Result<TransportKind, C
 
             Ok(TransportKind::Scion(ScionConfig {
                 endhost_api,
-                snap_token: blank_as_none(form.snap_token.as_str()).map(SnapToken::new),
+                credential: credential(form)?,
                 target: blank_as_none(&form.target),
                 trust: trust(form)?,
             }))
         }
+    }
+}
+
+/// What the client proves itself with, from the two flags that can say so.
+fn credential(form: &ConnectionForm) -> Result<Credential, ChatError> {
+    let key = blank_as_none(form.auth_api_key.as_str());
+    let token = blank_as_none(form.snap_token.as_str());
+
+    match (key, token) {
+        (Some(_), Some(_)) => Err(ChatError::Config(
+            "--auth-api-key is exchanged for tokens, and --snap-token is one already. Give one of \
+             them."
+                .to_owned(),
+        )),
+        (Some(key), None) => {
+            let aa_url = Url::parse(&form.aa_url).map_err(|error| {
+                ChatError::Config(format!(
+                    "--aa-url \"{}\" is not a URL: {error}",
+                    form.aa_url
+                ))
+            })?;
+
+            Ok(Credential::ApiKey(Box::new(ApiKeyAuth {
+                key: ApiKey::new(key),
+                aa_url,
+                device_id: DEVICE_ID.to_owned(),
+            })))
+        }
+        (None, Some(token)) => Ok(Credential::Token(SnapToken::new(token))),
+        (None, None) => Ok(Credential::None),
     }
 }
 
@@ -583,6 +616,8 @@ mod tests {
             target: "2-ff00:0:212,127.0.0.1".to_owned(),
             cert_path: "/tmp/dev/cert.pem".to_owned(),
             insecure: false,
+            auth_api_key: ApiKey::new(""),
+            aa_url: chat_client_core::ANAPAYA_AA.to_owned(),
             snap_token: SnapToken::new("a token"),
         }
     }
@@ -648,8 +683,8 @@ mod tests {
         assert_eq!(scion.target, Some(form.target));
         assert_eq!(scion.trust, Trust::Pinned(PathBuf::from(&form.cert_path)));
         assert_eq!(
-            scion.snap_token.map(|token| token.as_str().to_owned()),
-            Some(form.snap_token.as_str().to_owned())
+            scion.credential,
+            Credential::Token(SnapToken::new(form.snap_token.as_str()))
         );
     }
 
@@ -668,7 +703,7 @@ mod tests {
         };
         assert_eq!(scion.target, None);
         assert_eq!(scion.trust, Trust::SystemRoots);
-        assert!(scion.snap_token.is_none());
+        assert_eq!(scion.credential, Credential::None);
 
         let blank = ConnectionForm {
             server_url: "https://localhost:8443".to_owned(),
@@ -706,6 +741,41 @@ mod tests {
         };
         assert!(message.contains("--insecure"), "{message}");
         assert!(message.contains("--cert-path"), "{message}");
+    }
+
+    /// A key names the authority it is spent at, without anyone having to type one.
+    #[test]
+    fn an_api_key_is_carried_with_the_default_authority() {
+        let form = ConnectionForm {
+            snap_token: SnapToken::new(""),
+            auth_api_key: ApiKey::new("aakey_secret"),
+            ..answered(Transport::Scion, "https://localhost:8443")
+        };
+
+        let Ok(TransportKind::Scion(scion)) = kind(&form) else {
+            panic!("scion with an endhost API is enough");
+        };
+        let Credential::ApiKey(auth) = scion.credential else {
+            panic!("a key was given");
+        };
+        assert_eq!(auth.key.as_str(), "aakey_secret");
+        assert_eq!(auth.aa_url.as_str(), "https://auth.scion.anapaya.net/");
+        assert_eq!(auth.device_id, DEVICE_ID);
+    }
+
+    /// Both name a credential, and they are not the same one. Guessing is worse than saying so.
+    #[test]
+    fn an_api_key_and_a_token_together_are_refused() {
+        let both = ConnectionForm {
+            auth_api_key: ApiKey::new("aakey_secret"),
+            ..answered(Transport::Scion, "https://localhost:8443")
+        };
+
+        let Err(ChatError::Config(message)) = kind(&both) else {
+            panic!("two credentials at once is refused");
+        };
+        assert!(message.contains("--auth-api-key"), "{message}");
+        assert!(message.contains("--snap-token"), "{message}");
     }
 
     /// TCP carries no TLS, so there is no verification to turn off.

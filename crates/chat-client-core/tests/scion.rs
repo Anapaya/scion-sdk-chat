@@ -18,7 +18,8 @@
 use std::{net::SocketAddr, path::Path, time::Duration};
 
 use chat_client_core::{
-    ChatClient, ClientConfig, PollConfig, SnapToken, TransportKind, Trust, config::ScionConfig,
+    ChatClient, ClientConfig, Credential, PollConfig, SnapToken, TransportKind, Trust,
+    config::ScionConfig,
 };
 use chat_server::{cert, config::Transport, scion};
 use pocketscion::util::{
@@ -77,7 +78,7 @@ async fn fixture() -> Fixture {
     let client = ChatClient::new(ClientConfig {
         transport: TransportKind::Scion(ScionConfig {
             endhost_api: client_api.to_string().parse().expect("an endhost api"),
-            snap_token: Some(SnapToken::new(dev_auth_token())),
+            credential: Credential::Token(SnapToken::new(dev_auth_token())),
             // This topology has no TSAR records.
             target: Some(host),
             trust: Trust::Pinned(certificate.cert_path.clone()),

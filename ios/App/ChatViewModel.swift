@@ -18,6 +18,14 @@ enum Screen {
     case chat
 }
 
+/// Which credential the client proves itself with, as the form offers the choice.
+enum CredentialChoice: String, CaseIterable, Identifiable {
+    case apiKey = "API key"
+    case token = "SNAP token"
+
+    var id: Self { self }
+}
+
 /// Which certificates the client accepts, as the form offers the choice.
 enum TrustChoice: String, CaseIterable, Identifiable {
     case systemRoots = "System roots"
@@ -32,6 +40,8 @@ struct ManualForm: Equatable {
     var endhostApiUrl = ""
     var baseUrl = ""
     var snapToken = ""
+    var authApiKey = ""
+    var credential: CredentialChoice = .apiKey
     var target = ""
     var certPem = ""
     var trust: TrustChoice = .systemRoots
@@ -40,9 +50,20 @@ struct ManualForm: Equatable {
         ScionConfig(
             endhostApiUrl: trimmed(endhostApiUrl) ?? "",
             baseUrl: trimmed(baseUrl) ?? "",
-            snapToken: trimmed(snapToken),
+            credential: chosenCredential(),
             target: trimmed(target),
             trust: chosen())
+    }
+
+    private func chosenCredential() -> Credential {
+        switch credential {
+        case .apiKey:
+            guard let key = trimmed(authApiKey) else { return .none }
+            return .apiKey(ApiKeyAuth(key: key))
+        case .token:
+            guard let token = trimmed(snapToken) else { return .none }
+            return .token(token)
+        }
     }
 
     private func chosen() -> Trust {
@@ -127,7 +148,7 @@ final class ChatViewModel: ObservableObject {
 
     /// Builds a client, and proves the server is there.
     private func open(_ config: ScionConfig) async throws {
-        let built = ChatClient(transport: try ScionTransport(config: config))
+        let built = ChatClient(transport: try await ScionTransport(config: config))
         // Nothing is dialled until a call is made, so the health check is what turns a wrong
         // address into an error on this screen.
         do {

@@ -201,7 +201,9 @@ Every field of the connect screen also has a flag, so a launch can arrive with t
 | `--target` | `CHAT_CLIENT_TARGET` | the server's SCION address, for a host with no TSAR record |
 | `--cert-path` | `CHAT_CLIENT_CERT_PATH` | a certificate to trust instead of the system roots |
 | `--insecure` | `CHAT_CLIENT_INSECURE` | accept any certificate. See [Trust](#trust) |
-| `--snap-token` | `CHAT_CLIENT_SNAP_TOKEN` | the token the SNAP underlay asks for |
+| `--auth-api-key` | `CHAT_CLIENT_AUTH_API_KEY` | a key the authority mints tokens from. See [Credentials](#credentials) |
+| `--snap-token` | `CHAT_CLIENT_SNAP_TOKEN` | 1 token, already minted, as `chat-dev` hands out |
+| `--aa-url` | `CHAT_CLIENT_AA_URL` | the authority. Defaults to `https://auth.scion.anapaya.net` |
 
 Each transport uses 1 URL scheme:
 
@@ -209,6 +211,26 @@ Each transport uses 1 URL scheme:
 - `tcp` uses `http`
 
 The client checks the URL against the transport.
+
+#### Credentials
+
+The SNAP asks every client to prove it may use the network. There are 2 ways to answer, and the
+clients offer the choice the same way they offer [Trust](#trust):
+
+| choice | flag | what it is |
+| --- | --- | --- |
+| API key | `--auth-api-key` | the long-lived secret. The authority mints tokens from it |
+| SNAP token | `--snap-token` | 1 token, already minted |
+
+A token lasts a day at most, so a client given only a token stops working when it expires. A client
+given a key mints its own and keeps minting them, which is what a deployment wants. `chat-dev` is
+the other case: it has no authority, and mints a token of its own for every read of `/info`, so the
+quickstart above passes a token.
+
+An endhost API on an appliance asks for neither, so both flags may be left out. Giving both is
+refused, because they name different credentials.
+
+The key is the thing worth guarding: a token expires, a key does not until it is revoked.
 
 #### Trust
 

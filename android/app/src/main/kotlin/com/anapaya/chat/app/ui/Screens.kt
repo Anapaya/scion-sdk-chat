@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.anapaya.chat.app.CredentialChoice
 import com.anapaya.chat.app.ManualForm
 import com.anapaya.chat.app.TrustChoice
 import com.anapaya.chat.app.UiState
@@ -100,7 +101,23 @@ public fun ManualScreen(
 
         Field("Endhost API", form.endhostApiUrl) { onForm(form.copy(endhostApiUrl = it)) }
         Field("Server URL", form.baseUrl) { onForm(form.copy(baseUrl = it)) }
-        Field("SNAP token", form.snapToken) { onForm(form.copy(snapToken = it)) }
+        Text("Credential", style = MaterialTheme.typography.labelMedium)
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            CredentialChoice.entries.forEachIndexed { index, choice ->
+                SegmentedButton(
+                    selected = form.credential == choice,
+                    onClick = { onForm(form.copy(credential = choice)) },
+                    shape = SegmentedButtonDefaults.itemShape(index, CredentialChoice.entries.size),
+                ) { Text(choice.label) }
+            }
+        }
+        when (form.credential) {
+            CredentialChoice.ApiKey ->
+                Field("Auth API key", form.authApiKey) { onForm(form.copy(authApiKey = it)) }
+            CredentialChoice.Token ->
+                Field("SNAP token", form.snapToken) { onForm(form.copy(snapToken = it)) }
+        }
+
         Field("Target - the server's SCION address", form.target) { onForm(form.copy(target = it)) }
 
         Text("Trust", style = MaterialTheme.typography.labelMedium)

@@ -25,7 +25,8 @@ use url::Url;
 
 use super::{MAX_BODY_BYTES, Transport, describe};
 use crate::{
-    config::{ScionConfig, Trust},
+    auth,
+    config::{Credential, ScionConfig, Trust},
     error::{ChatError, TransportError},
 };
 
@@ -35,17 +36,23 @@ pub struct ScionTransport {
 }
 
 impl ScionTransport {
-    /// Builds the client. Nothing is dialled: the stack is built on the first request.
+    /// Builds the client. Only an API key reaches the network here, to be exchanged for a token.
     ///
     /// `server_url` is read for its host, which is the name a `target` answers for.
-    pub fn new(config: &ScionConfig, server_url: &Url) -> Result<Self, ChatError> {
+    pub async fn new(config: &ScionConfig, server_url: &Url) -> Result<Self, ChatError> {
         // Idempotent. Both backends are in the build, so rustls installs no default of its own.
         scion_sdk_utils::rustls::select_ring_crypto_provider();
 
         let mut settings = Config::new(config.endhost_api.clone());
 
-        if let Some(token) = &config.snap_token {
-            settings = settings.with_auth_token(token.as_str());
+        match &config.credential {
+            Credential::None => {}
+            Credential::Token(token) => settings = settings.with_auth_token(token.as_str()),
+            // A source rather than the token it holds: these expire, and the SDK rebuilds
+            // connectivity from this configuration every time it resets.
+            Credential::ApiKey(auth) => {
+                settings = settings.with_auth_token_source(auth::token_source(auth).await?);
+            }
         }
 
         let mut quic = QuicConfig::builder();

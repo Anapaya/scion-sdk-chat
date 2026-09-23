@@ -31,7 +31,7 @@ public struct DevNetwork: Decodable, Sendable {
         ScionConfig(
             endhostApiUrl: endhostApiUrl,
             baseUrl: baseUrl,
-            snapToken: authToken,
+            credential: .token(authToken),
             target: target,
             trust: .pinned(caPem))
     }
