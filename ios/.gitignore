@@ -4,6 +4,7 @@ libs/
 # Xcode
 *.xcodeproj/
 .build/
+build/
 .swiftpm/
 DerivedData/
 
