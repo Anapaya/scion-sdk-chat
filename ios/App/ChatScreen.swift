@@ -263,7 +263,10 @@ private struct Composer: View {
                 .background(Palette.fieldFill, in: RoundedRectangle(cornerRadius: 18))
                 .overlay(
                     RoundedRectangle(cornerRadius: 18).stroke(Palette.fieldBorder, lineWidth: 1))
-                .onSubmit(onSend)
+                // Guarded like the button beside it. A second send while the first is in flight
+                // is refused, and the refusal puts the text back into a field that had just been
+                // cleared.
+                .onSubmit { if ready { onSend() } }
 
             Button(action: onSend) {
                 Image(systemName: "arrow.right")
