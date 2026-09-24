@@ -2,7 +2,7 @@
 
 [versions]
 # The SDK, from the same release as the Rust crates this workspace uses.
-scionSdk = "0.8.0"
+scionSdk = "0.8.2"
 agp = "8.7.3"
 # Matches the kotlin-stdlib the SDK's POM declares, so one stdlib reaches the build.
 kotlin = "2.1.0"

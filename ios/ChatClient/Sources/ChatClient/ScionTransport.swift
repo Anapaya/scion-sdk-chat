@@ -41,6 +41,10 @@ public final class ScionTransport: Transport {
         var settings = ScionHttp3Client.Configuration(
             endhostApi: config.endhostApiUrl,
             authToken: minted?.token)
+        if let address {
+            // The URL's host stays the name the certificate must carry. The lookup only.
+            settings.dnsOverrides = [try host(of: config.baseUrl): [address]]
+        }
         switch config.trust {
         case .systemRoots:
             break
@@ -92,8 +96,6 @@ public final class ScionTransport: Transport {
     public func send(_ request: ChatRequest) async throws -> ChatReply {
         var built = ScionHttp3Request(url: "\(config.baseUrl)/api/v1\(request.path)")
         built.method = ScionHttp3Request.Method(request.method)
-        // The URL's host stays the name the certificate must carry. The lookup only.
-        if let address { built.targets = [address] }
         if let bearer = request.bearer {
             built.headers.add("authorization", "Bearer \(bearer)")
         }
@@ -113,6 +115,14 @@ public final class ScionTransport: Transport {
         renewal?.cancel()
         await client.shutdown()
     }
+}
+
+/// The name in a URL, which is what a DNS override is keyed on.
+private func host(of url: String) throws -> String {
+    guard let host = URLComponents(string: url)?.host else {
+        throw ChatError.config("the server URL has no host: \(url)")
+    }
+    return host
 }
 
 /// How long before a token expires the next one is asked for.
