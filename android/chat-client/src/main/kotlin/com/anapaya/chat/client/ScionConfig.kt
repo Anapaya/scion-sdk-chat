@@ -8,13 +8,37 @@ public data class ScionConfig(
     val endhostApiUrl: String,
     /** Where the server is. Its host is the name the certificate is issued for. */
     val baseUrl: String,
-    /** The token the SNAP underlay authenticates the tunnel with. */
-    val snapToken: String? = null,
+    /** How the client proves it may use the SNAP. */
+    val credential: Credential = Credential.None,
     /** The server's SCION address, without a port: the port comes from [baseUrl]. */
     val target: String? = null,
     /** Which certificates this client accepts from the server. */
     val trust: Trust = Trust.SystemRoots,
 )
+
+/** The authority that mints tokens for Anapaya's own network. */
+public const val ANAPAYA_AA: String = "https://auth.scion.anapaya.net"
+
+/**
+ * How a client proves to the SNAP that it may use the network.
+ *
+ * An API key is the long-lived secret. The authority mints tokens from it, each good for a day at
+ * most, and the client renews them for as long as it runs.
+ */
+public sealed interface Credential {
+    /** Nothing to prove. An endhost API on an appliance asks for no token. */
+    public data object None : Credential
+
+    /** One token, already minted. This is what `chat-dev` hands out. */
+    public data class Token(val token: String) : Credential
+
+    /** A key the client exchanges for tokens, and keeps exchanging. */
+    public data class ApiKey(
+        val key: String,
+        val aaUrl: String = ANAPAYA_AA,
+        val deviceId: String = "chat-android",
+    ) : Credential
+}
 
 /** Which certificates a client accepts from the server. */
 public sealed interface Trust {

@@ -13,7 +13,7 @@
 // limitations under the License.
 //! Where the server is, and how to reach it. The first screen, because every launch starts here.
 
-use chat_client_core::SnapToken;
+use chat_client_core::{ANAPAYA_AA, ApiKey, SnapToken};
 use clap::{Parser, ValueEnum};
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::{
@@ -107,7 +107,17 @@ pub struct ConnectionForm {
     #[arg(long, env = "CHAT_CLIENT_INSECURE")]
     pub insecure: bool,
 
-    /// The token the SNAP underlay asks for. An argument is readable by anyone listing processes.
+    /// The key the authority exchanges for tokens. An argument is readable by anyone listing
+    /// processes.
+    #[arg(
+        long,
+        env = "CHAT_CLIENT_AUTH_API_KEY",
+        hide_env_values = true,
+        default_value = ""
+    )]
+    pub auth_api_key: ApiKey,
+
+    /// A token the SNAP underlay asks for, for a network that mints its own. `chat-dev` does.
     #[arg(
         long,
         env = "CHAT_CLIENT_SNAP_TOKEN",
@@ -115,6 +125,10 @@ pub struct ConnectionForm {
         default_value = ""
     )]
     pub snap_token: SnapToken,
+
+    /// The authority that exchanges an API key for tokens.
+    #[arg(long, env = "CHAT_CLIENT_AA_URL", default_value = ANAPAYA_AA)]
+    pub aa_url: String,
 }
 
 impl Default for ConnectionForm {
@@ -126,7 +140,46 @@ impl Default for ConnectionForm {
             target: String::new(),
             cert_path: String::new(),
             insecure: false,
+            auth_api_key: ApiKey::new(""),
             snap_token: SnapToken::new(""),
+            aa_url: ANAPAYA_AA.to_owned(),
+        }
+    }
+}
+
+/// Which credential the client proves itself with, as the form offers the choice.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum CredentialChoice {
+    /// A key, exchanged at the authority for tokens.
+    #[default]
+    ApiKey,
+    /// One token, as a development network hands out.
+    Token,
+}
+
+impl CredentialChoice {
+    /// What the form was launched with. A token given by name is what asks for one.
+    fn of(form: &ConnectionForm) -> Self {
+        if form.snap_token.as_str().is_empty() {
+            Self::ApiKey
+        } else {
+            Self::Token
+        }
+    }
+
+    /// The other one.
+    fn other(self) -> Self {
+        match self {
+            Self::ApiKey => Self::Token,
+            Self::Token => Self::ApiKey,
+        }
+    }
+
+    /// The label the field below it takes.
+    fn label(self) -> &'static str {
+        match self {
+            Self::ApiKey => " Auth API key ",
+            Self::Token => " SNAP token ",
         }
     }
 }
@@ -181,7 +234,8 @@ enum Focus {
     Target,
     Trust,
     CertPath,
-    SnapToken,
+    Credential,
+    Secret,
 }
 
 impl Focus {
@@ -196,7 +250,8 @@ impl Focus {
                     Self::EndhostApi,
                     Self::Target,
                     Self::Trust,
-                    Self::SnapToken,
+                    Self::Credential,
+                    Self::Secret,
                 ]
             }
             (true, true) => {
@@ -207,7 +262,8 @@ impl Focus {
                     Self::Target,
                     Self::Trust,
                     Self::CertPath,
-                    Self::SnapToken,
+                    Self::Credential,
+                    Self::Secret,
                 ]
             }
         }
@@ -240,7 +296,10 @@ pub struct Connection {
     target: Input,
     trust: TrustChoice,
     cert_path: Input,
-    snap_token: Input,
+    credential: CredentialChoice,
+    /// Carried from the command line untouched: the screen offers no way to edit it.
+    aa_url: String,
+    secret: Input,
     focus: Focus,
     /// What went wrong last time, shown until the next attempt.
     pub error: Option<String>,
@@ -249,14 +308,22 @@ pub struct Connection {
 impl Connection {
     /// The screen with its fields already answered, as the command line answers them.
     pub fn new(form: ConnectionForm) -> Self {
+        let credential = CredentialChoice::of(&form);
+        let secret = match credential {
+            CredentialChoice::ApiKey => form.auth_api_key.as_str().to_owned(),
+            CredentialChoice::Token => form.snap_token.as_str().to_owned(),
+        };
+
         Self {
             transport: form.transport,
             trust: TrustChoice::of(&form),
+            credential,
+            aa_url: form.aa_url,
             server_url: Input::new(form.server_url),
             endhost_api: Input::new(form.endhost_api),
             target: Input::new(form.target),
             cert_path: Input::new(form.cert_path),
-            snap_token: Input::new(form.snap_token.as_str().to_owned()),
+            secret: Input::new(secret),
             focus: Focus::default(),
             error: None,
         }
@@ -274,7 +341,8 @@ impl Connection {
             target,
             trust,
             cert,
-            token,
+            credential,
+            secret,
             hint,
             error,
         ] = Layout::vertical([
@@ -286,6 +354,7 @@ impl Connection {
             Constraint::Length(3),
             // The certificate is only asked for when it is used.
             Constraint::Length(if pinned { 3 } else { 0 }),
+            Constraint::Length(3),
             Constraint::Length(3),
             Constraint::Length(1),
             Constraint::Length(1),
@@ -314,6 +383,16 @@ impl Connection {
                 ("No check", self.trust == TrustChoice::Insecure),
             ],
             self.focus == Focus::Trust,
+        );
+        field::choice(
+            frame,
+            credential,
+            ui::label(" Credential "),
+            &[
+                ("API key", self.credential == CredentialChoice::ApiKey),
+                ("SNAP token", self.credential == CredentialChoice::Token),
+            ],
+            self.focus == Focus::Credential,
         );
 
         for (area, label, input, focus, mask) in [
@@ -348,10 +427,10 @@ impl Connection {
                 false,
             ),
             (
-                token,
-                " SNAP token ",
-                &self.snap_token,
-                Focus::SnapToken,
+                secret,
+                self.credential.label(),
+                &self.secret,
+                Focus::Secret,
                 true,
             ),
         ] {
@@ -411,6 +490,11 @@ impl Connection {
             {
                 self.transport = self.transport.other();
             }
+            KeyCode::Left | KeyCode::Right | KeyCode::Char(' ')
+                if self.focus == Focus::Credential =>
+            {
+                self.credential = self.credential.other();
+            }
             KeyCode::Left if self.focus == Focus::Trust => self.trust = self.trust.previous(),
             KeyCode::Right | KeyCode::Char(' ') if self.focus == Focus::Trust => {
                 self.trust = self.trust.next();
@@ -443,24 +527,32 @@ impl Connection {
             endhost_api: self.endhost_api.value().trim().to_owned(),
             target: self.target.value().trim().to_owned(),
             insecure: self.trust == TrustChoice::Insecure,
+            aa_url: self.aa_url.clone(),
+            auth_api_key: match self.credential {
+                CredentialChoice::ApiKey => ApiKey::new(self.secret.value().trim()),
+                CredentialChoice::Token => ApiKey::new(""),
+            },
+            snap_token: match self.credential {
+                CredentialChoice::ApiKey => SnapToken::new(""),
+                CredentialChoice::Token => SnapToken::new(self.secret.value().trim()),
+            },
             cert_path: if self.pinned() {
                 self.cert_path.value().trim().to_owned()
             } else {
                 String::new()
             },
-            snap_token: SnapToken::new(self.snap_token.value().trim()),
         }
     }
 
     /// The field the keys are going to, or `None` when it is the one with nothing to type into.
     fn focused_mut(&mut self) -> Option<&mut Input> {
         match self.focus {
-            Focus::Transport | Focus::Trust => None,
+            Focus::Transport | Focus::Trust | Focus::Credential => None,
             Focus::ServerUrl => Some(&mut self.server_url),
             Focus::EndhostApi => Some(&mut self.endhost_api),
             Focus::Target => Some(&mut self.target),
             Focus::CertPath => Some(&mut self.cert_path),
-            Focus::SnapToken => Some(&mut self.snap_token),
+            Focus::Secret => Some(&mut self.secret),
         }
     }
 }
@@ -510,7 +602,9 @@ mod tests {
                 target: "2-ff00:0:212,127.0.0.1".to_owned(),
                 cert_path: "/tmp/dev/cert.pem".to_owned(),
                 insecure: false,
+                auth_api_key: ApiKey::new(""),
                 snap_token: SnapToken::new("a token"),
+                aa_url: ANAPAYA_AA.to_owned(),
             }
         );
     }
@@ -549,6 +643,41 @@ mod tests {
         let form = screen.form();
         assert!(form.insecure);
         assert_eq!(form.cert_path, "", "a path that is not used is not sent");
+    }
+
+    /// A launch that names a token opens on the token, and one that names neither on the key.
+    #[test]
+    fn the_form_opens_on_the_credential_the_flags_named() {
+        let token = ConnectionForm {
+            snap_token: SnapToken::new("a token"),
+            ..ConnectionForm::default()
+        };
+
+        assert_eq!(
+            CredentialChoice::of(&ConnectionForm::default()),
+            CredentialChoice::ApiKey
+        );
+        assert_eq!(CredentialChoice::of(&token), CredentialChoice::Token);
+    }
+
+    /// One field holds both, so leaving the choice must not send the other one too.
+    #[test]
+    fn leaving_a_credential_behind_drops_what_was_typed_into_it() {
+        let mut screen = Connection::new(ConnectionForm {
+            snap_token: SnapToken::new("a token"),
+            ..ConnectionForm::default()
+        });
+        assert_eq!(screen.form().snap_token.as_str(), "a token");
+
+        screen.credential = CredentialChoice::ApiKey;
+
+        let form = screen.form();
+        assert_eq!(
+            form.auth_api_key.as_str(),
+            "a token",
+            "the field is carried"
+        );
+        assert_eq!(form.snap_token.as_str(), "", "under one name only");
     }
 
     /// Tab reaches the certificate only when it is going to be read.

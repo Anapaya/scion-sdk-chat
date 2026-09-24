@@ -30,6 +30,7 @@
 //! Every wire type comes from `chat-core` and is re-exported here, so a caller needs one
 //! dependency.
 
+mod auth;
 pub mod client;
 pub mod config;
 pub mod error;
@@ -38,7 +39,10 @@ pub mod transport;
 
 pub use chat_core::api::v1;
 pub use client::{ChatClient, SessionInfo};
-pub use config::{ClientConfig, PollConfig, ScionConfig, SnapToken, TransportKind, Trust};
+pub use config::{
+    ANAPAYA_AA, ApiKey, ApiKeyAuth, ClientConfig, Credential, PollConfig, ScionConfig, SnapToken,
+    TransportKind, Trust,
+};
 pub use error::{ChatError, TransportError};
 pub use feed::{MessagesFeed, RoomsFeed, Since};
 pub use transport::{Transport, mock::MockTransport, tcp::TcpTransport};

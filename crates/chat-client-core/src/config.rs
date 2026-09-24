@@ -37,14 +37,68 @@ pub enum TransportKind {
 pub struct ScionConfig {
     /// The endhost API to reach the SCION network through.
     pub endhost_api: Url,
-    /// A token, needed only on the SNAP underlay.
-    pub snap_token: Option<SnapToken>,
+    /// How the client proves it may use the SNAP.
+    #[serde(default)]
+    pub credential: Credential,
     /// The SCION address to dial, for a host with no TSAR record. Portless: the port always comes
     /// from `server_url`.
     pub target: Option<String>,
     /// Which certificates the client accepts from the server.
     #[serde(default)]
     pub trust: Trust,
+}
+
+/// How a client proves to the SNAP that it may use the network.
+///
+/// An API key is the long-lived secret. The AA mints tokens from it, each good for a day at most,
+/// and the client renews them for as long as it runs.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Credential {
+    /// Nothing to prove. An endhost API on an appliance asks for no token.
+    #[default]
+    None,
+    /// One token, already minted. This is what `chat-dev` hands out.
+    Token(SnapToken),
+    /// A key the client exchanges for tokens, and keeps exchanging.
+    ///
+    /// Boxed: it is the largest of the three by far, and every config carries a `Credential`.
+    ApiKey(Box<ApiKeyAuth>),
+}
+
+/// An API key, and where to spend it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApiKeyAuth {
+    /// The key itself.
+    pub key: ApiKey,
+    /// The authority that mints tokens for it.
+    #[serde(default = "anapaya_aa")]
+    pub aa_url: Url,
+    /// What the client calls itself in the authority's records.
+    #[serde(default = "default_device_id")]
+    pub device_id: String,
+}
+
+impl ApiKeyAuth {
+    /// A key spent at the Anapaya authority, by a client that names itself.
+    pub fn new(key: ApiKey, device_id: impl Into<String>) -> Self {
+        Self {
+            key,
+            aa_url: anapaya_aa(),
+            device_id: device_id.into(),
+        }
+    }
+}
+
+/// The authority that mints tokens for Anapaya's own network.
+pub const ANAPAYA_AA: &str = "https://auth.scion.anapaya.net";
+
+fn anapaya_aa() -> Url {
+    Url::parse(ANAPAYA_AA).expect("a constant URL parses")
+}
+
+fn default_device_id() -> String {
+    "chat".to_owned()
 }
 
 /// Which certificates a client accepts from the server.
@@ -94,6 +148,41 @@ impl std::str::FromStr for SnapToken {
     /// Any string is a token here. The server decides whether it is a good one.
     fn from_str(token: &str) -> Result<Self, Self::Err> {
         Ok(Self::new(token))
+    }
+}
+
+/// A key the authority exchanges for tokens.
+///
+/// `Debug` prints a placeholder. Serialization is not redacted. This is the long-lived secret:
+/// whoever holds it can mint tokens until it is revoked.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ApiKey(String);
+
+impl ApiKey {
+    /// Wraps a key read from configuration.
+    pub fn new(key: impl Into<String>) -> Self {
+        Self(key.into())
+    }
+
+    /// The key, for the exchange that spends it.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Debug for ApiKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("ApiKey(<redacted>)")
+    }
+}
+
+impl std::str::FromStr for ApiKey {
+    type Err = std::convert::Infallible;
+
+    /// Any string is a key here. The authority decides whether it is a good one.
+    fn from_str(key: &str) -> Result<Self, Self::Err> {
+        Ok(Self::new(key))
     }
 }
 
@@ -169,7 +258,7 @@ mod tests {
         let config = ClientConfig {
             transport: TransportKind::Scion(ScionConfig {
                 endhost_api: Url::parse("http://127.0.0.1:8041").expect("a url"),
-                snap_token: Some(SnapToken::new("a token")),
+                credential: Credential::Token(SnapToken::new("a token")),
                 target: Some("2-ff00:0:212,10.0.0.5".to_owned()),
                 trust: Trust::Pinned(PathBuf::from("chat-server.pem")),
             }),
@@ -195,7 +284,7 @@ mod tests {
         let config = ClientConfig {
             transport: TransportKind::Scion(ScionConfig {
                 endhost_api: Url::parse("http://127.0.0.1:8041").expect("a url"),
-                snap_token: Some(SnapToken::new("s3cret")),
+                credential: Credential::Token(SnapToken::new("s3cret")),
                 target: None,
                 trust: Trust::SystemRoots,
             }),
@@ -225,7 +314,7 @@ mod tests {
         let tcp = serde_json::to_string(&TransportKind::Tcp).expect("serialize");
         let scion = serde_json::to_string(&TransportKind::Scion(ScionConfig {
             endhost_api: Url::parse("http://127.0.0.1:8041").expect("a url"),
-            snap_token: None,
+            credential: Credential::None,
             target: None,
             trust: Trust::SystemRoots,
         }))
@@ -238,13 +327,13 @@ mod tests {
         );
     }
 
-    /// A settings file written before [`Trust`] existed names no trust, and must still load.
+    /// A settings file naming neither a trust nor a credential must still load, and must land on
+    /// the choice that asks the most of the server.
     #[test]
-    fn a_config_without_a_trust_reads_as_the_system_roots() {
+    fn what_a_config_leaves_out_reads_as_the_strict_choice() {
         let json = r#"{
             "transport": {"scion": {
                 "endhost_api": "http://127.0.0.1:8041/",
-                "snap_token": null,
                 "target": null
             }},
             "server_url": "https://localhost:8443/",
@@ -259,6 +348,33 @@ mod tests {
             panic!("a scion transport");
         };
         assert_eq!(scion.trust, Trust::SystemRoots);
+        assert_eq!(scion.credential, Credential::None);
+    }
+
+    /// The authority is a constant, so a key names only itself.
+    #[test]
+    fn a_key_is_spent_at_the_anapaya_authority_by_default() {
+        let auth = ApiKeyAuth::new(ApiKey::new("aakey_secret"), "chat-ui-ratatui");
+
+        assert_eq!(auth.aa_url.as_str(), "https://auth.scion.anapaya.net/");
+        assert_eq!(auth.device_id, "chat-ui-ratatui");
+    }
+
+    /// A key reaches a log through `Debug` as readily as a token does, and neither may go.
+    #[test]
+    fn an_api_key_is_redacted_in_debug_output() {
+        let credential = Credential::ApiKey(Box::new(ApiKeyAuth::new(
+            ApiKey::new("aakey_s3cret"),
+            "chat",
+        )));
+
+        let shown = format!("{credential:?}");
+
+        assert!(!shown.contains("s3cret"), "the key is in {shown}");
+        assert!(
+            shown.contains("<redacted>"),
+            "and its absence shows: {shown}"
+        );
     }
 
     /// Each choice survives a settings file, the pinned path included.

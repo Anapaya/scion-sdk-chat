@@ -28,7 +28,7 @@ public data class DevNetwork(
     public fun toScionConfig(): ScionConfig = ScionConfig(
         endhostApiUrl = endhostApiUrl,
         baseUrl = baseUrl,
-        snapToken = authToken,
+        credential = Credential.Token(authToken),
         target = target,
         trust = Trust.Pinned(caPem),
     )

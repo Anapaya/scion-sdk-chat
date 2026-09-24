@@ -9,6 +9,7 @@ publish = false
 description = "Every part of a chat client except the user interface"
 
 [dependencies]
+anapaya-aa-client = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
 chat-core = { workspace = true }

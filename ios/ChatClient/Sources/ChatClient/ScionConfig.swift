@@ -8,8 +8,8 @@ public struct ScionConfig: Sendable, Equatable {
     public var endhostApiUrl: String
     /// Where the server is. Its host is the name the certificate is issued for.
     public var baseUrl: String
-    /// The token the SNAP underlay authenticates the tunnel with.
-    public var snapToken: String?
+    /// How the client proves it may use the SNAP.
+    public var credential: Credential
     /// The server's SCION address, without a port: the port comes from ``baseUrl``.
     public var target: String?
     /// Which certificates this client accepts from the server.
@@ -18,15 +18,47 @@ public struct ScionConfig: Sendable, Equatable {
     public init(
         endhostApiUrl: String,
         baseUrl: String,
-        snapToken: String? = nil,
+        credential: Credential = .none,
         target: String? = nil,
         trust: Trust = .systemRoots
     ) {
         self.endhostApiUrl = endhostApiUrl
         self.baseUrl = baseUrl
-        self.snapToken = snapToken
+        self.credential = credential
         self.target = target
         self.trust = trust
+    }
+}
+
+/// The authority that mints tokens for Anapaya's own network.
+public let anapayaAa = "https://auth.scion.anapaya.net"
+
+/// How a client proves to the SNAP that it may use the network.
+///
+/// An API key is the long-lived secret. The authority mints tokens from it, each good for a day at
+/// most, and the client renews them for as long as it runs.
+public enum Credential: Sendable, Equatable {
+    /// Nothing to prove. An endhost API on an appliance asks for no token.
+    case none
+    /// One token, already minted. This is what `chat-dev` hands out.
+    case token(String)
+    /// A key the client exchanges for tokens, and keeps exchanging.
+    case apiKey(ApiKeyAuth)
+}
+
+/// A key, and where to spend it.
+public struct ApiKeyAuth: Sendable, Equatable {
+    /// The key itself.
+    public var key: String
+    /// The authority that mints tokens for it.
+    public var aaUrl: String
+    /// What the client calls itself in the authority's records.
+    public var deviceId: String
+
+    public init(key: String, aaUrl: String = anapayaAa, deviceId: String = "chat-ios") {
+        self.key = key
+        self.aaUrl = aaUrl
+        self.deviceId = deviceId
     }
 }
 

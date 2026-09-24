@@ -78,7 +78,7 @@ impl ChatClient {
         let transport: Arc<dyn Transport> = match &config.transport {
             TransportKind::Tcp => Arc::new(TcpTransport::new()?),
             TransportKind::Scion(scion) => {
-                Arc::new(ScionTransport::new(scion, &config.server_url)?)
+                Arc::new(ScionTransport::new(scion, &config.server_url).await?)
             }
         };
 

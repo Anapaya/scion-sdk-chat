@@ -53,7 +53,20 @@ struct ManualScreen: View {
 
                 Field("Endhost API", text: $model.manual.endhostApiUrl)
                 Field("Server URL", text: $model.manual.baseUrl)
-                Field("SNAP token", text: $model.manual.snapToken)
+                Text("Credential").font(.caption).foregroundStyle(Palette.dim)
+                Picker("Credential", selection: $model.manual.credential) {
+                    ForEach(CredentialChoice.allCases) { choice in
+                        Text(choice.rawValue).tag(choice)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                if model.manual.credential == .apiKey {
+                    Field("Auth API key", text: $model.manual.authApiKey)
+                } else {
+                    Field("SNAP token", text: $model.manual.snapToken)
+                }
+
                 Field("Target - the server's SCION address", text: $model.manual.target)
 
                 Text("Trust").font(.caption).foregroundStyle(Palette.dim)

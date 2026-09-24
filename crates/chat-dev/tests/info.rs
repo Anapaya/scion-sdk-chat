@@ -19,7 +19,8 @@
 use std::{path::PathBuf, time::Duration};
 
 use chat_client_core::{
-    ChatClient, ClientConfig, PollConfig, SnapToken, TransportKind, Trust, config::ScionConfig,
+    ChatClient, ClientConfig, Credential, PollConfig, SnapToken, TransportKind, Trust,
+    config::ScionConfig,
 };
 use chat_dev::{Config, DevNetwork, DevSetup, Server};
 
@@ -64,7 +65,7 @@ async fn client(network: &DevNetwork) -> ChatClient {
     ChatClient::new(ClientConfig {
         transport: TransportKind::Scion(ScionConfig {
             endhost_api: network.endhost_api_url.parse().expect("an endhost api"),
-            snap_token: Some(SnapToken::new(network.auth_token.clone())),
+            credential: Credential::Token(SnapToken::new(network.auth_token.clone())),
             target: Some(network.target.clone()),
             trust: Trust::Pinned(PathBuf::from(&network.ca_path)),
         }),
