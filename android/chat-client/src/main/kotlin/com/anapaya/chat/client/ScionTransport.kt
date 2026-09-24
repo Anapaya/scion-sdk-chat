@@ -50,6 +50,10 @@ public class ScionTransport private constructor(
                 .Builder(context)
                 .endhostApi(config.endhostApiUrl)
                 .apply { minted?.let { authToken(it.token) } }
+                .apply {
+                    // The URL's host stays the name the certificate must carry. The lookup only.
+                    address?.let { dnsOverride(hostOf(config.baseUrl), it) }
+                }
                 .trust(
                     when (val trust = config.trust) {
                         is Trust.SystemRoots -> TrustAnchors.systemDefault()
@@ -102,10 +106,6 @@ public class ScionTransport private constructor(
             .Builder()
             .url("${config.baseUrl}/api/v1${request.path}")
             .apply {
-                // The URL's host stays the name the certificate must carry. The lookup only.
-                address?.let { target(it) }
-            }
-            .apply {
                 request.bearer?.let { header("authorization", "Bearer $it") }
                 when (request.json) {
                     null -> method(request.method, null)
@@ -129,6 +129,11 @@ public class ScionTransport private constructor(
         client.close()
     }
 }
+
+/** The name in a URL, which is what a DNS override is keyed on. */
+private fun hostOf(url: String): String =
+    runCatching { java.net.URI(url).host }.getOrNull()
+        ?: throw ChatError.Config("the server URL has no host: $url")
 
 /** Sorts an SDK failure into the one taxonomy the app knows. */
 internal fun failure(error: ScionHttp3Exception): ChatError.Transport {
