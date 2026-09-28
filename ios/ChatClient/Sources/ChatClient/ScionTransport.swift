@@ -78,8 +78,9 @@ public final class ScionTransport: Transport {
         Task {
             var current = first
             while !Task.isCancelled {
-                let wait = max(
-                    current.expiresAt.timeIntervalSinceNow - renewEarly, renewRetry)
+                // Half of what is left, so a failed attempt has as long again to try once more.
+                // Each failure halves the wait, so attempts close up as expiry approaches.
+                let wait = max(current.expiresAt.timeIntervalSinceNow / 2, renewRetry)
                 try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
                 if Task.isCancelled { return }
 
@@ -125,10 +126,7 @@ private func host(of url: String) throws -> String {
     return host
 }
 
-/// How long before a token expires the next one is asked for.
-private let renewEarly: TimeInterval = 60
-
-/// How long to wait before trying again, and the shortest gap between attempts.
+/// The shortest gap between attempts, once halving has run the wait down.
 private let renewRetry: TimeInterval = 30
 
 /// Sorts an SDK failure into the one taxonomy the app knows.

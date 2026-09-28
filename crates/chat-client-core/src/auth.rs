@@ -13,10 +13,18 @@
 // limitations under the License.
 //! Trading an API key for the tokens the SNAP asks for.
 
+use std::time::Duration;
+
 use anapaya_aa_client::{ApiKeyTokenRefresher, CrpcAaAuthClient};
 use scion_http3::scion_stack::reqwest_connect_rpc::token_source::refresh::RefreshTokenSource;
 
 use crate::{config::ApiKeyAuth, error::ChatError};
+
+/// How long before a token expires the next one is asked for.
+///
+/// Half the lifetime the authority gives by default, so a refresh that fails has as long again to
+/// try once more. The SDK asks a minute ahead, which leaves room for one attempt.
+const RENEW_AT: Duration = Duration::from_secs(30 * 60);
 
 /// A source of tokens, which keeps minting them for as long as it lives.
 ///
@@ -47,5 +55,6 @@ pub(crate) async fn token_source(auth: &ApiKeyAuth) -> Result<RefreshTokenSource
 
     Ok(RefreshTokenSource::builder("aa", refresher)
         .with_initial_token(first)
+        .refresh_threshold(RENEW_AT)
         .build())
 }
