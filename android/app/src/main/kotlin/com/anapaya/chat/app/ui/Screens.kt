@@ -29,6 +29,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.anapaya.chat.app.CredentialChoice
 import com.anapaya.chat.app.ManualForm
@@ -113,9 +114,13 @@ public fun ManualScreen(
         }
         when (form.credential) {
             CredentialChoice.ApiKey ->
-                Field("Auth API key", form.authApiKey) { onForm(form.copy(authApiKey = it)) }
+                Field("Auth API key", form.authApiKey, secret = true) {
+                    onForm(form.copy(authApiKey = it))
+                }
             CredentialChoice.Token ->
-                Field("SNAP token", form.snapToken) { onForm(form.copy(snapToken = it)) }
+                Field("SNAP token", form.snapToken, secret = true) {
+                    onForm(form.copy(snapToken = it))
+                }
         }
 
         Field("Target - the server's SCION address", form.target) { onForm(form.copy(target = it)) }
@@ -153,6 +158,7 @@ private fun Field(
     label: String,
     value: String,
     lines: Int = 1,
+    secret: Boolean = false,
     onValue: (String) -> Unit,
 ) {
     OutlinedTextField(
@@ -161,6 +167,8 @@ private fun Field(
         label = { Text(label) },
         singleLine = lines == 1,
         maxLines = lines,
+        visualTransformation =
+            if (secret) PasswordVisualTransformation() else VisualTransformation.None,
         modifier = Modifier.fillMaxWidth(),
     )
 }
