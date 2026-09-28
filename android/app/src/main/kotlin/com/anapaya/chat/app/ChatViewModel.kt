@@ -160,8 +160,15 @@ public class ChatViewModel(application: Application) : AndroidViewModel(applicat
         val built = ChatClient(ScionTransport.open(getApplication(), config))
         // Building only parses configuration; nothing is dialled until a call is made. The health
         // check is what turns a wrong address into an error on this screen.
-        built.health()
+        try {
+            built.health()
+        } catch (failure: Throwable) {
+            built.close()
+            throw failure
+        }
 
+        // The one it replaces holds a stack, and a renewal that outlives it otherwise.
+        client?.close()
         client = built
         _state.update {
             it.copy(screen = Screen.SignIn, target = config.target ?: config.baseUrl)
