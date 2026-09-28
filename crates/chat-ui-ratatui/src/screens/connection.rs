@@ -297,9 +297,11 @@ pub struct Connection {
     trust: TrustChoice,
     cert_path: Input,
     credential: CredentialChoice,
+    /// One field for each, so switching between them carries nothing across.
+    auth_api_key: Input,
+    snap_token: Input,
     /// Carried from the command line untouched: the screen offers no way to edit it.
     aa_url: String,
-    secret: Input,
     focus: Focus,
     /// What went wrong last time, shown until the next attempt.
     pub error: Option<String>,
@@ -309,10 +311,6 @@ impl Connection {
     /// The screen with its fields already answered, as the command line answers them.
     pub fn new(form: ConnectionForm) -> Self {
         let credential = CredentialChoice::of(&form);
-        let secret = match credential {
-            CredentialChoice::ApiKey => form.auth_api_key.as_str().to_owned(),
-            CredentialChoice::Token => form.snap_token.as_str().to_owned(),
-        };
 
         Self {
             transport: form.transport,
@@ -323,7 +321,8 @@ impl Connection {
             endhost_api: Input::new(form.endhost_api),
             target: Input::new(form.target),
             cert_path: Input::new(form.cert_path),
-            secret: Input::new(secret),
+            auth_api_key: Input::new(form.auth_api_key.as_str().to_owned()),
+            snap_token: Input::new(form.snap_token.as_str().to_owned()),
             focus: Focus::default(),
             error: None,
         }
@@ -429,7 +428,7 @@ impl Connection {
             (
                 secret,
                 self.credential.label(),
-                &self.secret,
+                self.secret(),
                 Focus::Secret,
                 true,
             ),
@@ -512,6 +511,14 @@ impl Connection {
         self.transport == Transport::Scion
     }
 
+    /// The field the credential choice names.
+    fn secret(&self) -> &Input {
+        match self.credential {
+            CredentialChoice::ApiKey => &self.auth_api_key,
+            CredentialChoice::Token => &self.snap_token,
+        }
+    }
+
     fn pinned(&self) -> bool {
         self.trust == TrustChoice::Pinned
     }
@@ -529,12 +536,12 @@ impl Connection {
             insecure: self.trust == TrustChoice::Insecure,
             aa_url: self.aa_url.clone(),
             auth_api_key: match self.credential {
-                CredentialChoice::ApiKey => ApiKey::new(self.secret.value().trim()),
+                CredentialChoice::ApiKey => ApiKey::new(self.auth_api_key.value().trim()),
                 CredentialChoice::Token => ApiKey::new(""),
             },
             snap_token: match self.credential {
                 CredentialChoice::ApiKey => SnapToken::new(""),
-                CredentialChoice::Token => SnapToken::new(self.secret.value().trim()),
+                CredentialChoice::Token => SnapToken::new(self.snap_token.value().trim()),
             },
             cert_path: if self.pinned() {
                 self.cert_path.value().trim().to_owned()
@@ -552,7 +559,12 @@ impl Connection {
             Focus::EndhostApi => Some(&mut self.endhost_api),
             Focus::Target => Some(&mut self.target),
             Focus::CertPath => Some(&mut self.cert_path),
-            Focus::Secret => Some(&mut self.secret),
+            Focus::Secret => {
+                Some(match self.credential {
+                    CredentialChoice::ApiKey => &mut self.auth_api_key,
+                    CredentialChoice::Token => &mut self.snap_token,
+                })
+            }
         }
     }
 }
@@ -660,9 +672,9 @@ mod tests {
         assert_eq!(CredentialChoice::of(&token), CredentialChoice::Token);
     }
 
-    /// One field holds both, so leaving the choice must not send the other one too.
+    /// Each credential has its own field, so what was typed as one is never sent as the other.
     #[test]
-    fn leaving_a_credential_behind_drops_what_was_typed_into_it() {
+    fn a_token_never_leaves_as_a_key() {
         let mut screen = Connection::new(ConnectionForm {
             snap_token: SnapToken::new("a token"),
             ..ConnectionForm::default()
@@ -674,10 +686,29 @@ mod tests {
         let form = screen.form();
         assert_eq!(
             form.auth_api_key.as_str(),
-            "a token",
-            "the field is carried"
+            "",
+            "the token is not offered as a key"
         );
-        assert_eq!(form.snap_token.as_str(), "", "under one name only");
+        assert_eq!(
+            form.snap_token.as_str(),
+            "",
+            "and is not sent under its own name either"
+        );
+    }
+
+    /// Switching away and back keeps what was typed, because the fields are separate.
+    #[test]
+    fn each_credential_keeps_what_was_typed_into_it() {
+        let mut screen = Connection::new(ConnectionForm::default());
+        screen.auth_api_key = Input::new("aakey_secret".to_owned());
+        screen.snap_token = Input::new("a token".to_owned());
+
+        assert_eq!(screen.form().auth_api_key.as_str(), "aakey_secret");
+
+        screen.credential = CredentialChoice::Token;
+        let form = screen.form();
+        assert_eq!(form.snap_token.as_str(), "a token");
+        assert_eq!(form.auth_api_key.as_str(), "");
     }
 
     /// Tab reaches the certificate only when it is going to be read.
