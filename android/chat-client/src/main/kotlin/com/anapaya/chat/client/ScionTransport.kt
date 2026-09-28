@@ -81,7 +81,9 @@ public class ScionTransport private constructor(
         ): Job = CoroutineScope(Dispatchers.IO).launch {
             var current = first
             while (isActive) {
-                val wait = current.expiresAtMillis - System.currentTimeMillis() - RENEW_EARLY_MILLIS
+                // Half of what is left, so a failed attempt has as long again to try once more.
+                // Each failure halves the wait, so attempts close up as expiry approaches.
+                val wait = (current.expiresAtMillis - System.currentTimeMillis()) / 2
                 delay(wait.coerceAtLeast(RENEW_RETRY_MILLIS))
 
                 // A failure leaves the old token in place and the loop waits out the retry gap.
@@ -94,10 +96,7 @@ public class ScionTransport private constructor(
             }
         }
 
-        /** How long before a token expires the next one is asked for. */
-        private const val RENEW_EARLY_MILLIS = 60_000L
-
-        /** How long to wait before trying again, and the shortest gap between attempts. */
+        /** The shortest gap between attempts, once halving has run the wait down. */
         private const val RENEW_RETRY_MILLIS = 30_000L
     }
 
