@@ -62,9 +62,9 @@ struct ManualScreen: View {
                 .pickerStyle(.segmented)
 
                 if model.manual.credential == .apiKey {
-                    Field("Auth API key", text: $model.manual.authApiKey)
+                    Field("Auth API key", text: $model.manual.authApiKey, secure: true)
                 } else {
-                    Field("SNAP token", text: $model.manual.snapToken)
+                    Field("SNAP token", text: $model.manual.snapToken, secure: true)
                 }
 
                 Field("Target - the server's SCION address", text: $model.manual.target)
