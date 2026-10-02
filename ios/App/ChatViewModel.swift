@@ -148,7 +148,7 @@ final class ChatViewModel: ObservableObject {
 
     /// Builds a client, and proves the server is there.
     private func open(_ config: ScionConfig) async throws {
-        let built = ChatClient(transport: try await ScionTransport(config: config))
+        let built = ChatClient(transport: try ScionTransport(config: config))
         // Nothing is dialled until a call is made, so the health check is what turns a wrong
         // address into an error on this screen.
         do {
