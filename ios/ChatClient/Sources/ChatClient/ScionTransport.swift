@@ -11,14 +11,9 @@ public final class ScionTransport: Transport {
     /// Where to send the packets, for a network that publishes no TSAR record. Null in production.
     private let address: ScionAddress?
 
-    /// Renews the token for as long as this transport lives. Nil when nothing expires.
-    private let renewal: Task<Void, Never>?
-
-    /// Builds the client, minting a token first when the configuration carries a key.
-    ///
-    /// Asynchronous because the authority is asked here: the SDK takes a token and cannot be given
-    /// one later, so the exchange has to finish before the client exists.
-    public init(config: ScionConfig) async throws {
+    /// Builds the client. Performs no I/O: the first request builds connectivity, and exchanges an
+    /// API key for a token when the configuration carries one.
+    public init(config: ScionConfig) throws {
         self.config = config
 
         if let target = config.target {
@@ -31,16 +26,15 @@ public final class ScionTransport: Transport {
             address = nil
         }
 
-        let minted: MintedToken?
+        var settings = ScionHttp3Client.Configuration(endhostApi: config.endhostApiUrl)
         switch config.credential {
-        case .none: minted = nil
-        case .token(let token): minted = MintedToken(token: token, expiresAt: .distantFuture)
-        case .apiKey(let auth): minted = try await mint(auth)
+        case .none:
+            break
+        case .token(let token):
+            settings.authToken = token
+        case .apiKey(let auth):
+            settings.apiKey = .init(key: auth.key, aaUrl: auth.aaUrl)
         }
-
-        var settings = ScionHttp3Client.Configuration(
-            endhostApi: config.endhostApiUrl,
-            authToken: minted?.token)
         if let address {
             // The URL's host stays the name the certificate must carry. The lookup only.
             settings.dnsOverrides = [try host(of: config.baseUrl): [address]]
@@ -63,35 +57,6 @@ public final class ScionTransport: Transport {
         } catch {
             throw ChatError.config("the SCION client could not be built: \(error)")
         }
-
-        if case .apiKey(let auth) = config.credential, let first = minted {
-            renewal = Self.renew(client: client, auth: auth, first: first)
-        } else {
-            renewal = nil
-        }
-    }
-
-    /// Mints a fresh token before each one expires, and hands it to the client.
-    private static func renew(
-        client: ScionHttp3Client, auth: ApiKeyAuth, first: MintedToken
-    ) -> Task<Void, Never> {
-        Task {
-            var current = first
-            while !Task.isCancelled {
-                // Half of what is left, so a failed attempt has as long again to try once more.
-                // Each failure halves the wait, so attempts close up as expiry approaches.
-                let wait = max(current.expiresAt.timeIntervalSinceNow / 2, renewRetry)
-                try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
-                if Task.isCancelled { return }
-
-                // A failure leaves the old token in place and the loop waits out the retry gap.
-                // It is still good for a little longer, so there is nothing to report yet.
-                guard let next = try? await mint(auth) else { continue }
-
-                current = next
-                try? client.setAuthToken(next.token)
-            }
-        }
     }
 
     public func send(_ request: ChatRequest) async throws -> ChatReply {
@@ -113,7 +78,6 @@ public final class ScionTransport: Transport {
     }
 
     public func close() async {
-        renewal?.cancel()
         await client.shutdown()
     }
 }
@@ -125,9 +89,6 @@ private func host(of url: String) throws -> String {
     }
     return host
 }
-
-/// The shortest gap between attempts, once halving has run the wait down.
-private let renewRetry: TimeInterval = 30
 
 /// Sorts an SDK failure into the one taxonomy the app knows.
 func failure(_ error: ScionHttp3Error) -> ChatError {

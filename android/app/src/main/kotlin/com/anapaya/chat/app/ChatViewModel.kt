@@ -167,7 +167,7 @@ public class ChatViewModel(application: Application) : AndroidViewModel(applicat
             throw failure
         }
 
-        // The one it replaces holds a stack, and a renewal that outlives it otherwise.
+        // The one it replaces holds a stack that outlives it otherwise.
         client?.close()
         client = built
         _state.update {

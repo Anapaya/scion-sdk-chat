@@ -32,11 +32,10 @@ public sealed interface Credential {
     /** One token, already minted. This is what `chat-dev` hands out. */
     public data class Token(val token: String) : Credential
 
-    /** A key the client exchanges for tokens, and keeps exchanging. */
+    /** A key the SDK exchanges for tokens, and keeps exchanging. */
     public data class ApiKey(
         val key: String,
         val aaUrl: String = ANAPAYA_AA,
-        val deviceId: String = "chat-android",
     ) : Credential
 }
 

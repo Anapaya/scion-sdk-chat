@@ -3,13 +3,6 @@
 package com.anapaya.chat.client
 
 import android.content.Context
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import com.anapaya.scion.http3.ScionAddress
 import com.anapaya.scion.http3.ScionHttp3Client
 import com.anapaya.scion.http3.ScionHttp3Exception
@@ -21,35 +14,29 @@ import com.anapaya.scion.http3.TrustAnchors
 public class ScionTransport private constructor(
     private val config: ScionConfig,
     private val client: ScionHttp3Client,
-    /** Where to send the packets, for a network with no TSAR record. Null in production. */
-    private val address: ScionAddress?,
-    /** Renews the token for as long as this transport lives. Null when nothing expires. */
-    private val renewal: Job?,
 ) : Transport {
 
     public companion object {
         /**
-         * Builds the client, minting a token first when the configuration carries a key.
-         *
-         * Suspending because the authority is asked here: the SDK takes a token and cannot be
-         * given one later, so the exchange has to finish before the client exists.
+         * Builds the client. Performs no I/O: the first request builds connectivity, and
+         * exchanges an API key for a token when the configuration carries one.
          */
-        public suspend fun open(context: Context, config: ScionConfig): ScionTransport {
+        public fun open(context: Context, config: ScionConfig): ScionTransport {
             val address = config.target?.let { target ->
                 runCatching { ScionAddress.parse(target) }
                     .getOrElse { throw ChatError.Config("the target is not a SCION address: $target") }
             }
 
-            val minted = when (val credential = config.credential) {
-                is Credential.None -> null
-                is Credential.Token -> MintedToken(credential.token, Long.MAX_VALUE)
-                is Credential.ApiKey -> mint(credential)
-            }
-
             val client = ScionHttp3Client
                 .Builder(context)
                 .endhostApi(config.endhostApiUrl)
-                .apply { minted?.let { authToken(it.token) } }
+                .apply {
+                    when (val credential = config.credential) {
+                        is Credential.None -> {}
+                        is Credential.Token -> authToken(credential.token)
+                        is Credential.ApiKey -> apiKey(credential.key, credential.aaUrl)
+                    }
+                }
                 .apply {
                     // The URL's host stays the name the certificate must carry. The lookup only.
                     address?.let { dnsOverride(hostOf(config.baseUrl), it) }
@@ -63,41 +50,8 @@ public class ScionTransport private constructor(
                 )
                 .build()
 
-            val credential = config.credential
-            val renewal = if (credential is Credential.ApiKey && minted != null) {
-                renew(client, credential, minted)
-            } else {
-                null
-            }
-
-            return ScionTransport(config, client, address, renewal)
+            return ScionTransport(config, client)
         }
-
-        /** Mints a fresh token before each one expires, and hands it to the client. */
-        private fun renew(
-            client: ScionHttp3Client,
-            auth: Credential.ApiKey,
-            first: MintedToken,
-        ): Job = CoroutineScope(Dispatchers.IO).launch {
-            var current = first
-            while (isActive) {
-                // Half of what is left, so a failed attempt has as long again to try once more.
-                // Each failure halves the wait, so attempts close up as expiry approaches.
-                val wait = (current.expiresAtMillis - System.currentTimeMillis()) / 2
-                delay(wait.coerceAtLeast(RENEW_RETRY_MILLIS))
-
-                // A failure leaves the old token in place and the loop waits out the retry gap.
-                // It is still good for a little longer, so there is nothing to report yet.
-                val next = runCatching { mint(auth) }.getOrNull()
-                if (next != null) {
-                    current = next
-                    client.setAuthToken(next.token)
-                }
-            }
-        }
-
-        /** The shortest gap between attempts, once halving has run the wait down. */
-        private const val RENEW_RETRY_MILLIS = 30_000L
     }
 
     override suspend fun send(request: ChatRequest): ChatReply {
@@ -124,7 +78,6 @@ public class ScionTransport private constructor(
     }
 
     override fun close() {
-        renewal?.cancel()
         client.close()
     }
 }
