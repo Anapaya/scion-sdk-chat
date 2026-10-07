@@ -222,10 +222,10 @@ clients offer the choice the same way they offer [Trust](#trust):
 | API key | `--auth-api-key` | the long-lived secret. The authority mints tokens from it |
 | SNAP token | `--snap-token` | 1 token, already minted |
 
-A token lasts a day at most, so a client given only a token stops working when it expires. A client
-given a key hands it to the SDK, which exchanges it for a token on the first request and renews
-that token for as long as the client runs. `chat-dev` is the other case: it has no authority, and
-mints a token of its own for every read of `/info`, so the quickstart above passes a token.
+A token expires, so a client given only a token stops working at that moment. A client given a key
+hands it to the SDK, which exchanges it for a token on the first request and renews that token for
+as long as the client runs. `chat-dev` is the other case: it has no authority, and mints a token of
+its own for every read of `/info`, so the quickstart above passes a token.
 
 A key the authority refuses fails that first request, and so does an authority out of reach. The
 2 are told apart by whether a retry can help.

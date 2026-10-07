@@ -81,12 +81,10 @@ impl ServerCert {
 }
 
 fn generate(data_dir: &Path, cert_path: &Path, key_path: &Path) -> Result<(), CertError> {
-    fs::create_dir_all(data_dir).map_err(|source| {
-        CertError::Io {
-            action: "create the data directory",
-            path: data_dir.to_owned(),
-            source,
-        }
+    fs::create_dir_all(data_dir).map_err(|source| CertError::Io {
+        action: "create the data directory",
+        path: data_dir.to_owned(),
+        source,
     })?;
 
     // P-256 verifies under every client's default algorithm preferences, which is all the Android
@@ -99,18 +97,14 @@ fn generate(data_dir: &Path, cert_path: &Path, key_path: &Path) -> Result<(), Ce
 }
 
 fn fingerprint(cert_path: &Path) -> Result<String, CertError> {
-    let text = fs::read(cert_path).map_err(|source| {
-        CertError::Io {
-            action: "read the certificate",
-            path: cert_path.to_owned(),
-            source,
-        }
+    let text = fs::read(cert_path).map_err(|source| CertError::Io {
+        action: "read the certificate",
+        path: cert_path.to_owned(),
+        source,
     })?;
-    let block = pem::parse(&text).map_err(|source| {
-        CertError::Parse {
-            path: cert_path.to_owned(),
-            source,
-        }
+    let block = pem::parse(&text).map_err(|source| CertError::Parse {
+        path: cert_path.to_owned(),
+        source,
     })?;
 
     // Over the DER, not the PEM, to match what every other tool reports.
@@ -121,12 +115,10 @@ fn fingerprint(cert_path: &Path) -> Result<String, CertError> {
 }
 
 fn write(path: &Path, contents: &[u8], mode: u32) -> Result<(), CertError> {
-    let failed = |source| {
-        CertError::Io {
-            action: "write",
-            path: path.to_owned(),
-            source,
-        }
+    let failed = |source| CertError::Io {
+        action: "write",
+        path: path.to_owned(),
+        source,
     };
 
     #[cfg(unix)]

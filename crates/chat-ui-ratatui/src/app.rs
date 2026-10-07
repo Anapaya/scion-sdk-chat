@@ -586,12 +586,10 @@ fn credential(form: &ConnectionForm) -> Result<Credential, ChatError> {
 /// Which certificates to accept, from the two flags that can say so.
 fn trust(form: &ConnectionForm) -> Result<Trust, ChatError> {
     match (form.insecure, blank_as_none(&form.cert_path)) {
-        (true, Some(path)) => {
-            Err(ChatError::Config(format!(
-                "--insecure accepts any certificate, and --cert-path {path} accepts one. Give one of \
+        (true, Some(path)) => Err(ChatError::Config(format!(
+            "--insecure accepts any certificate, and --cert-path {path} accepts one. Give one of \
              them."
-            )))
-        }
+        ))),
         (true, None) => Ok(Trust::Insecure),
         (false, Some(path)) => Ok(Trust::Pinned(PathBuf::from(path))),
         (false, None) => Ok(Trust::SystemRoots),

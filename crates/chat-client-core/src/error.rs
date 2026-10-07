@@ -80,13 +80,11 @@ pub enum TransportError {
 /// failure.
 pub(crate) fn refusal(status: u16, body: &[u8]) -> ChatError {
     match serde_json::from_slice::<ErrorResponse>(body) {
-        Ok(envelope) => {
-            ChatError::Api {
-                status,
-                code: envelope.error.code().clone(),
-                message: envelope.error.message().to_owned(),
-            }
-        }
+        Ok(envelope) => ChatError::Api {
+            status,
+            code: envelope.error.code().clone(),
+            message: envelope.error.message().to_owned(),
+        },
         Err(error) => ChatError::Protocol(format!("{status} carried no error envelope: {error}")),
     }
 }

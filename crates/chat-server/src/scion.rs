@@ -39,20 +39,19 @@ impl ScionListener {
     pub async fn bind(stack: ScionStack, config: &Config) -> Result<Self, RunError> {
         // The endhost API decides which AS the host is in, so `--listen` contributes only its IP
         // and port. Binding explicitly is what makes the port predictable.
-        let isd_asn = *stack.local_ases().first().ok_or_else(|| {
-            RunError::Scion {
-                action: "reading the local AS",
-                detail: "the endhost API reported no AS for this host".to_owned(),
-            }
+        let isd_asn = *stack.local_ases().first().ok_or_else(|| RunError::Scion {
+            action: "reading the local AS",
+            detail: "the endhost API reported no AS for this host".to_owned(),
         })?;
         let bind_addr = ScionSocketIpAddr::new(isd_asn, config.listen.ip(), config.listen.port());
 
-        let socket = stack.bind(Some(bind_addr)).await.map_err(|source| {
-            RunError::Scion {
+        let socket = stack
+            .bind(Some(bind_addr))
+            .await
+            .map_err(|source| RunError::Scion {
                 action: "binding a SCION socket",
                 detail: source.to_string(),
-            }
-        })?;
+            })?;
 
         Ok(Self {
             _stack: stack,
@@ -105,11 +104,9 @@ pub async fn serve_on(
         shutdown,
     )
     .await
-    .map_err(|source| {
-        RunError::Scion {
-            action: "serving over scion",
-            detail: source.to_string(),
-        }
+    .map_err(|source| RunError::Scion {
+        action: "serving over scion",
+        detail: source.to_string(),
     })
 }
 
@@ -143,31 +140,27 @@ pub async fn build_stack(config: &Config) -> Result<ScionStack, RunError> {
         builder = builder.with_auth_token(token.trim().to_owned());
     }
 
-    builder.build().await.map_err(|source| {
-        RunError::Scion {
-            action: "building the SCION stack",
-            detail: source.to_string(),
-        }
+    builder.build().await.map_err(|source| RunError::Scion {
+        action: "building the SCION stack",
+        detail: source.to_string(),
     })
 }
 
 /// The QUIC configuration, carrying the certificate clients pin.
 fn quic_config(cert: &cert::ServerCert) -> Result<squiche::Config, RunError> {
     let failed = |action: &'static str| {
-        move |source: squiche::Error| {
-            RunError::Scion {
-                action,
-                detail: source.to_string(),
-            }
+        move |source: squiche::Error| RunError::Scion {
+            action,
+            detail: source.to_string(),
         }
     };
     let path = |file: &std::path::Path| -> Result<String, RunError> {
-        file.to_str().map(str::to_owned).ok_or_else(|| {
-            RunError::Scion {
+        file.to_str()
+            .map(str::to_owned)
+            .ok_or_else(|| RunError::Scion {
                 action: "reading the certificate path",
                 detail: format!("{} is not valid UTF-8", file.display()),
-            }
-        })
+            })
     };
 
     let mut quic = QuicConfig::builder()

@@ -114,13 +114,11 @@ pub async fn register(
 
     match state.store.insert_user(&username.0, &hash).await {
         Ok(Registration::Created) => Ok(StatusCode::CREATED),
-        Ok(Registration::UsernameTaken) => {
-            Err(ApiError::new(
-                StatusCode::CONFLICT,
-                ErrorCode::UsernameTaken,
-                "that username is already registered",
-            ))
-        }
+        Ok(Registration::UsernameTaken) => Err(ApiError::new(
+            StatusCode::CONFLICT,
+            ErrorCode::UsernameTaken,
+            "that username is already registered",
+        )),
         Err(e) => Err(e.into()),
     }
 }

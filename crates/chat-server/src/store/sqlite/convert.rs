@@ -31,22 +31,18 @@ pub(super) fn now() -> UnixMillis {
 /// A column on its way out. SQLite integers are signed and the API's are not, so this is where a
 /// negative column value is caught.
 pub(super) fn from_column(what: &'static str, value: i64) -> Result<u64, StoreError> {
-    u64::try_from(value).map_err(|_| {
-        StoreError::OutOfRange {
-            what,
-            value: i128::from(value),
-        }
+    u64::try_from(value).map_err(|_| StoreError::OutOfRange {
+        what,
+        value: i128::from(value),
     })
 }
 
 /// A value on its way into a column. Fails only above `i64::MAX`, which a client can ask for by
 /// sending an enormous cursor.
 pub(super) fn to_column(what: &'static str, value: u64) -> Result<i64, StoreError> {
-    i64::try_from(value).map_err(|_| {
-        StoreError::OutOfRange {
-            what,
-            value: i128::from(value),
-        }
+    i64::try_from(value).map_err(|_| StoreError::OutOfRange {
+        what,
+        value: i128::from(value),
     })
 }
 
