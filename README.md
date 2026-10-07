@@ -225,7 +225,7 @@ clients offer the choice the same way they offer [Trust](#trust):
 A token expires, so a client given only a token stops working at that moment. A client given a key
 hands it to the SDK, which exchanges it for a token on the first request and renews that token for
 as long as the client runs. For local development, `chat-dev` takes the place of the authority:
-each read of `/info` returns a newly minted token. That is why the quickstart above passes a token.
+each read of `/info` returns a newly minted token.
 
 A key the authority refuses fails that first request, and so does an authority out of reach. The
 2 are told apart by whether a retry can help.
