@@ -35,8 +35,8 @@ public let anapayaAa = "https://auth.scion.anapaya.net"
 
 /// How a client proves to the SNAP that it may use the network.
 ///
-/// An API key is the long-lived secret. The authority mints tokens from it, each good for a day at
-/// most, and the client renews them for as long as it runs.
+/// An API key is the long-lived secret. The authority mints tokens from it, and the SDK renews
+/// them for as long as the client runs.
 public enum Credential: Sendable, Equatable {
     /// Nothing to prove. An endhost API on an appliance asks for no token.
     case none
@@ -52,13 +52,10 @@ public struct ApiKeyAuth: Sendable, Equatable {
     public var key: String
     /// The authority that mints tokens for it.
     public var aaUrl: String
-    /// What the client calls itself in the authority's records.
-    public var deviceId: String
 
-    public init(key: String, aaUrl: String = anapayaAa, deviceId: String = "chat-ios") {
+    public init(key: String, aaUrl: String = anapayaAa) {
         self.key = key
         self.aaUrl = aaUrl
-        self.deviceId = deviceId
     }
 }
 

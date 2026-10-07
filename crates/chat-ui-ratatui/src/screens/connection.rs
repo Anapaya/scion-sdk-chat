@@ -243,29 +243,25 @@ impl Focus {
     fn shown(scion: bool, pinned: bool) -> &'static [Self] {
         match (scion, pinned) {
             (false, _) => &[Self::Transport, Self::ServerUrl],
-            (true, false) => {
-                &[
-                    Self::Transport,
-                    Self::ServerUrl,
-                    Self::EndhostApi,
-                    Self::Target,
-                    Self::Trust,
-                    Self::Credential,
-                    Self::Secret,
-                ]
-            }
-            (true, true) => {
-                &[
-                    Self::Transport,
-                    Self::ServerUrl,
-                    Self::EndhostApi,
-                    Self::Target,
-                    Self::Trust,
-                    Self::CertPath,
-                    Self::Credential,
-                    Self::Secret,
-                ]
-            }
+            (true, false) => &[
+                Self::Transport,
+                Self::ServerUrl,
+                Self::EndhostApi,
+                Self::Target,
+                Self::Trust,
+                Self::Credential,
+                Self::Secret,
+            ],
+            (true, true) => &[
+                Self::Transport,
+                Self::ServerUrl,
+                Self::EndhostApi,
+                Self::Target,
+                Self::Trust,
+                Self::CertPath,
+                Self::Credential,
+                Self::Secret,
+            ],
         }
     }
 
@@ -559,12 +555,10 @@ impl Connection {
             Focus::EndhostApi => Some(&mut self.endhost_api),
             Focus::Target => Some(&mut self.target),
             Focus::CertPath => Some(&mut self.cert_path),
-            Focus::Secret => {
-                Some(match self.credential {
-                    CredentialChoice::ApiKey => &mut self.auth_api_key,
-                    CredentialChoice::Token => &mut self.snap_token,
-                })
-            }
+            Focus::Secret => Some(match self.credential {
+                CredentialChoice::ApiKey => &mut self.auth_api_key,
+                CredentialChoice::Token => &mut self.snap_token,
+            }),
         }
     }
 }

@@ -42,13 +42,11 @@ pub(super) async fn post_message(
     .await
     // The foreign key is what rejects a room that does not exist; report it as such rather
     // than passing a driver error up.
-    .map_err(|e| {
-        match &e {
-            sqlx::Error::Database(db) if db.kind() == ErrorKind::ForeignKeyViolation => {
-                StoreError::NotFound(format!("room {room}"))
-            }
-            _ => StoreError::DbError(e),
+    .map_err(|e| match &e {
+        sqlx::Error::Database(db) if db.kind() == ErrorKind::ForeignKeyViolation => {
+            StoreError::NotFound(format!("room {room}"))
         }
+        _ => StoreError::DbError(e),
     })?;
 
     Ok(PostMessageResponse {

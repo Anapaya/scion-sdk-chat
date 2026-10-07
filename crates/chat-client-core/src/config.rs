@@ -50,8 +50,8 @@ pub struct ScionConfig {
 
 /// How a client proves to the SNAP that it may use the network.
 ///
-/// An API key is the long-lived secret. The AA mints tokens from it, each good for a day at most,
-/// and the client renews them for as long as it runs.
+/// An API key is the long-lived secret. The AA mints tokens from it, and the client renews them
+/// for as long as it runs.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Credential {

@@ -195,13 +195,11 @@ impl From<StoreError> for ApiError {
         match error {
             // The only row the store reports missing is a room.
             StoreError::NotFound(_) => Self::room_not_found(),
-            StoreError::CapExceeded { what } => {
-                Self::new(
-                    StatusCode::TOO_MANY_REQUESTS,
-                    ErrorCode::CapExceeded,
-                    format!("this server accepts no more {what}s"),
-                )
-            }
+            StoreError::CapExceeded { what } => Self::new(
+                StatusCode::TOO_MANY_REQUESTS,
+                ErrorCode::CapExceeded,
+                format!("this server accepts no more {what}s"),
+            ),
             error => {
                 tracing::error!(%error, "store failed");
                 Self::internal()

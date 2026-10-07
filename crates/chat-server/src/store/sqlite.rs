@@ -60,11 +60,9 @@ impl SqliteStore {
         // only as "unable to open database file".
         match path.parent() {
             Some(parent) if !parent.as_os_str().is_empty() => {
-                std::fs::create_dir_all(parent).map_err(|source| {
-                    StoreError::FileError {
-                        path: parent.to_path_buf(),
-                        source,
-                    }
+                std::fs::create_dir_all(parent).map_err(|source| StoreError::FileError {
+                    path: parent.to_path_buf(),
+                    source,
                 })?;
             }
             _ => {}
