@@ -227,14 +227,6 @@ hands it to the SDK, which exchanges it for a token on the first request and ren
 as long as the client runs. For local development, `chat-dev` takes the place of the authority:
 each read of `/info` returns a newly minted token.
 
-A key the authority refuses fails that first request, and so does an authority out of reach. The
-2 are told apart by whether a retry can help.
-
-An endhost API on an appliance asks for neither, so both flags may be left out. Giving both is
-refused, because they name different credentials.
-
-The key is the thing worth guarding: a token expires, a key does not until it is revoked.
-
 #### Trust
 
 Every client accepts the server's certificate in 1 of 3 ways. The terminal client chooses with the
