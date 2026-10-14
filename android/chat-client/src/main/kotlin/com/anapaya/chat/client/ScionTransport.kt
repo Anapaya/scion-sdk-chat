@@ -3,6 +3,7 @@
 package com.anapaya.chat.client
 
 import android.content.Context
+import com.anapaya.scion.http3.AuthTokenSource
 import com.anapaya.scion.http3.ScionAddress
 import com.anapaya.scion.http3.ScionHttp3Client
 import com.anapaya.scion.http3.ScionHttp3Exception
@@ -18,8 +19,8 @@ public class ScionTransport private constructor(
 
     public companion object {
         /**
-         * Builds the client. Performs no I/O: the first request builds connectivity, and
-         * exchanges an API key for a token when the configuration carries one.
+         * Builds the client. The first request builds connectivity. An API key is exchanged for
+         * a token from the start.
          */
         public fun open(context: Context, config: ScionConfig): ScionTransport {
             val address = config.target?.let { target ->
@@ -34,7 +35,8 @@ public class ScionTransport private constructor(
                     when (val credential = config.credential) {
                         is Credential.None -> {}
                         is Credential.Token -> authToken(credential.token)
-                        is Credential.ApiKey -> apiKey(credential.key, credential.aaUrl)
+                        is Credential.ApiKey ->
+                            authTokenSource(AuthTokenSource.anapayaAa(credential.key, credential.aaUrl))
                     }
                 }
                 .apply {

@@ -11,8 +11,8 @@ public final class ScionTransport: Transport {
     /// Where to send the packets, for a network that publishes no TSAR record. Null in production.
     private let address: ScionAddress?
 
-    /// Builds the client. Performs no I/O: the first request builds connectivity, and exchanges an
-    /// API key for a token when the configuration carries one.
+    /// Builds the client. The first request builds connectivity. An API key is exchanged for a
+    /// token from the start.
     public init(config: ScionConfig) throws {
         self.config = config
 
@@ -33,7 +33,7 @@ public final class ScionTransport: Transport {
         case .token(let token):
             settings.authToken = token
         case .apiKey(let auth):
-            settings.apiKey = .init(key: auth.key, aaUrl: auth.aaUrl)
+            settings.authTokenSource = .anapayaAa(apiKey: auth.key, aaUrl: auth.aaUrl)
         }
         if let address {
             // The URL's host stays the name the certificate must carry. The lookup only.

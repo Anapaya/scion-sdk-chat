@@ -223,8 +223,8 @@ clients offer the choice the same way they offer [Trust](#trust):
 | SNAP token | `--snap-token` | 1 token, already minted |
 
 A token expires, so a client given only a token stops working at that moment. A client given a key
-hands it to the SDK, which exchanges it for a token on the first request and renews that token for
-as long as the client runs. For local development, `chat-dev` takes the place of the AA service:
+hands it to the SDK, which exchanges it for a token when the client is built and renews that token
+for as long as the client runs. For local development, `chat-dev` takes the place of the AA service:
 each read of `/info` returns a newly minted token.
 
 #### Trust

@@ -15,10 +15,11 @@
 
 use std::{str::FromStr as _, sync::Arc};
 
+use anapaya_aa_client::AnapayaAaTokenSource;
 use async_trait::async_trait;
 use bytes::Bytes;
 use scion_http3::{
-    ApiKeyAuth, Client, Config, Error, Request, scion_quic::quic::config::QuicConfig,
+    Client, Config, Error, Request, scion_quic::quic::config::QuicConfig,
     scion_stack::resolver::txt::ScionTxtDnsResolver, sciparse::address::ip_addr::ScionIpAddr,
 };
 use url::Url;
@@ -35,8 +36,8 @@ pub struct ScionTransport {
 }
 
 impl ScionTransport {
-    /// Builds the client. Performs no I/O: the first request builds connectivity, and exchanges
-    /// an API key for a token when there is one.
+    /// Builds the client. The first request builds connectivity. An API key is exchanged for a
+    /// token from the start, which needs a Tokio runtime.
     ///
     /// `server_url` is read for its host, which is the name a `target` answers for.
     pub fn new(config: &ScionConfig, server_url: &Url) -> Result<Self, ChatError> {
@@ -49,11 +50,15 @@ impl ScionTransport {
             Credential::None => {}
             Credential::Token(token) => settings = settings.with_auth_token(token.as_str()),
             Credential::ApiKey(auth) => {
-                settings = settings.with_api_key(ApiKeyAuth::new(
+                let source = AnapayaAaTokenSource::new(
                     auth.key.as_str(),
-                    auth.aa_url.clone(),
+                    &auth.aa_url,
                     auth.device_id.clone(),
-                ));
+                )
+                .map_err(|error| {
+                    ChatError::Config(format!("the AA token source could not be built: {error:#}"))
+                })?;
+                settings = settings.with_auth_token_source(source);
             }
         }
 
