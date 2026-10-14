@@ -115,9 +115,9 @@ dependencies = [
 
 [[package]]
 name = "anapaya-aa-client"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3464f0db61d46c7de5ea29752fcdbf0064797762e0937ddac351c25d6c55eb4c"
+checksum = "7ea965baaae925a8d3e0b7595f27a4567c9e14d3a3227c6c99595b85f55eee1a"
 dependencies = [
  "anapaya-aa-protobuf",
  "anyhow",
@@ -127,15 +127,16 @@ dependencies = [
  "reqwest-connect-rpc",
  "serde",
  "thiserror 2.0.20",
+ "tokio",
  "tracing",
  "url",
 ]
 
 [[package]]
 name = "anapaya-aa-protobuf"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "198193733ef9848f6c9878fc2d0e794699dadf9642d8d1f5e15df57514b10c29"
+checksum = "ead1b39cede9a9929c3dd7a2a1009e86cde76dd443ebbe64ba3bd80e77ed957f"
 dependencies = [
  "buffa",
  "serde",
@@ -143,9 +144,9 @@ dependencies = [
 
 [[package]]
 name = "anapaya-ead-api"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f11c6e28ee06254a28c28c890f9d550091217cea2c62f9054d3dfe69946c3cb9"
+checksum = "477a476267d4dc81eb6ac250dcad414a133e1ca6262ec477abbb0cd371b9ebf0"
 dependencies = [
  "anapaya-ead-models",
  "axum",
@@ -155,9 +156,9 @@ dependencies = [
 
 [[package]]
 name = "anapaya-ead-client"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8ecb31983318fe2509582aa7e462b64b8e577670d79fb99f76b51b62741e161"
+checksum = "a9f4a76e2b5df664fbff21748048dca456d69d80051c1b205176ad25ba7bfb46"
 dependencies = [
  "anapaya-ead-models",
  "anyhow",
@@ -170,9 +171,9 @@ dependencies = [
 
 [[package]]
 name = "anapaya-ead-models"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1880476ff960649fbc9d9bb336ba6ae9c70a920ba0616123b49bd116283612c3"
+checksum = "8b15655cd93458589d4b79ce79df08a2efeaaf7cd47e8c3ad2fbb7735a5bc637"
 dependencies = [
  "async-trait",
  "buffa",
@@ -427,9 +428,9 @@ dependencies = [
 
 [[package]]
 name = "axum-connect-rpc"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fdd15b6ce6cad8a53efcb7b01e4f9054c6b0fbb0e27771c9f685201dee24e69"
+checksum = "9ff9e54da4570ed7f7b766f49e26fb09c7c5a3f55ff994cf5cc5e04a9a83e95a"
 dependencies = [
  "axum",
  "buffa",
@@ -1608,9 +1609,9 @@ dependencies = [
 
 [[package]]
 name = "dhsd"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3aeb0fcdb231b6e8979cdb510bc54122baca8774da45afb69cd2a47c5cf87ce2"
+checksum = "52a8110bdd5f93c257d8e43daa642caa95e65d7c7ce3002d47472387e6aa1b89"
 dependencies = [
  "ring",
  "zeroize",
@@ -1762,9 +1763,9 @@ dependencies = [
 
 [[package]]
 name = "endhost-api"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ad1eaa7c7dacadf8d2d1eb4975926c522a90f621f12c0391d50c36f6bff0fc8"
+checksum = "b35ac5ae84061010dab8657b5d9d744ff5a06420ada34350b01016620a2eb051"
 dependencies = [
  "axum",
  "axum-connect-rpc",
@@ -1776,9 +1777,9 @@ dependencies = [
 
 [[package]]
 name = "endhost-api-client"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23581c5d333f0749e0211c1e67c1d84e57f22373361e521a3fc9114da23ff5dc"
+checksum = "14332403a1439591f162655d4119053c545578b6a78a434223e231d804ec3b57"
 dependencies = [
  "async-trait",
  "endhost-api",
@@ -1793,9 +1794,9 @@ dependencies = [
 
 [[package]]
 name = "endhost-api-models"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1963a525dfe301594398a98ed71083381e8cdb23472fc210956eac94d6c8b7fb"
+checksum = "53cd5a664f8b9f31f07c567a4231eef76204493b067de72e8807c1451d503708"
 dependencies = [
  "async-trait",
  "sciparse",
@@ -1806,9 +1807,9 @@ dependencies = [
 
 [[package]]
 name = "endhost-api-protobuf"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63acde252b8854e0e1f7b651a61db99ed65ed8c3242ed7823ca6aa8b4331109e"
+checksum = "6213f04bb29483451781602c8daf8ba7138cb442c32d243ce0f98e669cecf5b7"
 dependencies = [
  "buffa",
  "endhost-api-models",
@@ -3802,9 +3803,9 @@ dependencies = [
 
 [[package]]
 name = "pocketscion"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "864d2cde164928720dfd4d11c4ca71affa22b9fcb8cfdb2be8b29ce9bc6625db"
+checksum = "5299212e308964f9e875e1caa06152571e4fd6326b1dbd3419dc7a1d98e4b179"
 dependencies = [
  "anapaya-ead-api",
  "anapaya-ead-models",
@@ -4422,9 +4423,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest-connect-rpc"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0cc543c891f7221b89d696bc8b2ac0c9fcfacecb12d9b87439614bb38313380"
+checksum = "14c2ed37f774617776dbb20f8172449e5b9123291a86335776913ada468273d2"
 dependencies = [
  "async-trait",
  "buffa",
@@ -4698,9 +4699,9 @@ dependencies = [
 
 [[package]]
 name = "scion-connect-rpc"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aeaf0f3dadb9463933c8aea4e3f233ad7aa6ddca6356992e407b3cd58fc797ed"
+checksum = "b80c35ac0efd4913fce378e4e619e1588fe3b81e1c6e64f25deb057e830e7773"
 dependencies = [
  "async-trait",
  "buffa",
@@ -4720,9 +4721,9 @@ dependencies = [
 
 [[package]]
 name = "scion-h3-axum"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1dfe6e2a0310c39b20062decec4b6bdfcb4548cb46035fb3147ba5f98746b570"
+checksum = "f52e049c60e66e9b36289eacc2aa2f24b1da2b5b8c0321185076dc1e1c4080b2"
 dependencies = [
  "axum",
  "scion-quic",
@@ -4732,9 +4733,9 @@ dependencies = [
 
 [[package]]
 name = "scion-http3"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea6291fc56d5e672b908f0524251ec6417f5cf6726e2eac2786fcca35804b686"
+checksum = "1dbeb542aab49e3ad6c281d9c9c4a3225fe6005f5a36f978f3b8935abaf66125"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4752,9 +4753,9 @@ dependencies = [
 
 [[package]]
 name = "scion-protobuf"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "510382689139e424b02a09c77f5c145de50381691acd74553dd8d45bfa2f5f7f"
+checksum = "8643e82a09101876c88e0a5086488f038de5b39631a3c4967b65c50eed4c8aac"
 dependencies = [
  "buffa",
  "buffa-types",
@@ -4764,9 +4765,9 @@ dependencies = [
 
 [[package]]
 name = "scion-quic"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2195f4858f2e54a87fc6df3de4120b94b5de8a54383f2a852e522080f34da45"
+checksum = "f56aa4efbdd14f5d06c2a51c89a7c7a24248dcbcc80bf5fc44cea337146d88fe"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4786,9 +4787,9 @@ dependencies = [
 
 [[package]]
 name = "scion-sdk-observability"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ba544602a06e61e72f5f50e9a2c8a500dedbc5401c9f7a30757164426a569bd"
+checksum = "4afa9ff07ebcf234a3ef42232a6cc2fbe092f8adfd7a7c3a21837a1325276a7b"
 dependencies = [
  "axum",
  "chacha20 0.10.2",
@@ -4810,9 +4811,9 @@ dependencies = [
 
 [[package]]
 name = "scion-sdk-token-validator"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34011bb954a193f84a83b47adde437f2534eb12feee9f61de159b0a0cb67ff87"
+checksum = "38187cc312b5a5524729ce5469ad27d29bd8f24220920bb0aaa959738903786e"
 dependencies = [
  "ed25519-dalek",
  "jsonwebtoken",
@@ -4823,9 +4824,9 @@ dependencies = [
 
 [[package]]
 name = "scion-sdk-utils"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98a38fb1d6f1cf719f77788cad057547c82f814252dd837fbcb9b39642ec378d"
+checksum = "5e61bbba83bb567bb8f202be0210f233a755e9d5d1031c04009ddf7581817716"
 dependencies = [
  "num-traits",
  "rand 0.10.2",
@@ -4840,9 +4841,9 @@ dependencies = [
 
 [[package]]
 name = "scion-stack"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91c67fe58d12e84249b04722e3f2e9df86945876e4be683e418159368a8d59c4"
+checksum = "e110e4ce3119f03702ffc0bef8ba3288da8d6ebcebe59be18926930c756b5e53"
 dependencies = [
  "ana-gotatun",
  "anapaya-ead-client",
@@ -4876,9 +4877,9 @@ dependencies = [
 
 [[package]]
 name = "scion-trc"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8217747a7d5d642717fd794260139c1e31561ab98a1c9d76c255e5dfa432dd8f"
+checksum = "36bf3b2e70edbac08bee023b2863f169ec94691740bfc0711f86a90d0a28c08b"
 dependencies = [
  "cms",
  "der",
@@ -4889,9 +4890,9 @@ dependencies = [
 
 [[package]]
 name = "sciparse"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d36d0fe5b294c452b9965e7d00f90a39dbf5b174374d86e8b1936d824a4bdc68"
+checksum = "d42975569bb128003c23a99c95a43b26037542cb4ab8fa3ddf6898b471e29740"
 dependencies = [
  "aes",
  "bitflags 2.13.1",
@@ -5279,9 +5280,9 @@ dependencies = [
 
 [[package]]
 name = "snap-control"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f623f9339328170272cb13c0e182bf86f1348d14bd7aa8e6e3afe9cec00408e"
+checksum = "aa12febe5e04300649c7bd21238fc2a14908b93ac0f271eedb9110bbe3ddeaa4"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -5323,9 +5324,9 @@ dependencies = [
 
 [[package]]
 name = "snap-dataplane"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "465bd136c59c26bafdf67e9eaa35e35996f47d9a1a72c2b438e50c1487c5afc9"
+checksum = "a26f081d8257c8435707ba3e15ccfb34eb702a1005776c932d88c3cd39441fdd"
 dependencies = [
  "ana-gotatun",
  "anyhow",
@@ -5347,9 +5348,9 @@ dependencies = [
 
 [[package]]
 name = "snap-tokens"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c803e3106646dafddd8c4d053cc83f22d6f47e6c351d35d6cf67f37ba1a1e3ca"
+checksum = "6a2cd230117a2afed8281f1cb56c45108dcbee1bd8d80d891de1c6ecf67edf72"
 dependencies = [
  "base64 0.23.1",
  "jsonwebtoken",
@@ -5363,9 +5364,9 @@ dependencies = [
 
 [[package]]
 name = "snap-tun"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f1071e9f462d61f30d8374593a85a686bfee0a41ce5b60b6e7c7efdae505a6a"
+checksum = "58805c74ba64630298b291d84644b86f2a96b7b6ddcbddaab5db682475bba59f"
 dependencies = [
  "ana-gotatun",
  "async-channel",

@@ -36,7 +36,7 @@ use crate::{
     ui::theme,
 };
 
-/// What this client calls itself when it asks the authority for a token.
+/// The device id this client sends to the AA.
 const DEVICE_ID: &str = "chat-ui-ratatui";
 
 /// How often the open room is re-read. The sidebar keeps the default, being less urgent.
@@ -743,9 +743,9 @@ mod tests {
         assert!(message.contains("--cert-path"), "{message}");
     }
 
-    /// A key names the authority it is spent at, without anyone having to type one.
+    /// A key names the AA it goes to, without anyone having to type one.
     #[test]
-    fn an_api_key_is_carried_with_the_default_authority() {
+    fn an_api_key_is_carried_with_the_default_aa() {
         let form = ConnectionForm {
             snap_token: SnapToken::new(""),
             auth_api_key: ApiKey::new("aakey_secret"),

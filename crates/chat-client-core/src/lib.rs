@@ -30,7 +30,6 @@
 //! Every wire type comes from `chat-core` and is re-exported here, so a caller needs one
 //! dependency.
 
-mod auth;
 pub mod client;
 pub mod config;
 pub mod error;

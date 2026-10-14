@@ -167,7 +167,7 @@ public class ChatViewModel(application: Application) : AndroidViewModel(applicat
             throw failure
         }
 
-        // The one it replaces holds a stack, and a renewal that outlives it otherwise.
+        // The old client keeps its SCION stack running until it is closed.
         client?.close()
         client = built
         _state.update {

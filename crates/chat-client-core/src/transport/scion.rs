@@ -15,6 +15,7 @@
 
 use std::{str::FromStr as _, sync::Arc};
 
+use anapaya_aa_client::AnapayaAaTokenSource;
 use async_trait::async_trait;
 use bytes::Bytes;
 use scion_http3::{
@@ -25,7 +26,6 @@ use url::Url;
 
 use super::{MAX_BODY_BYTES, Transport, describe};
 use crate::{
-    auth,
     config::{Credential, ScionConfig, Trust},
     error::{ChatError, TransportError},
 };
@@ -36,10 +36,10 @@ pub struct ScionTransport {
 }
 
 impl ScionTransport {
-    /// Builds the client. Only an API key reaches the network here, to be exchanged for a token.
+    /// Builds the client.
     ///
     /// `server_url` is read for its host, which is the name a `target` answers for.
-    pub async fn new(config: &ScionConfig, server_url: &Url) -> Result<Self, ChatError> {
+    pub fn new(config: &ScionConfig, server_url: &Url) -> Result<Self, ChatError> {
         // Idempotent. Both backends are in the build, so rustls installs no default of its own.
         scion_sdk_utils::rustls::select_ring_crypto_provider();
 
@@ -48,10 +48,16 @@ impl ScionTransport {
         match &config.credential {
             Credential::None => {}
             Credential::Token(token) => settings = settings.with_auth_token(token.as_str()),
-            // A source rather than the token it holds: these expire, and the SDK rebuilds
-            // connectivity from this configuration every time it resets.
             Credential::ApiKey(auth) => {
-                settings = settings.with_auth_token_source(auth::token_source(auth).await?);
+                let source = AnapayaAaTokenSource::new(
+                    auth.key.as_str(),
+                    &auth.aa_url,
+                    auth.device_id.clone(),
+                )
+                .map_err(|error| {
+                    ChatError::Config(format!("the AA token source could not be built: {error:#}"))
+                })?;
+                settings = settings.with_auth_token_source(source);
             }
         }
 

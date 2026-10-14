@@ -107,7 +107,7 @@ pub struct ConnectionForm {
     #[arg(long, env = "CHAT_CLIENT_INSECURE")]
     pub insecure: bool,
 
-    /// The key the authority exchanges for tokens. An argument is readable by anyone listing
+    /// The key the AA exchanges for tokens. An argument is readable by anyone listing
     /// processes.
     #[arg(
         long,
@@ -126,7 +126,7 @@ pub struct ConnectionForm {
     )]
     pub snap_token: SnapToken,
 
-    /// The authority that exchanges an API key for tokens.
+    /// The AA that exchanges an API key for tokens.
     #[arg(long, env = "CHAT_CLIENT_AA_URL", default_value = ANAPAYA_AA)]
     pub aa_url: String,
 }
@@ -150,7 +150,7 @@ impl Default for ConnectionForm {
 /// Which credential the client proves itself with, as the form offers the choice.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 enum CredentialChoice {
-    /// A key, exchanged at the authority for tokens.
+    /// A key, exchanged at the AA for tokens.
     #[default]
     ApiKey,
     /// One token, as a development network hands out.
