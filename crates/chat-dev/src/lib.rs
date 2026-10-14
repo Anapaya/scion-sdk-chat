@@ -128,10 +128,12 @@ impl DevSetup {
 
         let control = TcpListener::bind(SocketAddr::new(config.bind_ip, config.control_port))
             .await
-            .map_err(|source| DevError::Io {
-                action: "binding the control API on",
-                path: PathBuf::from(format!("{}:{}", config.bind_ip, config.control_port)),
-                source,
+            .map_err(|source| {
+                DevError::Io {
+                    action: "binding the control API on",
+                    path: PathBuf::from(format!("{}:{}", config.bind_ip, config.control_port)),
+                    source,
+                }
             })?;
         let control_url = format!("http://{}", local_addr(&control));
 
@@ -245,11 +247,13 @@ impl DevSetup {
             .route(
                 "/info",
                 get(
-                    |State(profiles): State<Arc<Profiles>>, headers: HeaderMap| async move {
-                        axum::Json(DevNetwork {
-                            auth_token: dev_auth_token(),
-                            ..profiles.for_host(&headers).clone()
-                        })
+                    |State(profiles): State<Arc<Profiles>>, headers: HeaderMap| {
+                        async move {
+                            axum::Json(DevNetwork {
+                                auth_token: dev_auth_token(),
+                                ..profiles.for_host(&headers).clone()
+                            })
+                        }
                     },
                 ),
             )
@@ -310,19 +314,23 @@ async fn start_server(
 fn data_dir(config: &Config) -> Result<(PathBuf, Option<TempDir>), DevError> {
     match &config.data_dir {
         Some(named) => {
-            std::fs::create_dir_all(named).map_err(|source| DevError::Io {
-                action: "creating the data directory",
-                path: named.clone(),
-                source,
+            std::fs::create_dir_all(named).map_err(|source| {
+                DevError::Io {
+                    action: "creating the data directory",
+                    path: named.clone(),
+                    source,
+                }
             })?;
 
             Ok((named.clone(), None))
         }
         None => {
-            let made = TempDir::new().map_err(|source| DevError::Io {
-                action: "creating a temporary data directory",
-                path: PathBuf::from("a temporary directory"),
-                source,
+            let made = TempDir::new().map_err(|source| {
+                DevError::Io {
+                    action: "creating a temporary data directory",
+                    path: PathBuf::from("a temporary directory"),
+                    source,
+                }
             })?;
 
             Ok((made.path().to_owned(), Some(made)))
@@ -331,11 +339,11 @@ fn data_dir(config: &Config) -> Result<(PathBuf, Option<TempDir>), DevError> {
 }
 
 fn endhost_api(found: Option<impl ToString>, isd_as: impl ToString) -> Result<String, DevError> {
-    found
-        .map(|url| url.to_string())
-        .ok_or_else(|| DevError::NoEndhostApi {
+    found.map(|url| url.to_string()).ok_or_else(|| {
+        DevError::NoEndhostApi {
             isd_as: isd_as.to_string(),
-        })
+        }
+    })
 }
 
 fn local_addr(listener: &TcpListener) -> SocketAddr {
@@ -345,17 +353,21 @@ fn local_addr(listener: &TcpListener) -> SocketAddr {
 }
 
 fn write(path: &Path, contents: impl AsRef<[u8]>) -> Result<(), DevError> {
-    std::fs::write(path, contents).map_err(|source| DevError::Io {
-        action: "writing",
-        path: path.to_owned(),
-        source,
+    std::fs::write(path, contents).map_err(|source| {
+        DevError::Io {
+            action: "writing",
+            path: path.to_owned(),
+            source,
+        }
     })
 }
 
 fn read(path: &Path) -> Result<String, DevError> {
-    std::fs::read_to_string(path).map_err(|source| DevError::Io {
-        action: "reading",
-        path: path.to_owned(),
-        source,
+    std::fs::read_to_string(path).map_err(|source| {
+        DevError::Io {
+            action: "reading",
+            path: path.to_owned(),
+            source,
+        }
     })
 }

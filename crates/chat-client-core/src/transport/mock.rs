@@ -163,10 +163,12 @@ impl Transport for MockTransport {
         };
 
         match answer {
-            Answer::Reply { status, body } => Ok(http::Response::builder()
-                .status(status)
-                .body(body)
-                .expect("a scripted status is valid")),
+            Answer::Reply { status, body } => {
+                Ok(http::Response::builder()
+                    .status(status)
+                    .body(body)
+                    .expect("a scripted status is valid"))
+            }
             Answer::Fail(error) => Err(error),
         }
     }

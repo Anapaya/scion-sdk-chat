@@ -108,9 +108,11 @@ pub fn verify_password(password: &str, stored: Option<&PasswordHash>) -> bool {
 ///
 /// Losing the file logs everyone out and costs nothing else.
 pub fn load_or_create_secret(path: &Path) -> Result<Vec<u8>, AuthError> {
-    let fail = |source| AuthError::Secret {
-        path: path.to_path_buf(),
-        source,
+    let fail = |source| {
+        AuthError::Secret {
+            path: path.to_path_buf(),
+            source,
+        }
     };
 
     match std::fs::read(path) {
