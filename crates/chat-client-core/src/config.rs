@@ -50,8 +50,8 @@ pub struct ScionConfig {
 
 /// How a client proves to the SNAP that it may use the network.
 ///
-/// An API key is the long-lived secret. The AA mints tokens from it, each good for a day at most,
-/// and the client renews them for as long as it runs.
+/// An API key is the long-lived secret. The AA mints tokens from it, and the client renews them
+/// for as long as it runs.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Credential {
@@ -60,7 +60,7 @@ pub enum Credential {
     None,
     /// One token, already minted. This is what `chat-dev` hands out.
     Token(SnapToken),
-    /// A key the client exchanges for tokens, and keeps exchanging.
+    /// A key the SDK exchanges for tokens.
     ///
     /// Boxed: it is the largest of the three by far, and every config carries a `Credential`.
     ApiKey(Box<ApiKeyAuth>),
@@ -71,16 +71,16 @@ pub enum Credential {
 pub struct ApiKeyAuth {
     /// The key itself.
     pub key: ApiKey,
-    /// The authority that mints tokens for it.
+    /// The AA that exchanges it for tokens.
     #[serde(default = "anapaya_aa")]
     pub aa_url: Url,
-    /// What the client calls itself in the authority's records.
+    /// The device id that the AA records.
     #[serde(default = "default_device_id")]
     pub device_id: String,
 }
 
 impl ApiKeyAuth {
-    /// A key spent at the Anapaya authority, by a client that names itself.
+    /// A key for the Anapaya AA, with the client's device id.
     pub fn new(key: ApiKey, device_id: impl Into<String>) -> Self {
         Self {
             key,
@@ -90,7 +90,7 @@ impl ApiKeyAuth {
     }
 }
 
-/// The authority that mints tokens for Anapaya's own network.
+/// The Anapaya AA, which exchanges API keys for tokens.
 pub const ANAPAYA_AA: &str = "https://auth.scion.anapaya.net";
 
 fn anapaya_aa() -> Url {
@@ -151,7 +151,7 @@ impl std::str::FromStr for SnapToken {
     }
 }
 
-/// A key the authority exchanges for tokens.
+/// A key the AA exchanges for tokens.
 ///
 /// `Debug` prints a placeholder. Serialization is not redacted. This is the long-lived secret:
 /// whoever holds it can mint tokens until it is revoked.
@@ -180,7 +180,7 @@ impl fmt::Debug for ApiKey {
 impl std::str::FromStr for ApiKey {
     type Err = std::convert::Infallible;
 
-    /// Any string is a key here. The authority decides whether it is a good one.
+    /// Any string is a key here. The AA decides whether it is valid.
     fn from_str(key: &str) -> Result<Self, Self::Err> {
         Ok(Self::new(key))
     }
@@ -351,9 +351,9 @@ mod tests {
         assert_eq!(scion.credential, Credential::None);
     }
 
-    /// The authority is a constant, so a key names only itself.
+    /// The AA is a constant, so a key names only itself.
     #[test]
-    fn a_key_is_spent_at_the_anapaya_authority_by_default() {
+    fn a_key_goes_to_the_anapaya_aa_by_default() {
         let auth = ApiKeyAuth::new(ApiKey::new("aakey_secret"), "chat-ui-ratatui");
 
         assert_eq!(auth.aa_url.as_str(), "https://auth.scion.anapaya.net/");
