@@ -1,0 +1,20 @@
+# Copyright 2026 Anapaya Systems
+name: Docs
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+"on":
+  push:
+    branches:
+      - main
+  pull_request:
+jobs:
+  anchors:
+    name: docs/anchors
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Check the regions that the SDK guide quotes
+        run: docs/check-anchors.sh

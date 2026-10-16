@@ -38,6 +38,7 @@ public final class ScionTransport: Transport {
             // The URL's host stays the name the certificate must carry. The lookup only.
             settings.dnsOverrides = [try host(of: config.baseUrl): [address]]
         }
+        // ANCHOR: trust
         switch config.trust {
         case .systemRoots:
             break
@@ -50,6 +51,7 @@ public final class ScionTransport: Transport {
         case .insecure:
             settings.trust = .insecureNoVerify
         }
+        // ANCHOR_END: trust
 
         do {
             client = try ScionHttp3Client(configuration: settings)
@@ -89,6 +91,7 @@ private func host(of url: String) throws -> String {
     return host
 }
 
+// ANCHOR: errors
 /// Sorts an SDK failure into the one taxonomy the app knows.
 func failure(_ error: ScionHttp3Error) -> ChatError {
     let kind: TransportFailure
@@ -105,3 +108,4 @@ func failure(_ error: ScionHttp3Error) -> ChatError {
 
     return .transport(kind, error.detail)
 }
+// ANCHOR_END: errors

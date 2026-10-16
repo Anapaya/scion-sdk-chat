@@ -1,0 +1,18 @@
+# Copyright 2026 Anapaya Systems
+#
+# The code regions that the SCION SDK guide quotes, as <path>#<anchor>. See README.md.
+android/chat-client/src/main/kotlin/com/anapaya/chat/client/ScionTransport.kt#errors
+android/chat-client/src/main/kotlin/com/anapaya/chat/client/ScionTransport.kt#trust
+crates/chat-client-core/src/transport/scion.rs#errors
+crates/chat-client-core/src/transport/scion.rs#resolver
+crates/chat-client-core/src/transport/scion.rs#trust
+crates/chat-client-core/tests/scion.rs#fixture
+crates/chat-client-core/tests/scion.rs#round-trip
+crates/chat-dev/src/topology.rs#definition
+crates/chat-dev/src/topology.rs#start
+crates/chat-server/src/scion.rs#bind
+crates/chat-server/src/scion.rs#build-stack
+crates/chat-server/src/scion.rs#certificate
+crates/chat-server/src/scion.rs#serve
+ios/ChatClient/Sources/ChatClient/ScionTransport.swift#errors
+ios/ChatClient/Sources/ChatClient/ScionTransport.swift#trust

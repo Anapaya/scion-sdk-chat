@@ -40,6 +40,7 @@ public class ScionTransport private constructor(
                     // The URL's host stays the name the certificate must carry. The lookup only.
                     address?.let { dnsOverride(hostOf(config.baseUrl), it) }
                 }
+                // ANCHOR: trust
                 .trust(
                     when (val trust = config.trust) {
                         is Trust.SystemRoots -> TrustAnchors.systemDefault()
@@ -47,6 +48,7 @@ public class ScionTransport private constructor(
                         is Trust.Insecure -> TrustAnchors.insecureNoVerify()
                     },
                 )
+                // ANCHOR_END: trust
                 .build()
 
             return ScionTransport(config, client)
@@ -86,6 +88,8 @@ private fun hostOf(url: String): String =
     runCatching { java.net.URI(url).host }.getOrNull()
         ?: throw ChatError.Config("the server URL has no host: $url")
 
+// ANCHOR: errors
+
 /** Sorts an SDK failure into the one taxonomy the app knows. */
 internal fun failure(error: ScionHttp3Exception): ChatError.Transport {
     val kind = when (error) {
@@ -103,3 +107,4 @@ internal fun failure(error: ScionHttp3Exception): ChatError.Transport {
 
     return ChatError.Transport(kind, error.message ?: error.toString(), error)
 }
+// ANCHOR_END: errors

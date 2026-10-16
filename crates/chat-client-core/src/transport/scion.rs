@@ -61,6 +61,7 @@ impl ScionTransport {
             }
         }
 
+        // ANCHOR: trust
         let mut quic = QuicConfig::builder();
 
         match &config.trust {
@@ -81,6 +82,7 @@ impl ScionTransport {
             }
         }
         settings = settings.with_quic_config(quic.build());
+        // ANCHOR_END: trust
 
         if let Some(target) = &config.target {
             settings = settings.with_resolver(Arc::new(resolver(server_url, target)?));
@@ -129,6 +131,7 @@ impl Transport for ScionTransport {
     }
 }
 
+// ANCHOR: resolver
 /// A resolver that answers for the server's host from configuration, and every other host normally.
 fn resolver(server_url: &Url, target: &str) -> Result<ScionTxtDnsResolver, ChatError> {
     let host = server_url
@@ -142,7 +145,9 @@ fn resolver(server_url: &Url, target: &str) -> Result<ScionTxtDnsResolver, ChatE
         .map(|resolver| resolver.with_override(host, vec![address]))
         .map_err(|error| ChatError::Config(format!("building a resolver failed: {error}")))
 }
+// ANCHOR_END: resolver
 
+// ANCHOR: errors
 /// Sorts an HTTP/3 failure into the taxonomy every transport reports.
 fn failure(error: Error) -> TransportError {
     let detail = describe(&error);
@@ -157,3 +162,4 @@ fn failure(error: Error) -> TransportError {
         _ => TransportError::Protocol(detail),
     }
 }
+// ANCHOR_END: errors

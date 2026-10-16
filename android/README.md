@@ -4,7 +4,7 @@ The chat client as an Android app: connect, sign in, chat, with every request ca
 
 | File | What it is |
 | --- | --- |
-| `chat-client/ScionTransport.kt` | Builds the SDK client and sends each request. **The only file that mentions SCION.** |
+| `chat-client/ScionTransport.kt` | Builds the SDK client and sends each request. **The only file that imports the SDK.** |
 | `chat-client/ScionConfig.kt` | What the SDK needs to reach a server. |
 | `chat-client/ChatClient.kt` | The chat API: register, log in, rooms, messages. |
 | `chat-client/Feeds.kt` | Polling, as flows. |
