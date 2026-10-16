@@ -4,7 +4,7 @@ The chat client as an iOS app: connect, sign in, chat, with every request carrie
 
 | File | What it is |
 | --- | --- |
-| `ChatClient/ScionTransport.swift` | Builds the SDK client and sends each request. **The only file that mentions SCION.** |
+| `ChatClient/ScionTransport.swift` | Builds the SDK client and sends each request. **The only file that imports the SDK.** |
 | `ChatClient/ScionConfig.swift` | What the SDK needs to reach a server. |
 | `ChatClient/ChatClient.swift` | The chat API: register, log in, rooms, messages. |
 | `ChatClient/DevNetwork.swift` | Asks `chat-dev` for a `ScionConfig`. A deployed app is told one. |

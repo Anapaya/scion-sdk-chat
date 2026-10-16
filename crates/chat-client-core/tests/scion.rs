@@ -49,6 +49,7 @@ impl Drop for Fixture {
     }
 }
 
+// ANCHOR: fixture
 /// Starts two ASes, puts the server in one, and returns a client attached to the other.
 async fn fixture() -> Fixture {
     let network = minimal_topology(UnderlayType::Snap).await;
@@ -100,6 +101,7 @@ async fn fixture() -> Fixture {
         shutdown,
     }
 }
+// ANCHOR_END: fixture
 
 /// Brings the server up in `IA212`, and answers with the SCION host and port it landed on.
 async fn serve(
@@ -157,6 +159,7 @@ async fn await_ready(client: &ChatClient) {
     panic!("the server never answered over SCION; last failure: {last:?}");
 }
 
+// ANCHOR: round-trip
 /// The acceptance criterion: everything the client does works with a SCION network under it, and
 /// what was written in one AS reads back from another.
 #[tokio::test(flavor = "multi_thread")]
@@ -189,3 +192,4 @@ async fn the_client_holds_a_conversation_over_scion() {
 
     assert_eq!(seen, [("ada".to_owned(), "across the link".to_owned())]);
 }
+// ANCHOR_END: round-trip

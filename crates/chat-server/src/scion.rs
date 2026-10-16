@@ -37,6 +37,7 @@ pub struct ScionListener {
 impl ScionListener {
     /// Opens the socket the server listens on, taking ownership of the stack it is bound to.
     pub async fn bind(stack: ScionStack, config: &Config) -> Result<Self, RunError> {
+        // ANCHOR: bind
         // The endhost API decides which AS the host is in, so `--listen` contributes only its IP
         // and port. Binding explicitly is what makes the port predictable.
         let isd_asn = *stack.local_ases().first().ok_or_else(|| {
@@ -53,6 +54,7 @@ impl ScionListener {
                 detail: source.to_string(),
             }
         })?;
+        // ANCHOR_END: bind
 
         Ok(Self {
             _stack: stack,
@@ -87,6 +89,7 @@ pub async fn serve_on(
 ) -> Result<(), RunError> {
     let addr = listener.addr();
 
+    // ANCHOR: certificate
     let cert = cert::ServerCert::load_or_create(&config.data_dir)?;
     // The one line an operator has to pass on. Nothing else identifies the server.
     tracing::info!(
@@ -94,10 +97,12 @@ pub async fn serve_on(
         cert = %cert.cert_path.display(),
         "pin this certificate"
     );
+    // ANCHOR_END: certificate
 
     let quic = quic_config(&cert)?;
     tracing::info!(%addr, server_name = cert::SERVER_NAME, "serving over scion");
 
+    // ANCHOR: serve
     ScionH3AxumServer::serve_with_graceful_shutdown(
         Arc::clone(&listener.socket),
         router,
@@ -111,6 +116,7 @@ pub async fn serve_on(
             detail: source.to_string(),
         }
     })
+    // ANCHOR_END: serve
 }
 
 /// Builds the stack that reaches the SCION network.
@@ -132,6 +138,7 @@ pub async fn build_stack(config: &Config) -> Result<ScionStack, RunError> {
         ))
     })?;
 
+    // ANCHOR: build-stack
     let mut builder = ScionStackBuilder::new().with_endhost_api(endhost_api);
     if let Some(path) = &config.auth_token_file {
         let token = fs::read_to_string(path).map_err(|source| {
@@ -149,6 +156,7 @@ pub async fn build_stack(config: &Config) -> Result<ScionStack, RunError> {
             detail: source.to_string(),
         }
     })
+    // ANCHOR_END: build-stack
 }
 
 /// The QUIC configuration, carrying the certificate clients pin.

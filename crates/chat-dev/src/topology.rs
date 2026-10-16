@@ -41,6 +41,7 @@ use pocketscion::{
     util::topologies::PsSetup,
 };
 
+// ANCHOR: start
 /// Starts the network. Each AS gets an endhost API and a SNAP endpoint.
 pub async fn start(io_config: IoConfig) -> PsSetup {
     let mut state = PocketScionState::new(Utc::now());
@@ -68,7 +69,9 @@ pub async fn start(io_config: IoConfig) -> PsSetup {
         endhost_apis,
     }
 }
+// ANCHOR_END: start
 
+// ANCHOR: definition
 /// The three ASes, and one link from each client AS to the server's AS.
 fn definition() -> ScionTopologyBuilder {
     let mut topology = ScionTopologyBuilder::new();
@@ -90,6 +93,7 @@ fn definition() -> ScionTopologyBuilder {
         .expect("the emulator link");
     topology
 }
+// ANCHOR_END: definition
 
 #[cfg(test)]
 mod tests {
