@@ -910,6 +910,7 @@ dependencies = [
 name = "chat-server"
 version = "0.1.0"
 dependencies = [
+ "anapaya-aa-client",
  "argon2",
  "async-trait",
  "axum",

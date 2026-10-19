@@ -120,6 +120,8 @@ async fn serve(
         token_expiry_days: 7,
         endhost_api: Some(endhost_api.to_owned()),
         auth_token_file: Some(auth_token_file.to_owned()),
+        auth_api_key_file: None,
+        aa_url: chat_server::config::ANAPAYA_AA.to_owned(),
     };
 
     // Bound before it is served, which is the only way to learn the port it was given: serving
