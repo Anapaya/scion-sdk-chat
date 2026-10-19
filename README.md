@@ -21,6 +21,9 @@ Every request between a client and the server is HTTP/3 over SCION.
 | a SCION network on this machine | [`topology.rs`](crates/chat-dev/src/topology.rs) |
 | all of the above, in 1 test | [`tests/scion.rs`](crates/chat-client-core/tests/scion.rs) |
 
+The SCION SDK guide explains the SDK through this application: [Example
+application](https://learn.anapaya.net/docs/academy/scion-sdk/example-application/overview).
+
 The 3 clients are structurally identical. Only the language changes.
 
 ## Run it
