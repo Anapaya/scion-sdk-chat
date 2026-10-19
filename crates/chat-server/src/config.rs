@@ -17,6 +17,9 @@ use std::{net::SocketAddr, path::PathBuf, time::Duration};
 
 use clap::{Parser, ValueEnum};
 
+/// The Anapaya AA, which exchanges API keys for tokens.
+pub const ANAPAYA_AA: &str = "https://auth.scion.anapaya.net";
+
 /// A transport the API can be served over.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum Transport {
@@ -65,6 +68,19 @@ pub struct Config {
     /// A SNAP token, needed only on the SNAP underlay.
     #[arg(long, env = "CHAT_AUTH_TOKEN_FILE")]
     pub auth_token_file: Option<PathBuf>,
+
+    /// An API key, needed only on the SNAP underlay. The AA exchanges it for tokens for as long
+    /// as the server runs.
+    #[arg(
+        long,
+        env = "CHAT_AUTH_API_KEY_FILE",
+        conflicts_with = "auth_token_file"
+    )]
+    pub auth_api_key_file: Option<PathBuf>,
+
+    /// The AA that exchanges the API key for tokens.
+    #[arg(long, env = "CHAT_AA_URL", default_value = ANAPAYA_AA)]
+    pub aa_url: String,
 }
 
 impl Config {
@@ -108,6 +124,21 @@ mod tests {
         assert_eq!(config.max_rooms, 100);
         assert_eq!(config.max_message_bytes, 4096);
         assert_eq!(config.token_expiry_days, 7);
+        assert_eq!(config.aa_url, ANAPAYA_AA);
+    }
+
+    #[test]
+    fn a_token_and_an_api_key_together_are_refused() {
+        let both = minimal().into_iter().chain([
+            "--auth-token-file",
+            "/srv/chat/snap.token",
+            "--auth-api-key-file",
+            "/srv/chat/api.key",
+        ]);
+
+        let error = Config::try_parse_from(both).expect_err("2 credentials at once is refused");
+
+        assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
     }
 
     #[test]

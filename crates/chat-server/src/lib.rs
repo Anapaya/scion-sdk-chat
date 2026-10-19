@@ -52,6 +52,9 @@ pub enum RunError {
     /// A flag was missing or could not be used.
     #[error("{0}")]
     Config(String),
+    /// The AA did not exchange the API key for a token.
+    #[error("exchanging the API key at the AA: {0}")]
+    Aa(#[from] anapaya_aa_client::AnapayaAaStartError),
     /// The SCION stack, the socket, or the QUIC configuration refused.
     #[error("{action}: {detail}")]
     Scion {

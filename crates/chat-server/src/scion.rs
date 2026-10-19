@@ -13,8 +13,9 @@
 // limitations under the License.
 //! Serving the API over HTTP/3 on SCION.
 
-use std::{fs, sync::Arc};
+use std::{fs, path::Path, sync::Arc};
 
+use anapaya_aa_client::AnapayaAaTokenSource;
 use axum::Router;
 use scion_h3_axum::ScionH3AxumServer;
 use scion_stack::{
@@ -27,6 +28,9 @@ use scion_stack::{
 use tokio_util::sync::CancellationToken;
 
 use crate::{RunError, cert, config::Config};
+
+/// The device id the server sends to the AA.
+const DEVICE_ID: &str = "chat-server";
 
 /// A socket bound on a [`ScionStack`], and the stack it belongs to.
 pub struct ScionListener {
@@ -137,17 +141,23 @@ pub async fn build_stack(config: &Config) -> Result<ScionStack, RunError> {
             "--endhost-api \"{endhost_api}\" is not a URL: {source}"
         ))
     })?;
+    let aa_url = Url::parse(&config.aa_url).map_err(|source| {
+        RunError::Config(format!(
+            "--aa-url \"{}\" is not a URL: {source}",
+            config.aa_url
+        ))
+    })?;
 
     // ANCHOR: build-stack
     let mut builder = ScionStackBuilder::new().with_endhost_api(endhost_api);
     if let Some(path) = &config.auth_token_file {
-        let token = fs::read_to_string(path).map_err(|source| {
-            RunError::Config(format!(
-                "could not read --auth-token-file {}: {source}",
-                path.display()
-            ))
-        })?;
-        builder = builder.with_auth_token(token.trim().to_owned());
+        builder = builder.with_auth_token(read_secret(path, "--auth-token-file")?);
+    }
+    if let Some(path) = &config.auth_api_key_file {
+        let api_key = read_secret(path, "--auth-api-key-file")?;
+        // The first exchange runs here, so a refused key stops the server with the AA's reason.
+        let (source, _) = AnapayaAaTokenSource::start(api_key, &aa_url, DEVICE_ID).await?;
+        builder = builder.with_auth_token_source(source);
     }
 
     builder.build().await.map_err(|source| {
@@ -157,6 +167,17 @@ pub async fn build_stack(config: &Config) -> Result<ScionStack, RunError> {
         }
     })
     // ANCHOR_END: build-stack
+}
+
+/// The secret in the file that `flag` names, without the line break an editor leaves at the end.
+fn read_secret(path: &Path, flag: &str) -> Result<String, RunError> {
+    let secret = fs::read_to_string(path).map_err(|source| {
+        RunError::Config(format!(
+            "could not read {flag} {}: {source}",
+            path.display()
+        ))
+    })?;
+    Ok(secret.trim().to_owned())
 }
 
 /// The QUIC configuration, carrying the certificate clients pin.

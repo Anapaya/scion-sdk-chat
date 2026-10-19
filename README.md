@@ -151,6 +151,18 @@ environment fallback.
 - `stack.bind()` opens a socket on it
 - `ScionH3AxumServer::serve_with_graceful_shutdown` serves the Axum router on that socket
 
+The SNAP asks the server to prove that it may use the network, as it asks every client. The server
+answers with 1 of 2 flags:
+
+| flag | environment | what it is |
+| --- | --- | --- |
+| `--auth-api-key-file` | `CHAT_AUTH_API_KEY_FILE` | a file with an API key. The AA exchanges it for tokens for as long as the server runs |
+| `--auth-token-file` | `CHAT_AUTH_TOKEN_FILE` | a file with 1 token. The server stops working when the token expires |
+| `--aa-url` | `CHAT_AA_URL` | the AA for `--auth-api-key-file`. Defaults to `https://auth.scion.anapaya.net` |
+
+With neither flag, the server sends no token. Only an endhost API that asks for no token accepts
+that.
+
 #### Endpoints
 
 Every route sits under `/api/v1`. Every route needs an `authorization: Bearer <token>` header, with
