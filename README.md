@@ -26,6 +26,8 @@ One file for each role:
 
 The three clients are structurally identical. Only the language changes.
 
+![The three SDK calls of each client, and the server's](docs/fig/chat-sdk-calls.svg)
+
 ![The terminal client, the Android app and the iOS app in one room](docs/fig/chat-clients.gif)
 
 ## Run it
