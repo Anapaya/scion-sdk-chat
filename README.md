@@ -1,7 +1,7 @@
 # scion-sdk-chat
 
-A chat application, written to show the
-[SCION SDK](https://learn.anapaya.net/docs/academy/scion-sdk/). One server and three clients:
+A chat over SCION, built with the [SCION SDK](https://learn.anapaya.net/docs/academy/scion-sdk/).
+One server, three clients:
 
 - a terminal client
 - an Android app
