@@ -1,7 +1,7 @@
 # scion-sdk-chat
 
 A chat application, written to show the
-[SCION SDK](https://learn.anapaya.net/docs/academy/scion-sdk/). 1 server and 3 clients:
+[SCION SDK](https://learn.anapaya.net/docs/academy/scion-sdk/). One server and three clients:
 
 - a terminal client
 - an Android app
@@ -13,7 +13,7 @@ Every request between a client and the server is HTTP/3 over SCION.
 
 ## Where the SDK is
 
-1 file for each role:
+One file for each role:
 
 | role | file |
 | --- | --- |
@@ -22,16 +22,16 @@ Every request between a client and the server is HTTP/3 over SCION.
 | a client, on iOS | [`ScionTransport.swift`](ios/ChatClient/Sources/ChatClient/ScionTransport.swift) |
 | the server | [`scion.rs`](crates/chat-server/src/scion.rs) |
 | a SCION network on this machine | [`topology.rs`](crates/chat-dev/src/topology.rs) |
-| all of the above, in 1 test | [`tests/scion.rs`](crates/chat-client-core/tests/scion.rs) |
+| all of the above, in one test | [`tests/scion.rs`](crates/chat-client-core/tests/scion.rs) |
 
-The 3 clients are structurally identical. Only the language changes.
+The three clients are structurally identical. Only the language changes.
 
 ## Run it
 
-2 terminals:
+Two terminals:
 
-- terminal 1 starts a SCION network with the chat server in it
-- terminal 2 runs a terminal client that talks to the server over SCION
+- terminal one starts a SCION network with the chat server in it
+- terminal two runs a terminal client that talks to the server over SCION
 
 ![What chat-dev runs](docs/fig/chat-dev-flow.drawio.svg)
 
@@ -71,7 +71,7 @@ eval "$(curl -s http://127.0.0.1:8099/info | jq -r '
 cargo run -p chat-ui-ratatui
 ```
 
-For another user, run the same 2 commands in another terminal. Each read of `/info` makes a new
+For another user, run the same two commands in another terminal. Each read of `/info` makes a new
 token, and each client needs its own.
 
 ### 3. Connect a phone
@@ -102,7 +102,7 @@ Every client shares the rooms. A message from the terminal client appears on the
 
 ### From another machine
 
-`--bind-ip` moves every part of the network to 1 address that another machine reaches. Give a real
+`--bind-ip` moves every part of the network to one address that another machine reaches. Give a real
 address on this machine:
 
 ```sh
@@ -131,7 +131,7 @@ reaches both.
 The server. `cargo run -p chat-server -- --help` lists every flag with its default and its `CHAT_*`
 environment fallback.
 
-[`scion.rs`](crates/chat-server/src/scion.rs) puts it on SCION in 3 steps:
+[`scion.rs`](crates/chat-server/src/scion.rs) puts it on SCION in three steps:
 
 - `ScionStackBuilder` builds a stack
 - `stack.bind()` opens a socket on it
@@ -162,7 +162,7 @@ the token from `login`, except:
 The server describes itself at `/.well-known/openapi.json`. The repository also holds the same
 document as YAML at [`crates/chat-server/openapi.yaml`](crates/chat-server/openapi.yaml), because
 YAML gives a better diff. You can therefore read and review the API surface without a running
-server. A test compares the 2 documents, and it rewrites the file when you run:
+server. A test compares the two documents, and it rewrites the file when you run:
 
 ```sh
 CHAT_UPDATE_OPENAPI=1 cargo test -p chat-server
@@ -176,12 +176,12 @@ The typed API, the session, and the transport under them:
 - `TcpTransport` speaks plain HTTP to the server's `--transport tcp` mode
 - `MockTransport` answers from a script, so a test can produce a reply that no real server produces
 
-`tests/scion.rs` starts a network of 2 ASes, puts the server in 1 and a client in the other, and
+`tests/scion.rs` starts a network of two ASes, puts the server in one and a client in the other, and
 sends a message between them.
 
 ### chat-ui-ratatui
 
-3 screens over `chat-client-core`:
+Three screens over `chat-client-core`:
 
 - connect
 - sign in
@@ -200,10 +200,10 @@ Every field of the connect screen also has a flag, so a launch can arrive with t
 | `--cert-path` | `CHAT_CLIENT_CERT_PATH` | a certificate to trust instead of the system roots |
 | `--insecure` | `CHAT_CLIENT_INSECURE` | accept any certificate. See [Trust](#trust) |
 | `--auth-api-key` | `CHAT_CLIENT_AUTH_API_KEY` | a key the AA service exchanges for tokens. See [Credentials](#credentials) |
-| `--snap-token` | `CHAT_CLIENT_SNAP_TOKEN` | 1 token, already minted, as `chat-dev` hands out |
+| `--snap-token` | `CHAT_CLIENT_SNAP_TOKEN` | one token, already minted, as `chat-dev` hands out |
 | `--aa-url` | `CHAT_CLIENT_AA_URL` | the AA (Authentication and Authorization) service, the token issuer for Anapaya's network. Defaults to `https://auth.scion.anapaya.net` |
 
-Each transport uses 1 URL scheme:
+Each transport uses one URL scheme:
 
 - `scion` uses `https`
 - `tcp` uses `http`
@@ -212,13 +212,13 @@ The client checks the URL against the transport.
 
 #### Credentials
 
-The SNAP asks every client to prove it may use the network. There are 2 ways to answer, and the
+The SNAP asks every client to prove it may use the network. There are two ways to answer, and the
 clients offer the choice the same way they offer [Trust](#trust):
 
 | choice | flag | what it is |
 | --- | --- | --- |
 | API key | `--auth-api-key` | the long-lived secret. The AA service exchanges it for tokens |
-| SNAP token | `--snap-token` | 1 token, already minted |
+| SNAP token | `--snap-token` | one token, already minted |
 
 A token expires, so a client given only a token stops working at that moment. A client given a key
 hands it to the SDK, which exchanges it for a token when the client is built and renews that token
@@ -227,13 +227,13 @@ each read of `/info` returns a newly minted token.
 
 #### Trust
 
-Every client accepts the server's certificate in 1 of 3 ways. The terminal client chooses with the
-flags above, and the 2 apps with a control on the configuration screen:
+Every client accepts the server's certificate in one of three ways. The terminal client chooses with
+the flags above, and the two apps with a control on the configuration screen:
 
 | choice | flag | what it accepts |
 | --- | --- | --- |
 | system roots | neither flag | the anchors the machine ships |
-| pinned | `--cert-path` | 1 certificate, in place of those anchors |
+| pinned | `--cert-path` | one certificate, in place of those anchors |
 | no check | `--insecure` | any certificate at all |
 
 The default is the strict one, so a blank `--cert-path` means the system roots and a self-signed
@@ -242,7 +242,7 @@ you have copied its certificate, and while it is on, anyone on the path can answ
 Giving both flags is refused, because they name different trusts.
 
 The client reads `CHAT_CLIENT_*` and the server reads `CHAT_*`. Keep them apart. The server sits in
-1 AS and the client attaches to another, so a shared `CHAT_ENDHOST_API` would point the client at
+one AS and the client attaches to another, so a shared `CHAT_ENDHOST_API` would point the client at
 the wrong endhost API.
 
 ### chat-dev
@@ -253,7 +253,7 @@ the address its tunnel observed. A client behind a translation needs that.
 
 #### The topology
 
-The network holds 3 autonomous systems. The server's AS is the middle one.
+The network holds three autonomous systems. The server's AS is the middle one.
 
 ![The local SCION network](docs/fig/chat-dev-topology.drawio.svg)
 
@@ -271,14 +271,14 @@ that reaches that address uses it:
 
 An Android emulator on this machine is the only client that cannot use the default. The emulator
 reaches the host at `10.0.2.2`, and inside the emulator `127.0.0.1` means the emulator itself. The
-network publishes 1 address for each AS, and 1 AS holds 1 address, so the emulator gets
+network publishes one address for each AS, and one AS holds one address, so the emulator gets
 `2-ff00:0:222` as a fallback. `--bind-ip` makes the fallback unnecessary: with a LAN address bound,
 the emulator reaches that address like any other client.
 
-2 files build this:
+Two files build this:
 
-- [`topology.rs`](crates/chat-dev/src/topology.rs) makes the 3 ASes, the 2 links, and the endhost
-  API and SNAP endpoint in each
+- [`topology.rs`](crates/chat-dev/src/topology.rs) makes the three ASes, the two links, and the
+  endhost API and SNAP endpoint in each
 - [`lib.rs`](crates/chat-dev/src/lib.rs) sets the address each AS publishes, and chooses the
   description that `GET /info` answers with
 
@@ -356,13 +356,13 @@ The SDK leaves the choice of a rustls provider to the application. Every binary 
 ### The database
 
 SQLite is compiled into the binary, so there is no database service to install, start, or connect
-to. The database is 1 file. The store creates the file and the directory that holds it. Delete the
+to. The database is one file. The store creates the file and the directory that holds it. Delete the
 file to start over.
 
 ### The `.sqlx` folder
 
 The compiler checks the server's SQL against the schema, so it needs to know the schema.
-`crates/chat-server/.sqlx/` holds that knowledge, as 1 JSON file for each query.
+`crates/chat-server/.sqlx/` holds that knowledge, as one JSON file for each query.
 
 The repository commits this folder, so a build needs no database and no tooling. Every cargo
 command works on a fresh clone without `DATABASE_URL` or `sqlx-cli`. The crate fails to compile
