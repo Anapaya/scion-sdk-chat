@@ -8,6 +8,8 @@ A chat application, written to show the SCION SDK. 1 server and 3 clients:
 
 Every request between a client and the server is HTTP/3 over SCION.
 
+![The chat application: 3 clients and chat-dev](docs/fig/chat-overview.drawio.svg)
+
 ## Where the SDK is
 
 1 file for each role:
@@ -33,16 +35,7 @@ The 3 clients are structurally identical. Only the language changes.
 - terminal 1 starts a SCION network with the chat server in it
 - terminal 2 runs a terminal client that talks to the server over SCION
 
-```text
-  terminal 1                        terminal 2
-  +----------------------+          +----------------------+
-  | cargo run -p         |          | cargo run -p         |
-  |   chat-dev           | <------- |   chat-ui-ratatui    |
-  |                      |  SCION   |                      |
-  | SCION network +      |          | terminal client      |
-  | chat-server          |          |                      |
-  +----------------------+          +----------------------+
-```
+![What chat-dev runs](docs/fig/chat-dev-flow.drawio.svg)
 
 ### 1. Start the network and the server
 
@@ -107,6 +100,8 @@ same address outside it. `fetch-sdk.sh` downloads the SDK into `ios/libs`. See
 
 Every client shares the rooms. A message from the terminal client appears on the phone.
 
+![The terminal client, the Android app and the iOS app in 1 room](docs/fig/chat-clients.gif)
+
 ### From another machine
 
 `--bind-ip` moves every part of the network to 1 address that another machine reaches. Give a real
@@ -119,21 +114,11 @@ cargo run -p chat-dev -- --bind-ip 192.168.1.20
 Every client then uses that address, this machine included, so you give up the name `localhost`.
 See [the topology](#the-topology) for which AS each client attaches to.
 
-## How it fits together
+## The crates
 
-```text
-  +------------------+     +-------------------+     +-------------+
-  | chat-ui-ratatui  | --> | chat-client-core  | --> |             |
-  | terminal UI      |     | transports        |     |  chat-core  |
-  +------------------+     +-------------------+     |  API types  |
-                                                     |             |
-  +------------------+     +-------------------+     |             |
-  | chat-dev         | --> | chat-server       | --> |             |
-  | network + server |     | the API           |     +-------------+
-  +------------------+     +-------------------+
-```
+![The 5 crates, and which depends on which](docs/fig/chat-crates.svg)
 
-An arrow means "depends on". `cargo doc_dx --open` renders every crate.
+`cargo doc_dx --open` renders every crate.
 
 `android/` and `ios/` are separate builds. Each one reaches the same server over the SCION SDK for
 its platform, and each one has a README that lays out its code.
@@ -272,13 +257,7 @@ the address its tunnel observed. A client behind a translation needs that.
 
 The network holds 3 autonomous systems. The server's AS is the middle one.
 
-```text
-  1-ff00:0:132  (every client, at the bound address)
-        |  iface 1 to 3
-  2-ff00:0:212  (the chat server)
-        |  iface 4 to 2
-  2-ff00:0:222  (an Android emulator on this machine, at 10.0.2.2)
-```
+![The local SCION network](docs/fig/chat-dev-topology.drawio.svg)
 
 | AS | who attaches to it | published at |
 | --- | --- | --- |
