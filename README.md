@@ -26,7 +26,21 @@ One file for each role:
 
 The three clients are structurally identical. Only the language changes.
 
-![The three SDK calls of each client, and the server's](docs/fig/chat-sdk-calls.svg)
+The three calls that each client makes into the SDK, with the SDK names in bold:
+
+| | terminal client (Rust, `scion-http3`) | Android (Kotlin, `scion-http3-android`) | iOS (Swift, `scion-http3-swift`) |
+| --- | --- | --- | --- |
+| configure | <code>let mut settings = <b>Config</b>::<b>new</b>(config.endhost&#95;api.clone());</code> | <code>val client = <b>ScionHttp3Client</b><br>.<b>Builder</b>(context)<br>.<b>endhostApi</b>(config.endhostApiUrl)</code> | <code>var settings = <b>ScionHttp3Client</b>.<b>Configuration</b>(endhostApi: config.endhostApiUrl)</code> |
+| build | <code>client: <b>Client</b>::<b>new</b>(settings),</code> | <code>.<b>build</b>()</code> | <code>client = try <b>ScionHttp3Client</b>(configuration: settings)</code> |
+| send | <code>let reply = self.client.<b>request</b>(outgoing).await.map&#95;err(failure)?;</code> | <code>client.<b>newCall</b>(built).<b>execute</b>().use { reply -&gt;</code> | <code>let response = try await client.<b>execute</b>(built)</code> |
+
+The server, on `scion-stack` and `scion-h3-axum`:
+
+| | server (Rust) |
+| --- | --- |
+| configure | <code>let mut builder = <b>ScionStackBuilder</b>::<b>new</b>().<b>with&#95;endhost&#95;api</b>(endhost&#95;api);</code> |
+| build | <code>builder.<b>build</b>().await.map&#95;err(&#124;source&#124; {</code> |
+| serve | <code>let socket = stack.<b>bind</b>(Some(bind&#95;addr)).await.map&#95;err(&#124;source&#124; {<br><b>ScionH3AxumServer</b>::<b>serve&#95;with&#95;graceful&#95;shutdown</b>(</code> |
 
 ![The terminal client, the Android app and the iOS app in one room](docs/fig/chat-clients.gif)
 
