@@ -9,7 +9,7 @@ One server, three clients:
 
 Every request between a client and the server is HTTP/3 over SCION.
 
-![The chat application: 3 clients and chat-dev](docs/fig/chat-overview.drawio.svg)
+![The chat application: three clients and chat-dev](docs/fig/chat-overview.drawio.svg)
 
 ## Where the SDK is
 
@@ -32,15 +32,15 @@ The three calls that each client makes into the SDK, with the SDK names in bold:
 | --- | --- | --- | --- |
 | configure | <code>let mut settings = <b>Config</b>::<b>new</b>(config.endhost&#95;api.clone());</code> | <code>val client = <b>ScionHttp3Client</b><br>.<b>Builder</b>(context)<br>.<b>endhostApi</b>(config.endhostApiUrl)</code> | <code>var settings = <b>ScionHttp3Client</b>.<b>Configuration</b>(endhostApi: config.endhostApiUrl)</code> |
 | build | <code>client: <b>Client</b>::<b>new</b>(settings),</code> | <code>.<b>build</b>()</code> | <code>client = try <b>ScionHttp3Client</b>(configuration: settings)</code> |
-| send | <code>let reply = self.client.<b>request</b>(outgoing).await.map&#95;err(failure)?;</code> | <code>client.<b>newCall</b>(built).<b>execute</b>().use { reply -&gt;</code> | <code>let response = try await client.<b>execute</b>(built)</code> |
+| send | <code>let reply = self.client.<b>request</b>(outgoing).await.map&#95;err(failure)?;</code> | <code>client.<b>newCall</b>(built).<b>execute</b>()</code> | <code>let response = try await client.<b>execute</b>(built)</code> |
 
 The server, on `scion-stack` and `scion-h3-axum`:
 
-| | server (Rust) |
+| | the server (Rust) |
 | --- | --- |
 | configure | <code>let mut builder = <b>ScionStackBuilder</b>::<b>new</b>().<b>with&#95;endhost&#95;api</b>(endhost&#95;api);</code> |
-| build | <code>builder.<b>build</b>().await.map&#95;err(&#124;source&#124; {</code> |
-| serve | <code>let socket = stack.<b>bind</b>(Some(bind&#95;addr)).await.map&#95;err(&#124;source&#124; {<br><b>ScionH3AxumServer</b>::<b>serve&#95;with&#95;graceful&#95;shutdown</b>(</code> |
+| build | <code>builder.<b>build</b>().await</code> |
+| serve | <code>let socket = stack.<b>bind</b>(Some(bind&#95;addr)).await<br><b>ScionH3AxumServer</b>::<b>serve&#95;with&#95;graceful&#95;shutdown</b>(…)</code> |
 
 ![The terminal client, the Android app and the iOS app in one room](docs/fig/chat-clients.gif)
 
@@ -48,10 +48,8 @@ The server, on `scion-stack` and `scion-h3-axum`:
 
 Two terminals:
 
-- terminal one starts a SCION network with the chat server in it
-- terminal two runs a terminal client that talks to the server over SCION
-
-![What chat-dev runs](docs/fig/chat-dev-flow.drawio.svg)
+- one terminal starts a SCION network with the chat server in it
+- another runs a terminal client that talks to the server over SCION
 
 ### 1. Start the network and the server
 
@@ -74,6 +72,8 @@ Ctrl+C stops all of it.
 - the endhost API takes a free port
 - the SNAP token is new for each run
 - the certificate goes in a new directory
+
+![What chat-dev runs](docs/fig/chat-dev-flow.drawio.svg)
 
 Read them into the environment, then start the client:
 
@@ -130,7 +130,7 @@ See [the topology](#the-topology) for which AS each client attaches to.
 
 ## The crates
 
-![The 5 crates, and which depends on which](docs/fig/chat-crates.svg)
+![The five crates, and which depends on which](docs/fig/chat-crates.svg)
 
 `cargo doc_dx --open` renders every crate.
 
@@ -216,7 +216,7 @@ Every field of the connect screen also has a flag, so a launch can arrive with t
 | `--cert-path` | `CHAT_CLIENT_CERT_PATH` | a certificate to trust instead of the system roots |
 | `--insecure` | `CHAT_CLIENT_INSECURE` | accept any certificate. See [Trust](#trust) |
 | `--auth-api-key` | `CHAT_CLIENT_AUTH_API_KEY` | a key the AA service exchanges for tokens. See [Credentials](#credentials) |
-| `--snap-token` | `CHAT_CLIENT_SNAP_TOKEN` | one token, already minted, as `chat-dev` hands out |
+| `--snap-token` | `CHAT_CLIENT_SNAP_TOKEN` | a token, as `chat-dev` hands out. See [Credentials](#credentials) |
 | `--aa-url` | `CHAT_CLIENT_AA_URL` | the AA (Authentication and Authorization) service, the token issuer for Anapaya's network. Defaults to `https://auth.scion.anapaya.net` |
 
 Each transport uses one URL scheme:
