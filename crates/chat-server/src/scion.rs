@@ -156,7 +156,7 @@ pub async fn build_stack(config: &Config) -> Result<ScionStack, RunError> {
     if let Some(path) = &config.auth_api_key_file {
         let api_key = read_secret(path, "--auth-api-key-file")?;
         // The first exchange runs here, so a refused key stops the server with the AA's reason.
-        let (source, _) = AnapayaAaTokenSource::start(api_key, &aa_url, DEVICE_ID).await?;
+        let source = AnapayaAaTokenSource::start(api_key, &aa_url, DEVICE_ID).await?;
         builder = builder.with_auth_token_source(source);
     }
 
