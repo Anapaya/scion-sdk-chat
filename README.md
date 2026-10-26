@@ -26,6 +26,8 @@ One file for each role:
 
 The three clients are structurally identical. Only the language changes.
 
+![The terminal client, the Android app and the iOS app in one room](docs/fig/chat-clients.gif)
+
 ## Run it
 
 Two terminals:
@@ -97,8 +99,6 @@ same address outside it. `fetch-sdk.sh` downloads the SDK into `ios/libs`. See
 [ios/README.md](ios/README.md).
 
 Every client shares the rooms. A message from the terminal client appears on the phone.
-
-![The terminal client, the Android app and the iOS app in 1 room](docs/fig/chat-clients.gif)
 
 ### From another machine
 
