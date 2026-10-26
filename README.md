@@ -153,6 +153,10 @@ environment fallback.
 - `stack.bind()` opens a socket on it
 - `ScionH3AxumServer::serve_with_graceful_shutdown` serves the Axum router on that socket
 
+The server presents `cert.pem` and `cert.key` from its data directory, and generates a self-signed
+pair when they are missing. Put a certificate and its key there, in PEM, to serve a certificate of
+your own.
+
 The SNAP asks the server to prove that it may use the network, as it asks every client. The server
 answers with one of two flags:
 
@@ -161,6 +165,63 @@ answers with one of two flags:
 | `--auth-api-key-file` | `CHAT_AUTH_API_KEY_FILE` | a file with an API key. The AA exchanges it for tokens for as long as the server runs |
 | `--auth-token-file` | `CHAT_AUTH_TOKEN_FILE` | a file with one token. The server stops working when the token expires |
 | `--aa-url` | `CHAT_AA_URL` | the AA for `--auth-api-key-file`. Defaults to `https://auth.scion.anapaya.net` |
+
+With neither flag, the server sends no token. Only an endhost API that asks for no token accepts
+that.
+
+#### Endpoints
+
+Every route sits under `/api/v1`. Every route needs an `authorization: Bearer <token>` header, with
+the token from `login`, except:
+
+- `/healthz`
+- `/server`
+- `/register`
+- `/login`
+
+The server describes itself at `/.well-known/openapi.json`. The repository also holds the same
+document as YAML at [`crates/chat-server/openapi.yaml`](crates/chat-server/openapi.yaml), because
+YAML gives a better diff. You can therefore read and review the API surface without a running
+server. A test compares the two documents, and it rewrites the file when you run:
+
+```sh
+CHAT_UPDATE_OPENAPI=1 cargo test -p chat-server
+```
+
+### chat-client-core
+
+The typed API, the session, and the transport under them:
+
+- `ScionTransport` carries HTTP/3 over SCION, against the server's `--transport scion` mode
+- `TcpTransport` speaks plain HTTP to the server's `--transport tcp` mode
+- `MockTransport` answers from a script, so a test can produce a reply that no real server produces
+
+`tests/scion.rs` starts a network of two ASes, puts the server in one and a client in the other, and
+sends a message between them.
+
+### chat-ui-ratatui
+
+Three screens over `chat-client-core`:
+
+- connect
+- sign in
+- chat
+
+The screens draw and read keys. `app.rs` holds every call to the client.
+
+Every field of the connect screen also has a flag, so a launch can arrive with the form answered:
+
+| flag | environment | what it is |
+| --- | --- | --- |
+| `--transport` | `CHAT_CLIENT_TRANSPORT` | `scion` or `tcp`. Defaults to `scion`. `scion` is HTTP/3 over SCION; `tcp` is plain HTTP over IP, for a server in `--transport tcp`. The scheme of `--server-url` must match: `https` for `scion`, `http` for `tcp` |
+| `--server-url` | `CHAT_CLIENT_SERVER_URL` | the URL of the chat server. Defaults to `https://localhost:8443`, where `chat-dev` serves it. Its host is the name the server's certificate must carry. `chat-dev` gives it as `base_url`; a server you deploy has the URL you gave it |
+| `--endhost-api` | `CHAT_CLIENT_ENDHOST_API` | the URL of the endhost API, where the SDK discovers the SCION network. Required by `--transport scion`. `chat-dev` gives it as `endhost_api_url`; a real network's operator gives it to you |
+| `--target` | `CHAT_CLIENT_TARGET` | the SCION address of the server's host, `ISD-AS,IP`, with no port. A DNS override for the host of `--server-url`, for a host with no TSAR record. `scion` only. `chat-dev` gives it as `target`; a host with a TSAR record needs no flag |
+| `--cert-path` | `CHAT_CLIENT_CERT_PATH` | a PEM file. Pins that certificate as the only trusted one, in place of the system roots. `chat-dev` gives it as `ca_path`; a server with a publicly trusted certificate needs no flag. See [Trust](#trust) |
+| `--insecure` | `CHAT_CLIENT_INSECURE` | no certificate check at all. For a server you control, before you have its certificate. `scion` only, and refused together with `--cert-path`. See [Trust](#trust) |
+| `--auth-api-key` | `CHAT_CLIENT_AUTH_API_KEY` | the long-lived secret of a real network. The SDK exchanges it at the AA for SNAP tokens, and renews them. Prefer the environment variable: an argument is visible to anyone who lists processes. Refused together with `--snap-token`. See [Credentials](#credentials) |
+| `--snap-token` | `CHAT_CLIENT_SNAP_TOKEN` | one SNAP token. It expires, and the client stops with it. `chat-dev` gives it as `auth_token`, new on each read of `/info`. See [Credentials](#credentials) |
+| `--aa-url` | `CHAT_CLIENT_AA_URL` | the AA that exchanges `--auth-api-key`. Defaults to `https://auth.scion.anapaya.net`, the Anapaya AA. Unused without `--auth-api-key` |
 
 With neither flag, the server sends no token. Only an endhost API that asks for no token accepts
 that.
@@ -228,8 +289,9 @@ The client checks the URL against the transport.
 
 #### Credentials
 
-The SNAP asks every client to prove it may use the network. There are two ways to answer, and the
-clients offer the choice the same way they offer [Trust](#trust):
+The SNAP asks every client to prove it may use the network. The AA (Authentication and
+Authorization) service is the token issuer of Anapaya's network. There are two ways to answer, and
+the clients offer the choice the same way they offer [Trust](#trust):
 
 | choice | flag | what it is |
 | --- | --- | --- |
