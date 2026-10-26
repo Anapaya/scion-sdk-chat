@@ -1,6 +1,7 @@
 # scion-sdk-chat
 
-A chat application, written to show the SCION SDK. 1 server and 3 clients:
+A chat application, written to show the
+[SCION SDK](https://learn.anapaya.net/docs/academy/scion-sdk/). 1 server and 3 clients:
 
 - a terminal client
 - an Android app
@@ -22,9 +23,6 @@ Every request between a client and the server is HTTP/3 over SCION.
 | the server | [`scion.rs`](crates/chat-server/src/scion.rs) |
 | a SCION network on this machine | [`topology.rs`](crates/chat-dev/src/topology.rs) |
 | all of the above, in 1 test | [`tests/scion.rs`](crates/chat-client-core/tests/scion.rs) |
-
-The SCION SDK guide explains the SDK through this application: [Example
-application](https://learn.anapaya.net/docs/academy/scion-sdk/example-application/overview).
 
 The 3 clients are structurally identical. Only the language changes.
 
