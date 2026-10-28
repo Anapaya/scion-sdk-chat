@@ -2,15 +2,15 @@
 
 import SwiftUI
 
-/// Where a network that describes itself is asked for that description.
+/// Asks for the address where a development network serves its network info.
 struct ConnectScreen: View {
     @ObservedObject var model: ChatViewModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Connect").font(.largeTitle.bold())
-            Text("The address a development network serves its description at. Everything after "
-                + "this goes over SCION.")
+            Text("The address where a development network serves its network info. Everything "
+                + "after this goes over SCION.")
                 .font(.subheadline)
                 .foregroundStyle(Palette.dim)
 
@@ -42,7 +42,7 @@ struct ConnectScreen: View {
     }
 }
 
-/// The same configuration, typed out, for a network that describes nothing.
+/// The same configuration, typed out, for a network that serves no network info.
 struct ManualScreen: View {
     @ObservedObject var model: ChatViewModel
 

@@ -21,7 +21,7 @@ use clap::Parser;
 #[derive(Debug, Clone, Parser)]
 #[command(version, about)]
 pub struct Config {
-    /// Where this network serves its description.
+    /// The port that serves the network info.
     ///
     /// Fixed. Every other address is decided at startup, and read from here.
     #[arg(long, env = "CHAT_DEV_CONTROL_PORT", default_value_t = 8099)]

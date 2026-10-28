@@ -374,7 +374,6 @@ curl -s http://127.0.0.1:8099/info | jq
 {
   "control_url": "http://127.0.0.1:8099",
   "endhost_api_url": "http://127.0.0.1:65263/",
-  "client_isd_as": "1-ff00:0:132",
   "auth_token": "eyJ0eXAiOiJKV1Qi...",
   "base_url": "https://localhost:8443",
   "target": "2-ff00:0:212,127.0.0.1",

@@ -10,18 +10,18 @@ import kotlinx.serialization.json.Json
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** Where a `chat-dev` network is, and how to be trusted by it. A deployed app is told this. */
+/** The network info that `chat-dev` serves: what a client needs to reach the chat server. */
 @Serializable
 public data class DevNetwork(
-    /** The endhost API of the AS a client attaches to. */
+    /** The endhost API that a client uses. */
     @SerialName("endhost_api_url") val endhostApiUrl: String,
-    /** This reader's own token. Two clients sharing one evict each other. */
+    /** A token for this client only. Two clients with the same token evict each other. */
     @SerialName("auth_token") val authToken: String,
-    /** Where the server is. Its host is the name the certificate is issued for. */
+    /** The URL of the chat server. Its host is the name on the server's certificate. */
     @SerialName("base_url") val baseUrl: String,
-    /** The server's SCION address, without a port. */
+    /** The server's SCION address. `chat-dev` has no TSAR records, so the client needs it. */
     @SerialName("target") val target: String,
-    /** The certificate to pin, inline because an emulator cannot read the host's filesystem. */
+    /** The server's certificate in PEM. An emulator cannot read the host's files. */
     @SerialName("ca_pem") val caPem: String,
 ) {
     /** The same network, as the SDK is configured with it. */
@@ -39,7 +39,7 @@ public data class DevNetwork(
         /** What a control URL is pre-filled with: the emulator's view of the host's loopback. */
         public const val DEFAULT_CONTROL_URL: String = "http://10.0.2.2:8099"
 
-        /** Reads the description `chat-dev` serves, over plain HTTP: SCION may be what is broken. */
+        /** Reads the network info over plain HTTP, so it works when SCION does not. */
         public suspend fun discover(controlUrl: String): DevNetwork = withContext(Dispatchers.IO) {
             val url = URL("${controlUrl.trimEnd('/')}/info")
             val connection = (url.openConnection() as HttpURLConnection).apply {
