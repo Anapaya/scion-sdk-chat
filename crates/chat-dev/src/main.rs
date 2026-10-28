@@ -59,7 +59,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn summarise(network: &chat_dev::DevNetwork) {
     let mut out = std::io::stderr().lock();
 
-    let _ = writeln!(out, "\n  the local SCION network is up, and its network info is at");
+    let _ = writeln!(
+        out,
+        "\n  the local SCION network is up, and its network info is at"
+    );
     let _ = writeln!(out, "    {}/info\n", network.control_url);
 
     match network.server {
