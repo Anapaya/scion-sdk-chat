@@ -33,14 +33,6 @@ the SDK, with the SDK names in bold:
 | build | <code>client: <b>Client</b>::<b>new</b>(settings),</code> | <code>.<b>build</b>()</code> | <code>client = try <b>ScionHttp3Client</b>(configuration: settings)</code> |
 | send | <code>let reply = self.client.<b>request</b>(outgoing).await.map&#95;err(failure)?;</code> | <code>client.<b>newCall</b>(built).<b>execute</b>()</code> | <code>let response = try await client.<b>execute</b>(built)</code> |
 
-The server, on `scion-stack` and `scion-h3-axum`:
-
-| | the server (Rust) |
-| --- | --- |
-| configure | <code>let mut builder = <b>ScionStackBuilder</b>::<b>new</b>().<b>with&#95;endhost&#95;api</b>(endhost&#95;api);</code> |
-| build | <code>builder.<b>build</b>().await</code> |
-| serve | <code>let socket = stack.<b>bind</b>(Some(bind&#95;addr)).await<br><b>ScionH3AxumServer</b>::<b>serve&#95;with&#95;graceful&#95;shutdown</b>(…)</code> |
-
 ![The terminal client, the Android app and the iOS app in one room](docs/fig/chat-clients.gif)
 
 ## Run it
@@ -146,7 +138,8 @@ reaches both.
 The server. `cargo run -p chat-server -- --help` lists every flag with its default and its `CHAT_*`
 environment fallback.
 
-[`scion.rs`](crates/chat-server/src/scion.rs) puts it on SCION in three steps:
+[`scion.rs`](crates/chat-server/src/scion.rs) puts it on SCION in three steps, with `scion-stack` and
+`scion-h3-axum`:
 
 - `ScionStackBuilder` builds a stack
 - `stack.bind()` opens a socket on it
