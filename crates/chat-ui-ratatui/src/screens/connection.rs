@@ -26,8 +26,8 @@ use tui_input::{Input, backend::crossterm::EventHandler as _};
 
 use crate::ui::{self, field, layout::form, theme};
 
-/// The address the server listens on in development mode, so the common case is one keypress.
-const DEV_SERVER_URL: &str = "http://localhost:8080";
+/// The URL of the server that `chat-dev` starts, so the common case is one keypress.
+const DEV_SERVER_URL: &str = "https://localhost:8443";
 
 /// A transport the client can reach the server over. The same two the server serves.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum)]
