@@ -24,9 +24,8 @@ One file for each role:
 | the local SCION network (pocketscion) | [`topology.rs`](crates/chat-dev/src/topology.rs) |
 | all of the above, in one test | [`tests/scion.rs`](crates/chat-client-core/tests/scion.rs) |
 
-The three clients are structurally identical. Only the language changes.
-
-The three calls that each client makes into the SDK, with the SDK names in bold:
+The clients have the same structure. Only the language changes. Each client makes three calls into
+the SDK, with the SDK names in bold:
 
 | | terminal client (Rust, `scion-http3`) | Android (Kotlin, `scion-http3-android`) | iOS (Swift, `scion-http3-swift`) |
 | --- | --- | --- | --- |
