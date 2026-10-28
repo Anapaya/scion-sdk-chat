@@ -207,7 +207,8 @@ Three screens over `chat-client-core`:
 - sign in
 - chat
 
-The screens draw and read keys. `app.rs` holds every call to the client.
+Every call to `chat-client-core` is in [`app.rs`](crates/chat-ui-ratatui/src/app.rs). The screens only
+draw the UI and handle key presses.
 
 Every field of the connect screen also has a flag, so a launch can arrive with the form answered:
 
@@ -264,7 +265,8 @@ Three screens over `chat-client-core`:
 - sign in
 - chat
 
-The screens draw and read keys. `app.rs` holds every call to the client.
+Every call to `chat-client-core` is in [`app.rs`](crates/chat-ui-ratatui/src/app.rs). The screens only
+draw the UI and handle key presses.
 
 Every field of the connect screen also has a flag, so a launch can arrive with the form answered:
 
