@@ -215,8 +215,8 @@ fills in the field at start:
 
 | flag | environment | what it is |
 | --- | --- | --- |
-| `--transport` | `CHAT_CLIENT_TRANSPORT` | `scion` or `tcp`. Defaults to `scion`. `scion` is HTTP/3 over SCION; `tcp` is plain HTTP over IP, for a server in `--transport tcp`. The scheme of `--server-url` must match: `https` for `scion`, `http` for `tcp` |
-| `--server-url` | `CHAT_CLIENT_SERVER_URL` | the URL of the chat server. Defaults to `http://localhost:8080`, the URL of a server in `--transport tcp`; under the default `--transport scion`, pass the `https` URL, or the scheme check refuses the start. Its host is the name the server's certificate must carry. `chat-dev` gives it as `base_url`; a server you deploy has the URL you gave it |
+| `--transport` | `CHAT_CLIENT_TRANSPORT` | `scion` or `tcp`. Defaults to `scion`. `scion` uses `https` URLs and `tcp` uses `http` URLs. See [Trust](#trust) |
+| `--server-url` | `CHAT_CLIENT_SERVER_URL` | the URL of the chat server. Defaults to `https://localhost:8443`, the server that `chat-dev` starts. Its host is the name on the server's certificate. `chat-dev` gives it as `base_url`; a server you deploy has the URL you gave it |
 | `--endhost-api` | `CHAT_CLIENT_ENDHOST_API` | the URL of the endhost API, where the SDK discovers the SCION network. Required by `--transport scion`. `chat-dev` gives it as `endhost_api_url`; a real network's operator gives it to you |
 | `--target` | `CHAT_CLIENT_TARGET` | the SCION address of the server's host, `ISD-AS,IP`, with no port. A DNS override for the host of `--server-url`, for a host with no TSAR record. `scion` only. `chat-dev` gives it as `target`; a host with a TSAR record needs no flag |
 | `--cert-path` | `CHAT_CLIENT_CERT_PATH` | a PEM file. Pins that certificate as the only trusted one, in place of the system roots. `chat-dev` gives it as `ca_path`; a server with a publicly trusted certificate needs no flag. See [Trust](#trust) |
@@ -242,6 +242,9 @@ for as long as the client runs. For local development, `chat-dev` takes the plac
 each read of `/info` returns a newly minted token.
 
 #### Trust
+
+HTTP/3 always runs over TLS, so a client on `--transport scion` always checks the server's
+certificate. `--transport tcp` is plain HTTP with no TLS, and is for development only.
 
 Every client accepts the server's certificate in one of three ways. The terminal client chooses with
 the flags above, and the two apps with a control on the configuration screen:
