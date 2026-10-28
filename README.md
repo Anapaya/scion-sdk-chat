@@ -21,7 +21,7 @@ One file for each role:
 | a client, on Android | [`ScionTransport.kt`](android/chat-client/src/main/kotlin/com/anapaya/chat/client/ScionTransport.kt) |
 | a client, on iOS | [`ScionTransport.swift`](ios/ChatClient/Sources/ChatClient/ScionTransport.swift) |
 | the server | [`scion.rs`](crates/chat-server/src/scion.rs) |
-| a SCION network on this machine | [`topology.rs`](crates/chat-dev/src/topology.rs) |
+| the local SCION network (pocketscion) | [`topology.rs`](crates/chat-dev/src/topology.rs) |
 | all of the above, in one test | [`tests/scion.rs`](crates/chat-client-core/tests/scion.rs) |
 
 The three clients are structurally identical. Only the language changes.
@@ -48,7 +48,7 @@ The server, on `scion-stack` and `scion-h3-axum`:
 
 Two terminals:
 
-- one terminal starts a SCION network with the chat server in it
+- one terminal starts the local SCION network with the chat server in it
 - another runs a terminal client that talks to the server over SCION
 
 ### 1. Start the network and the server
@@ -59,7 +59,7 @@ cargo run -p chat-dev
 
 This command starts:
 
-- the SCION network
+- the local SCION network, which pocketscion emulates
 - the chat server
 - a control API that serves the network info
 
@@ -265,9 +265,9 @@ the wrong endhost API.
 
 ### chat-dev
 
-A development helper. It starts a SCION network on this machine and puts the chat server in it. The
-network runs for as long as the process runs. The underlay is SNAP, which addresses an endpoint at
-the address its tunnel observed. A client behind a NAT needs that.
+A development helper. It starts the local SCION network, which pocketscion emulates, and puts the
+chat server in it. The network runs for as long as the process runs. The underlay is SNAP, which
+addresses an endpoint at the address its tunnel observed. A client behind a NAT needs that.
 
 #### The topology
 

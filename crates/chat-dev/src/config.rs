@@ -17,7 +17,7 @@ use std::{net::IpAddr, path::PathBuf};
 
 use clap::Parser;
 
-/// A SCION network on this machine, with the chat server in it.
+/// The local SCION network, which pocketscion emulates, with the chat server in it.
 #[derive(Debug, Clone, Parser)]
 #[command(version, about)]
 pub struct Config {

@@ -11,7 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! A SCION network on this machine, with the chat server in it. For development only.
+//! The local SCION network, which pocketscion emulates, with the chat server in it. For
+//! development only.
 //!
 //! Three autonomous systems, and [`topology`] says why. The network runs as long as this
 //! process does.
