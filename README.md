@@ -207,8 +207,8 @@ Three screens over `chat-client-core`:
 - sign in
 - chat
 
-Every call to `chat-client-core` is in [`app.rs`](crates/chat-ui-ratatui/src/app.rs). The screens only
-draw the UI and handle key presses.
+Every call to `chat-client-core` is in [`app.rs`](crates/chat-ui-ratatui/src/app.rs). The screens
+only draw the UI and handle key presses.
 
 Each field of the connect screen also has a flag and an environment variable. A value given there
 fills in the field at start:
@@ -224,72 +224,6 @@ fills in the field at start:
 | `--auth-api-key` | `CHAT_CLIENT_AUTH_API_KEY` | the long-lived secret of a real network. The SDK exchanges it at the AA for SNAP tokens, and renews them. Prefer the environment variable: an argument is visible to anyone who lists processes. Refused together with `--snap-token`. See [Credentials](#credentials) |
 | `--snap-token` | `CHAT_CLIENT_SNAP_TOKEN` | one SNAP token. It expires, and the client stops with it. `chat-dev` gives it as `auth_token`, new on each read of `/info`. See [Credentials](#credentials) |
 | `--aa-url` | `CHAT_CLIENT_AA_URL` | the AA that exchanges `--auth-api-key`. Defaults to `https://auth.scion.anapaya.net`, the Anapaya AA. Unused without `--auth-api-key` |
-
-With neither flag, the server sends no token. Only an endhost API that asks for no token accepts
-that.
-
-#### Endpoints
-
-Every route sits under `/api/v1`. Every route needs an `authorization: Bearer <token>` header, with
-the token from `login`, except:
-
-- `/healthz`
-- `/server`
-- `/register`
-- `/login`
-
-The server describes itself at `/.well-known/openapi.json`. The repository also holds the same
-document as YAML at [`crates/chat-server/openapi.yaml`](crates/chat-server/openapi.yaml), because
-YAML gives a better diff. You can therefore read and review the API surface without a running
-server. A test compares the two documents, and it rewrites the file when you run:
-
-```sh
-CHAT_UPDATE_OPENAPI=1 cargo test -p chat-server
-```
-
-### chat-client-core
-
-The typed API, the session, and the transport under them:
-
-- `ScionTransport` carries HTTP/3 over SCION, against the server's `--transport scion` mode
-- `TcpTransport` speaks plain HTTP to the server's `--transport tcp` mode
-- `MockTransport` answers from a script, so a test can produce a reply that no real server produces
-
-`tests/scion.rs` starts a network of two ASes, puts the server in one and a client in the other, and
-sends a message between them.
-
-### chat-ui-ratatui
-
-Three screens over `chat-client-core`:
-
-- connect
-- sign in
-- chat
-
-Every call to `chat-client-core` is in [`app.rs`](crates/chat-ui-ratatui/src/app.rs). The screens only
-draw the UI and handle key presses.
-
-Each field of the connect screen also has a flag and an environment variable. A value given there
-fills in the field at start:
-
-| flag | environment | what it is |
-| --- | --- | --- |
-| `--transport` | `CHAT_CLIENT_TRANSPORT` | `scion` or `tcp`. Defaults to `scion` |
-| `--server-url` | `CHAT_CLIENT_SERVER_URL` | where the server is |
-| `--endhost-api` | `CHAT_CLIENT_ENDHOST_API` | how the client finds SCION. Required by `--transport scion` |
-| `--target` | `CHAT_CLIENT_TARGET` | the server's SCION address, for a host with no TSAR record |
-| `--cert-path` | `CHAT_CLIENT_CERT_PATH` | a certificate to trust instead of the system roots |
-| `--insecure` | `CHAT_CLIENT_INSECURE` | accept any certificate. See [Trust](#trust) |
-| `--auth-api-key` | `CHAT_CLIENT_AUTH_API_KEY` | a key the AA service exchanges for tokens. See [Credentials](#credentials) |
-| `--snap-token` | `CHAT_CLIENT_SNAP_TOKEN` | a token, as `chat-dev` hands out. See [Credentials](#credentials) |
-| `--aa-url` | `CHAT_CLIENT_AA_URL` | the AA (Authentication and Authorization) service, the token issuer for Anapaya's network. Defaults to `https://auth.scion.anapaya.net` |
-
-Each transport uses one URL scheme:
-
-- `scion` uses `https`
-- `tcp` uses `http`
-
-The client checks the URL against the transport.
 
 #### Credentials
 
