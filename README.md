@@ -226,18 +226,18 @@ fills in the field at start:
 
 #### Credentials
 
-The SNAP asks every client to prove it may use the network. The AA (Authentication and
-Authorization) service is the token issuer of Anapaya's network. There are two ways to answer, and
-the clients offer the choice the same way they offer [Trust](#trust):
+The SNAP asks every client to prove that it may use the network. The client proves it with a token
+from the Anapaya AA (Authentication and Authorization service). A client gets its token in one of
+two ways, and the clients offer the choice the same way that they offer [Trust](#trust):
 
 | choice | flag | what it is |
 | --- | --- | --- |
-| API key | `--auth-api-key` | the long-lived secret. The AA service exchanges it for tokens |
+| API key | `--auth-api-key` | the long-lived secret. The AA exchanges it for tokens |
 | SNAP token | `--snap-token` | one token, already minted |
 
 A token expires, so a client given only a token stops working at that moment. A client given a key
 hands it to the SDK, which exchanges it for a token when the client is built and renews that token
-for as long as the client runs. For local development, `chat-dev` takes the place of the AA service:
+for as long as the client runs. For local development, `chat-dev` takes the place of the AA:
 each read of `/info` returns a newly minted token.
 
 #### Trust
