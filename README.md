@@ -61,16 +61,16 @@ This command starts:
 
 - the SCION network
 - the chat server
-- a control API that describes both
+- a control API that serves the network info
 
 Ctrl+C stops all of it.
 
 ### 2. Connect a terminal client
 
-`chat-dev` serves its description on a fixed port, 8099. The values in it change with each run:
+`chat-dev` serves its [network info](#the-network-info) on a fixed port, 8099. The values in it change with each run:
 
 - the endhost API takes a free port
-- the SNAP token is new for each run
+- the SNAP token is new for each read
 - the certificate goes in a new directory
 
 ![What chat-dev runs](docs/fig/chat-dev-flow.drawio.svg)
@@ -267,7 +267,7 @@ the wrong endhost API.
 
 A development helper. It starts a SCION network on this machine and puts the chat server in it. The
 network runs for as long as the process runs. The underlay is SNAP, which addresses an endpoint at
-the address its tunnel observed. A client behind a translation needs that.
+the address its tunnel observed. A client behind a NAT needs that.
 
 #### The topology
 
@@ -298,13 +298,13 @@ Two files build this:
 - [`topology.rs`](crates/chat-dev/src/topology.rs) makes the three ASes, the two links, and the
   endhost API and SNAP endpoint in each
 - [`lib.rs`](crates/chat-dev/src/lib.rs) sets the address each AS publishes, and chooses the
-  description that `GET /info` answers with
+  network info that `GET /info` returns
 
-#### The description
+#### The network info
 
-`chat-dev` serves its description at `GET /info` on `--control-port` (8099), over plain TCP. A
-client that failed to connect over SCION can still read it. The same document goes to standard
-output at startup.
+`chat-dev` serves the network info at `GET /info` on `--control-port` (8099), over plain TCP. It
+also prints the network info to standard output at startup. The network info holds what a client
+needs to reach the chat server:
 
 ```sh
 curl -s http://127.0.0.1:8099/info | jq
@@ -322,15 +322,21 @@ curl -s http://127.0.0.1:8099/info | jq
 }
 ```
 
-This sample shows the fields a client reads most. The document holds more. Every field carries a
-doc comment in [`info.rs`](crates/chat-dev/src/info.rs), which `cargo doc_dx` renders.
+A client reads the network info over plain TCP, and then connects over SCION:
 
-`GET /info` answers with the description that matches the address the client asked at:
+- the Android and iOS apps read it from the address on their connect screen
+- the terminal client gets it from the `eval` in [step 2](#2-connect-a-terminal-client)
 
-- a request to `10.0.2.2` gets the emulator's AS
-- every other request gets the default AS
+On a real network, the network operator gives you the endhost API, and the AA gives the tokens.
+pocketscion has no AA and no endhost API discovery, so `chat-dev` gives both.
 
-Both descriptions name the same server, certificate and SCION address.
+`chat-dev` serves two versions of the network info. The `Host` header of the request selects one:
+
+- a request to `10.0.2.2` gets the version for the emulator's AS
+- every other request gets the version for the default AS
+
+Both versions name the same server, certificate and SCION address.
+[`info.rs`](crates/chat-dev/src/info.rs) documents every field.
 
 #### Running the server yourself
 
@@ -348,7 +354,8 @@ field holds the command that joins it:
 cargo run -p chat-server -- $(curl -s http://127.0.0.1:8099/info | jq -r '.chat_server_args | join(" ")')
 ```
 
-Give the server the same data directory, so it presents the certificate the description names.
+Give the server the same data directory, so that it presents the certificate that the network info
+names.
 
 ## Development
 
