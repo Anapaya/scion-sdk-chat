@@ -180,9 +180,8 @@ the token from `login`, except:
 - `/login`
 
 The server describes itself at `/.well-known/openapi.json`. The repository also holds the same
-document as YAML at [`crates/chat-server/openapi.yaml`](crates/chat-server/openapi.yaml), because
-YAML gives a better diff. You can therefore read and review the API surface without a running
-server. A test compares the two documents, and it rewrites the file when you run:
+document as YAML at [`crates/chat-server/openapi.yaml`](crates/chat-server/openapi.yaml). A test
+compares the two documents, and it rewrites the file when you run:
 
 ```sh
 CHAT_UPDATE_OPENAPI=1 cargo test -p chat-server
