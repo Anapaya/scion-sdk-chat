@@ -127,7 +127,7 @@ final class ChatViewModel: ObservableObject {
         actionError = nil
     }
 
-    /// Reads the network's description, then connects with it.
+    /// Reads the network info, then connects with it.
     func connect() {
         ask {
             let network = try await DevNetwork.discover(controlUrl: self.controlUrl)

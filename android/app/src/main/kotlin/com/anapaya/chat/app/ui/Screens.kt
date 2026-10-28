@@ -36,7 +36,7 @@ import com.anapaya.chat.app.ManualForm
 import com.anapaya.chat.app.TrustChoice
 import com.anapaya.chat.app.UiState
 
-/** Where a network that describes itself is asked for that description. */
+/** Asks for the address where a development network serves its network info. */
 @Composable
 public fun ConnectScreen(
     state: UiState,
@@ -53,8 +53,8 @@ public fun ConnectScreen(
     ) {
         Text("Connect", style = MaterialTheme.typography.headlineMedium)
         Text(
-            "The address a development network serves its description at. Everything after this " +
-                "goes over SCION.",
+            "The address where a development network serves its network info. Everything after " +
+                "this goes over SCION.",
             style = MaterialTheme.typography.bodyMedium,
         )
 
@@ -80,7 +80,7 @@ public fun ConnectScreen(
     }
 }
 
-/** The same configuration, typed out, for a network that describes nothing. */
+/** The same configuration, typed out, for a network that serves no network info. */
 @Composable
 public fun ManualScreen(
     state: UiState,

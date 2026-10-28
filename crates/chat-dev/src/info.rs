@@ -11,73 +11,63 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! The description of this network, in the values a client needs to reach it.
+//! The network info: what a client needs to reach the chat server on this network.
 //!
-//! The network decides most of these values at startup. The endhost APIs take free ports. The
-//! network makes a token for each run, and it generates the certificate. The control port is the
-//! one fixed value, so a client needs only that port to find the rest.
+//! The network chooses most values at startup. The endhost APIs take free ports, and the
+//! certificate is new. The control port is the one fixed value, so a client needs only that port
+//! to read the rest from `GET /info`.
 
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-/// Where the chat server is, for a client that must reach it.
+/// What a client needs to reach the chat server on this network.
 ///
-/// The process prints this as one line of JSON on standard output, and serves it at `GET /info`.
-/// A client in an emulator or a container reads the served copy.
+/// `chat-dev` prints it as one line of JSON on standard output, and serves it at `GET /info`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DevNetwork {
-    /// Where this description is served, for a client that reads no standard output.
+    /// The URL that serves this network info.
     pub control_url: String,
-    /// What carries SCION traffic between the two ASes.
-    pub underlay: String,
-    /// Whether the chat server runs in this process, or is expected alongside it.
+    /// Whether this process runs the chat server, or you start it.
     pub server: Server,
-    /// The endhost API of the AS a client attaches to. A client uses this one.
+    /// The endhost API that a client uses.
     pub endhost_api_url: String,
-    /// The endhost API of the AS the server sits in, for a server started separately.
+    /// The endhost API of the server's AS, for a chat server that you start yourself.
     pub server_endhost_api_url: String,
-    /// The AS a client attaches to.
-    pub client_isd_as: String,
-    /// A token for the endhost API and the SNAP control plane. Each read makes a new one.
+    /// A token for the endhost API and the SNAP. Each read of `GET /info` makes a new one.
     ///
-    /// Give each client its own. The control plane keeps one tunnel per `pssid`, so a second
-    /// client on one token evicts the first, which then stops without an error.
+    /// Give each client its own token. The SNAP keeps one tunnel per `pssid`, so a second client
+    /// with the same token evicts the first, and the first stops without an error.
     pub auth_token: String,
-    /// The server's own token, on disk, for `chat-server --auth-token-file`.
+    /// A file with the server's token, for `chat-server --auth-token-file`.
     pub auth_token_file: String,
-    /// Where the chat server is, as a URL. The host is the name its certificate is issued for.
+    /// The URL of the chat server. Its host is the name on the server's certificate.
     pub base_url: String,
-    /// The server's SCION address, without a port. This topology holds no TSAR records, so the
-    /// description gives a client the address to dial.
+    /// The server's SCION address, for `--transport scion`. This network has no TSAR records, so a
+    /// client cannot resolve the host of `base_url` without it.
     pub target: String,
-    /// The certificate the server presents, as text as well as a path: a client may read another
-    /// filesystem.
+    /// The server's certificate in PEM, for a client that cannot read `ca_path`.
     pub ca_pem: String,
-    /// The same certificate on disk, for a client that takes a path.
+    /// The path of the server's certificate.
     pub ca_path: String,
-    /// Its SHA-256, as the server logs it.
-    pub ca_fingerprint: String,
-    /// Where the certificate and the database live. Give the same directory to a chat server that
-    /// you start yourself, so it presents the certificate this description names.
+    /// The directory with the certificate and the database. Give it to a chat server that you
+    /// start yourself, so that it presents the same certificate.
     pub data_dir: String,
-    /// The arguments that join a chat server to this network, for `--no-server`.
+    /// The arguments that connect a chat server that you start yourself to this network.
     pub chat_server_args: Vec<String>,
 }
 
-/// Whether the chat server runs here or alongside.
+/// Who starts the chat server.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Server {
-    /// Started by this process, and stopped with it.
+    /// This process starts the chat server, and stops it on exit.
     Embedded,
-    /// You start it, with [`DevNetwork::chat_server_args`].
+    /// You start the chat server, with [`DevNetwork::chat_server_args`].
     External,
 }
 
-/// The arguments a chat server needs to join this network.
-///
-/// The ports change for each run, so this function builds the arguments from the current values.
+/// The arguments that connect a chat server to this network.
 pub fn chat_server_args(
     listen: &str,
     data_dir: &Path,
@@ -107,18 +97,15 @@ mod tests {
     fn network() -> DevNetwork {
         DevNetwork {
             control_url: "http://127.0.0.1:8099".to_owned(),
-            underlay: "snap".to_owned(),
             server: Server::Embedded,
             endhost_api_url: "http://127.0.0.1:41234/".to_owned(),
             server_endhost_api_url: "http://127.0.0.1:41235/".to_owned(),
-            client_isd_as: "1-ff00:0:132".to_owned(),
             auth_token: "a token".to_owned(),
             auth_token_file: "/tmp/dev/snap.token".to_owned(),
             base_url: "https://localhost:8443".to_owned(),
             target: "2-ff00:0:212,127.0.0.1".to_owned(),
             ca_pem: "-----BEGIN CERTIFICATE-----\n".to_owned(),
             ca_path: "/tmp/dev/cert.pem".to_owned(),
-            ca_fingerprint: "ab12".to_owned(),
             data_dir: "/tmp/dev".to_owned(),
             chat_server_args: vec!["--transport".to_owned(), "scion".to_owned()],
         }
@@ -142,24 +129,21 @@ mod tests {
                 "auth_token",
                 "auth_token_file",
                 "base_url",
-                "ca_fingerprint",
                 "ca_path",
                 "ca_pem",
                 "chat_server_args",
-                "client_isd_as",
                 "control_url",
                 "data_dir",
                 "endhost_api_url",
                 "server",
                 "server_endhost_api_url",
                 "target",
-                "underlay",
             ]
         );
     }
 
     #[test]
-    fn a_description_survives_the_round_trip_a_client_makes() {
+    fn the_network_info_survives_the_round_trip_a_client_makes() {
         let network = network();
 
         let json = serde_json::to_string(&network).expect("serialize");

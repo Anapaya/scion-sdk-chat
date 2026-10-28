@@ -11,7 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! A SCION network on this machine, with the chat server in it. For development only.
+//! The local SCION network, which pocketscion emulates, with the chat server in it. For
+//! development only.
 //!
 //! Three autonomous systems, and [`topology`] says why. The network runs as long as this
 //! process does.
@@ -88,19 +89,20 @@ pub struct DevSetup {
     shutdown: CancellationToken,
 }
 
-/// The same network, described once for each kind of client.
+/// The network info, once for each kind of client.
 #[derive(Debug, Clone)]
 struct Profiles {
     /// For every client that reaches the bound address.
     default: DevNetwork,
     /// For a client on an Android emulator.
     emulator: DevNetwork,
-    /// The address the emulator's description gives, and the one that selects it.
+    /// The address of the host as the emulator sees it. A request to this address gets the
+    /// emulator's network info.
     emulator_ip: IpAddr,
 }
 
 impl Profiles {
-    /// The description that matches the address the client asked at.
+    /// The network info for the address in the request's `Host` header.
     ///
     /// The emulator proxies TCP and keeps the payload, so `Host` arrives as the client wrote it.
     fn for_host(&self, headers: &HeaderMap) -> &DevNetwork {
@@ -141,7 +143,7 @@ impl DevSetup {
 
         let io = IoConfig::new();
         io.set_bind_ip(config.bind_ip);
-        // One address per AS, so this reaches the emulator's description alone.
+        // One address per AS, so only the emulator's network info names this address.
         io.set_advertised_ip(topology::EMULATOR, config.emulator_ip);
         let network = topology::start(io).await;
 
@@ -149,7 +151,7 @@ impl DevSetup {
         let auth_token_file = data_dir.join("snap.token");
         write(&auth_token_file, dev_auth_token())?;
 
-        // Made here, so `--no-server` still describes a certificate.
+        // Made here, so the network info names a certificate under `--no-server` too.
         let certificate = cert::ServerCert::load_or_create(&data_dir)?;
         let ca_pem = read(&certificate.cert_path)?;
 
@@ -176,7 +178,6 @@ impl DevSetup {
 
         let default = DevNetwork {
             control_url,
-            underlay: "snap".to_owned(),
             server: if config.no_server {
                 Server::External
             } else {
@@ -184,14 +185,12 @@ impl DevSetup {
             },
             endhost_api_url: client_api,
             server_endhost_api_url: server_api.clone(),
-            client_isd_as: topology::DEFAULT.to_string(),
             auth_token: dev_auth_token(),
             auth_token_file: auth_token_file.display().to_string(),
             base_url: format!("https://{}:{port}", cert::SERVER_NAME),
             target,
             ca_pem,
             ca_path: certificate.cert_path.display().to_string(),
-            ca_fingerprint: certificate.fingerprint,
             data_dir: data_dir.display().to_string(),
             chat_server_args: info::chat_server_args(
                 &SocketAddr::new(listen.ip(), port).to_string(),
@@ -209,7 +208,6 @@ impl DevSetup {
                 local_addr(&control).port()
             ),
             endhost_api_url: emulator_api,
-            client_isd_as: topology::EMULATOR.to_string(),
             ..default.clone()
         };
 
@@ -226,7 +224,7 @@ impl DevSetup {
         })
     }
 
-    /// What a client that reaches the bound address needs. This is the default description.
+    /// The network info for a client that reaches the bound address. This is the default.
     pub fn network(&self) -> &DevNetwork {
         &self.profiles.default
     }
@@ -241,7 +239,7 @@ impl DevSetup {
         self.shutdown.clone()
     }
 
-    /// Serves the description until [`DevSetup::stopper`] cancels it. Each read mints a token.
+    /// Serves the network info until [`DevSetup::stopper`] cancels it. Each read makes a new token.
     pub async fn serve(self) {
         let router = Router::new()
             .route(

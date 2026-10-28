@@ -796,6 +796,7 @@ mod tests {
     fn tcp_needs_none_of_it() {
         let form = ConnectionForm {
             transport: Transport::Tcp,
+            server_url: "http://localhost:8080".to_owned(),
             ..ConnectionForm::default()
         };
 

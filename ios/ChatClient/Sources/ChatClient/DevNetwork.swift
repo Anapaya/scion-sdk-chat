@@ -2,17 +2,17 @@
 
 import Foundation
 
-/// Where a `chat-dev` network is, and how to be trusted by it. A deployed app is told this.
+/// The network info that `chat-dev` serves: what a client needs to reach the chat server.
 public struct DevNetwork: Decodable, Sendable {
-    /// The endhost API of the AS a client attaches to.
+    /// The endhost API that a client uses.
     public let endhostApiUrl: String
-    /// This reader's own token. Two clients sharing one evict each other.
+    /// A token for this client only. Two clients with the same token evict each other.
     public let authToken: String
-    /// Where the server is. Its host is the name the certificate is issued for.
+    /// The URL of the chat server. Its host is the name on the server's certificate.
     public let baseUrl: String
-    /// The server's SCION address, without a port.
+    /// The server's SCION address. `chat-dev` has no TSAR records, so the client needs it.
     public let target: String
-    /// The certificate to pin, inline because it is generated per run.
+    /// The server's certificate in PEM. `chat-dev` makes a new one for each run.
     public let caPem: String
 
     enum CodingKeys: String, CodingKey {
@@ -36,7 +36,7 @@ public struct DevNetwork: Decodable, Sendable {
             trust: .pinned(caPem))
     }
 
-    /// Reads the description `chat-dev` serves, over plain HTTP: SCION may be what is broken.
+    /// Reads the network info over plain HTTP, so it works when SCION does not.
     public static func discover(controlUrl: String) async throws -> DevNetwork {
         let trimmed = controlUrl.hasSuffix("/") ? String(controlUrl.dropLast()) : controlUrl
         guard let url = URL(string: trimmed + "/info") else {
