@@ -17,11 +17,11 @@ use std::{net::IpAddr, path::PathBuf};
 
 use clap::Parser;
 
-/// A SCION network on this machine, with the chat server in it.
+/// The local SCION network, which pocketscion emulates, with the chat server in it.
 #[derive(Debug, Clone, Parser)]
 #[command(version, about)]
 pub struct Config {
-    /// Where this network serves its description.
+    /// The port that serves the network info.
     ///
     /// Fixed. Every other address is decided at startup, and read from here.
     #[arg(long, env = "CHAT_DEV_CONTROL_PORT", default_value_t = 8099)]

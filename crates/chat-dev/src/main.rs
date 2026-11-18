@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! Starts the network, prints its description, and holds it up.
+//! Starts the network, prints its network info, and keeps the network up.
 //!
 //! ```text
 //! cargo run -p chat-dev
@@ -24,7 +24,7 @@ use clap::Parser as _;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Standard output carries the description only, so a parser can read it from a pipe.
+    // Standard output carries only the network info, so a parser can read it from a pipe.
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
         .with_env_filter(
@@ -55,11 +55,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Prints the same description on standard error, in the form a person reads.
+/// Prints the same network info on standard error, in the form a person reads.
 fn summarise(network: &chat_dev::DevNetwork) {
     let mut out = std::io::stderr().lock();
 
-    let _ = writeln!(out, "\n  a SCION network is up, and it is described at");
+    let _ = writeln!(
+        out,
+        "\n  the local SCION network is up, and its network info is at"
+    );
     let _ = writeln!(out, "    {}/info\n", network.control_url);
 
     match network.server {

@@ -139,7 +139,7 @@ public class ChatViewModel(application: Application) : AndroidViewModel(applicat
         _state.update { it.copy(screen = screen, actionError = null) }
     }
 
-    /** Reads the network's description, then connects with it. */
+    /** Reads the network info, then connects with it. */
     public fun connect() {
         ask { open(DevNetwork.discover(_state.value.controlUrl).toScionConfig()) }
     }

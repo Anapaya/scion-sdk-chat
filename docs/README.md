@@ -15,6 +15,6 @@ let mut builder = ScionStackBuilder::new().with_endhost_api(endhost_api);
 
 - Keep the markers when you change the code between them. A removed or renamed marker breaks the
   guide at the next tag.
-- To quote a new region, add the markers and add 1 line to `anchors.txt`.
+- To quote a new region, add the markers and add one line to `anchors.txt`.
 - [check-anchors.sh](check-anchors.sh) checks the list against the markers. CI runs it on every
   pull request.

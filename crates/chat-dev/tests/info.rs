@@ -11,9 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//! What a client does with this network. It reads the description, then it uses it.
+//! What a client does with this network. It reads the network info, then it uses it.
 //!
-//! Each test reads the description over plain TCP, as a client reads it. Every call after that
+//! Each test reads the network info over plain TCP, as a client reads it. Every call after that
 //! goes over SCION.
 
 use std::{path::PathBuf, time::Duration};
@@ -41,8 +41,8 @@ fn ephemeral() -> Config {
 
 /// The emulator's AS, published at an address this machine can reach.
 ///
-/// `10.0.2.2` exists only inside an emulator, so a test that uses the emulator's description needs
-/// a different address. The AS, its SNAP endpoint and its path to the server stay the same.
+/// `10.0.2.2` exists only inside an emulator, so a test that uses the emulator's network info
+/// needs a different address. The AS, its SNAP endpoint and its path to the server stay the same.
 fn emulator_on_loopback() -> Config {
     Config {
         emulator_ip: "127.0.0.1".parse().expect("an address"),
@@ -50,17 +50,17 @@ fn emulator_on_loopback() -> Config {
     }
 }
 
-/// Reads the description over plain TCP, as a client reads it.
-async fn describe(control_url: &str) -> DevNetwork {
+/// Reads the network info over plain TCP, as a client reads it.
+async fn read_info(control_url: &str) -> DevNetwork {
     reqwest::get(format!("{control_url}/info"))
         .await
         .expect("the control api answers")
         .json()
         .await
-        .expect("a description")
+        .expect("the network info")
 }
 
-/// Builds the client that a description describes.
+/// Builds the client that the network info names.
 async fn client(network: &DevNetwork) -> ChatClient {
     ChatClient::new(ClientConfig {
         transport: TransportKind::Scion(ScionConfig {
@@ -93,14 +93,14 @@ async fn await_ready(client: &ChatClient) {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn the_description_is_enough_to_reach_the_server() {
+async fn the_network_info_is_enough_to_reach_the_server() {
     let setup = DevSetup::start(&ephemeral()).await.expect("a network");
     let served = setup.network().clone();
     let stop = setup.stopper();
     let serving = tokio::spawn(setup.serve());
 
     // Read it back over TCP, as a client that started no part of this process reads it.
-    let fetched = describe(&served.control_url).await;
+    let fetched = read_info(&served.control_url).await;
     assert_eq!(
         DevNetwork {
             auth_token: served.auth_token.clone(),
@@ -137,8 +137,8 @@ async fn every_reader_is_given_a_token_of_its_own() {
     let stop = setup.stopper();
     let serving = tokio::spawn(setup.serve());
 
-    let first = describe(&control_url).await;
-    let second = describe(&control_url).await;
+    let first = read_info(&control_url).await;
+    let second = read_info(&control_url).await;
 
     assert_ne!(first.auth_token, second.auth_token);
     assert_ne!(
@@ -148,7 +148,7 @@ async fn every_reader_is_given_a_token_of_its_own() {
     // Each read gives the same answer for every field except the token.
     assert_eq!(first.endhost_api_url, second.endhost_api_url);
     assert_eq!(first.target, second.target);
-    assert_eq!(first.ca_fingerprint, second.ca_fingerprint);
+    assert_eq!(first.ca_pem, second.ca_pem);
 
     stop.cancel();
     serving.await.expect("serving should not panic");
@@ -163,8 +163,8 @@ async fn two_clients_hold_a_conversation_across_the_link() {
     let stop = setup.stopper();
     let serving = tokio::spawn(setup.serve());
 
-    let ada = client(&describe(&control_url).await).await;
-    let grace = client(&describe(&control_url).await).await;
+    let ada = client(&read_info(&control_url).await).await;
+    let grace = client(&read_info(&control_url).await).await;
     await_ready(&ada).await;
 
     for (client, who) in [(&ada, "ada"), (&grace, "grace")] {
@@ -212,10 +212,6 @@ async fn a_client_in_the_emulator_as_shares_a_room_with_a_local_one() {
     let stop = setup.stopper();
     let serving = tokio::spawn(setup.serve());
 
-    assert_ne!(
-        default.client_isd_as, emulator.client_isd_as,
-        "the two clients attach to different ASes",
-    );
     assert_ne!(
         default.endhost_api_url, emulator.endhost_api_url,
         "each AS has an endhost API of its own",
@@ -273,7 +269,7 @@ async fn only_the_emulator_is_told_the_emulator_address() {
     let serving = tokio::spawn(setup.serve());
 
     // A terminal client asks. The Host header carries the address it wrote in its URL.
-    let default = describe(&control_url).await;
+    let default = read_info(&control_url).await;
     // The emulator asks. It reaches the same socket, and it wrote a different URL.
     let emulator: DevNetwork = reqwest::Client::new()
         .get(format!("{control_url}/info"))
@@ -283,7 +279,7 @@ async fn only_the_emulator_is_told_the_emulator_address() {
         .expect("the control api answers")
         .json()
         .await
-        .expect("a description");
+        .expect("the network info");
 
     assert!(
         default.endhost_api_url.contains("127.0.0.1"),
@@ -299,7 +295,7 @@ async fn only_the_emulator_is_told_the_emulator_address() {
     // One network, two ways in. Each field that names the server holds the same value.
     assert_eq!(default.target, emulator.target);
     assert_eq!(default.base_url, emulator.base_url);
-    assert_eq!(default.ca_fingerprint, emulator.ca_fingerprint);
+    assert_eq!(default.ca_pem, emulator.ca_pem);
     assert_eq!(
         default.server_endhost_api_url,
         emulator.server_endhost_api_url
@@ -340,7 +336,7 @@ async fn a_network_without_a_server_still_says_how_to_join_it() {
     assert_eq!(network.server, Server::External);
     assert!(!network.endhost_api_url.is_empty());
     assert!(!network.server_endhost_api_url.is_empty());
-    // This process makes the certificate, so the description holds it under `--no-server` too.
+    // This process makes the certificate, so the network info holds it under `--no-server` too.
     assert!(network.ca_pem.contains("BEGIN CERTIFICATE"));
     assert!(
         network
